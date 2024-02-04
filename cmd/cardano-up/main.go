@@ -15,9 +15,9 @@
 package main
 
 import (
-	"fmt"
+	"os"
 
-	"github.com/blinklabs-io/cardano-up/internal/version"
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -25,5 +25,26 @@ const (
 )
 
 func main() {
-	fmt.Printf("%s %s\n", programName, version.GetVersionString())
+	rootCmd := &cobra.Command{
+		Use: programName,
+		/*
+			Short: "A brief description of your application",
+			Long: `A longer description that spans multiple lines and likely contains
+			examples and usage of using your application. For example:
+
+			Cobra is a CLI library for Go that empowers applications.
+			This application is a tool to generate the needed files
+			to quickly create a Cobra application.`,
+		*/
+	}
+
+	// Add subcommands
+	rootCmd.AddCommand(
+		versionCommand(),
+	)
+
+	if err := rootCmd.Execute(); err != nil {
+		// NOTE: we purposely don't display the error, since cobra will have already displayed it
+		os.Exit(1)
+	}
 }
