@@ -1,4 +1,4 @@
-// Copyright 2023 Blink Labs Software
+// Copyright 2024 Blink Labs Software
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package main
 
 import (
+	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -25,6 +26,10 @@ const (
 )
 
 func main() {
+	globalFlags := struct {
+		debug bool
+	}{}
+
 	rootCmd := &cobra.Command{
 		Use: programName,
 		/*
@@ -36,11 +41,27 @@ func main() {
 			This application is a tool to generate the needed files
 			to quickly create a Cobra application.`,
 		*/
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			// Configure default logger
+			logLevel := slog.LevelInfo
+			if globalFlags.debug {
+				logLevel = slog.LevelDebug
+			}
+			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+				Level: logLevel,
+			}))
+			slog.SetDefault(logger)
+		},
 	}
+
+	// Global flags
+	rootCmd.PersistentFlags().BoolVarP(&globalFlags.debug, "debug", "D", false, "enable debug logging")
 
 	// Add subcommands
 	rootCmd.AddCommand(
 		versionCommand(),
+		// TODO: remove me
+		testCommand(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {
