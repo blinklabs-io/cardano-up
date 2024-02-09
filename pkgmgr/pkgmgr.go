@@ -14,14 +14,30 @@
 
 package pkgmgr
 
+import (
+	"errors"
+	"fmt"
+)
+
+// ErrOperationFailed is a placeholder error for operations that directly log errors.
+// It's used to signify when an operation has failed when the actual error message is
+// sent through the provided logger
+var ErrOperationFailed = errors.New("the operation has failed")
+
 type PackageManager struct {
 	config Config
+	state  *State
 	// TODO
 }
 
 func NewPackageManager(cfg Config) (*PackageManager, error) {
+	// Make sure that a logger was provided, since we use it for pretty much all feedback
+	if cfg.Logger == nil {
+		return nil, errors.New("you must provide a logger")
+	}
 	p := &PackageManager{
 		config: cfg,
+		state:  NewState(cfg),
 	}
 	if err := p.init(); err != nil {
 		return nil, err
@@ -38,7 +54,13 @@ func NewDefaultPackageManager() (*PackageManager, error) {
 }
 
 func (p *PackageManager) init() error {
-	// TODO: create config/cache dirs
 	p.config.Logger.Debug("initializing package manager")
+	if err := p.state.Load(); err != nil {
+		return fmt.Errorf("failed to load state: %s", err)
+	}
+	// TODO: remove me
+	if err := p.state.Save(); err != nil {
+		return err
+	}
 	return nil
 }
