@@ -16,17 +16,29 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
 
-	"github.com/blinklabs-io/cardano-up/internal/version"
+	"github.com/blinklabs-io/cardano-up/pkgmgr"
 	"github.com/spf13/cobra"
 )
 
-func versionCommand() *cobra.Command {
+func listAvailableCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:   "version",
-		Short: "Displays the version",
+		Use:   "list-available",
+		Short: "List available packages",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("%s %s\n", programName, version.GetVersionString())
+			pm, err := pkgmgr.NewDefaultPackageManager()
+			if err != nil {
+				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
+				os.Exit(1)
+			}
+			packages := pm.AvailablePackages()
+			pkgOutput := "Available packages:\n\n"
+			for _, tmpPackage := range packages {
+				pkgOutput += fmt.Sprintf("%s (%s)    %s\n", tmpPackage.Name, tmpPackage.Version, tmpPackage.Description)
+			}
+			slog.Info(pkgOutput)
 		},
 	}
 }

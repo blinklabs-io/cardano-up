@@ -60,8 +60,8 @@ func main() {
 	// Add subcommands
 	rootCmd.AddCommand(
 		versionCommand(),
-		// TODO: remove me
-		testCommand(),
+		listAvailableCommand(),
+		installCommand(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {

@@ -19,14 +19,10 @@ import (
 	"fmt"
 )
 
-// ErrOperationFailed is a placeholder error for operations that directly log errors.
-// It's used to signify when an operation has failed when the actual error message is
-// sent through the provided logger
-var ErrOperationFailed = errors.New("the operation has failed")
-
 type PackageManager struct {
-	config Config
-	state  *State
+	config            Config
+	state             *State
+	availablePackages []Package
 	// TODO
 }
 
@@ -58,9 +54,19 @@ func (p *PackageManager) init() error {
 	if err := p.state.Load(); err != nil {
 		return fmt.Errorf("failed to load state: %s", err)
 	}
+	// TODO: replace this with syncing a repo and reading from disk
+	p.availablePackages = append(p.availablePackages, RegistryPackages...)
 	// TODO: remove me
 	if err := p.state.Save(); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (p *PackageManager) AvailablePackages() []Package {
+	return p.availablePackages[:]
+}
+
+func (p *PackageManager) Install(pkg Package) error {
+	return pkg.install(p.config)
 }
