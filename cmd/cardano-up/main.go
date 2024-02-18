@@ -18,6 +18,8 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/blinklabs-io/cardano-up/internal/consolelog"
+
 	"github.com/spf13/cobra"
 )
 
@@ -47,9 +49,11 @@ func main() {
 			if globalFlags.debug {
 				logLevel = slog.LevelDebug
 			}
-			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-				Level: logLevel,
-			}))
+			logger := slog.New(
+				consolelog.NewHandler(os.Stdout, &slog.HandlerOptions{
+					Level: logLevel,
+				}),
+			)
 			slog.SetDefault(logger)
 		},
 	}
