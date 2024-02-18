@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/blinklabs-io/cardano-up/internal/version"
 	"github.com/spf13/cobra"
@@ -26,7 +27,7 @@ func versionCommand() *cobra.Command {
 		Use:   "version",
 		Short: "Displays the version",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("%s %s\n", programName, version.GetVersionString())
+			slog.Info(fmt.Sprintf("%s %s", programName, version.GetVersionString()))
 		},
 	}
 }
