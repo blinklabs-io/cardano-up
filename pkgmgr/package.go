@@ -22,10 +22,10 @@ import (
 )
 
 type Package struct {
-	Name         string
-	Version      string
-	Description  string
-	InstallSteps []PackageInstallStep
+	Name         string               `yaml:"name"`
+	Version      string               `yaml:"version"`
+	Description  string               `yaml:"description"`
+	InstallSteps []PackageInstallStep `yaml:"installSteps"`
 }
 
 func (p Package) install(cfg Config) error {
@@ -52,18 +52,18 @@ func (p Package) install(cfg Config) error {
 }
 
 type PackageInstallStep struct {
-	Docker *PackageInstallStepDocker
-	File   *PackageInstallStepFile
+	Docker *PackageInstallStepDocker `yaml:"docker,omitempty"`
+	File   *PackageInstallStepFile   `yaml:"file,omitempty"`
 }
 
 type PackageInstallStepDocker struct {
-	ContainerName string
-	Image         string
-	Env           map[string]string
-	Command       []string
-	Args          []string
-	Binds         []string
-	Ports         []string
+	ContainerName string            `yaml:"containerName"`
+	Image         string            `yaml:"image,omitempty"`
+	Env           map[string]string `yaml:"env,omitempty"`
+	Command       []string          `yaml:"command,omitempty"`
+	Args          []string          `yaml:"args,omitempty"`
+	Binds         []string          `yaml:"binds,omitempty"`
+	Ports         []string          `yaml:"ports,omitempty"`
 }
 
 func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
@@ -88,10 +88,10 @@ func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
 }
 
 type PackageInstallStepFile struct {
-	Filename string
-	Content  string
-	Template bool
-	Mode     fs.FileMode
+	Filename string      `yaml:"filename"`
+	Content  string      `yaml:"content"`
+	Template bool        `yaml:"template"`
+	Mode     fs.FileMode `yaml:"mode,omitempty"`
 }
 
 func (p *PackageInstallStepFile) install(cfg Config, pkgName string) error {
