@@ -1,19 +1,25 @@
 package pkgmgr
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"gopkg.in/yaml.v3"
 )
 
 const (
-	environmentsFilename = "environments.json"
+	defaultContext = "default"
+
+	environmentsFilename      = "environments.yaml"
+	activeContextFilename     = "active_context.yaml"
+	installedPackagesFilename = "installed_packages.yaml"
 )
 
 type State struct {
-	config       Config
-	Environments []Environment
-	// TODO: installed packages
+	config            Config
+	ActiveContext     string
+	Environments      []Environment
+	InstalledPackages []InstalledPackage
 }
 
 func NewState(cfg Config) *State {
@@ -27,11 +33,23 @@ func (s *State) Load() error {
 	if err := s.loadEnvironments(); err != nil {
 		return err
 	}
+	if err := s.loadActiveContext(); err != nil {
+		return err
+	}
+	if err := s.loadInstalledPackages(); err != nil {
+		return err
+	}
 	return nil
 }
 
 func (s *State) Save() error {
 	if err := s.saveEnvironments(); err != nil {
+		return err
+	}
+	if err := s.saveActiveContext(); err != nil {
+		return err
+	}
+	if err := s.saveInstalledPackages(); err != nil {
 		return err
 	}
 	return nil
@@ -54,7 +72,7 @@ func (s *State) loadFile(filename string, dest any) error {
 	if err != nil {
 		return err
 	}
-	if err := json.Unmarshal(content, dest); err != nil {
+	if err := yaml.Unmarshal(content, dest); err != nil {
 		return err
 	}
 	return nil
@@ -73,11 +91,11 @@ func (s *State) saveFile(filename string, src any) error {
 		s.config.ConfigDir,
 		filename,
 	)
-	jsonContent, err := json.Marshal(src)
+	yamlContent, err := yaml.Marshal(src)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(tmpPath, jsonContent, os.ModePerm); err != nil {
+	if err := os.WriteFile(tmpPath, yamlContent, os.ModePerm); err != nil {
 		return err
 	}
 	return nil
@@ -89,4 +107,26 @@ func (s *State) loadEnvironments() error {
 
 func (s *State) saveEnvironments() error {
 	return s.saveFile(environmentsFilename, &(s.Environments))
+}
+
+func (s *State) loadActiveContext() error {
+	if err := s.loadFile(activeContextFilename, &(s.ActiveContext)); err != nil {
+		return err
+	}
+	if s.ActiveContext == "" {
+		s.ActiveContext = defaultContext
+	}
+	return nil
+}
+
+func (s *State) saveActiveContext() error {
+	return s.saveFile(activeContextFilename, &(s.ActiveContext))
+}
+
+func (s *State) loadInstalledPackages() error {
+	return s.loadFile(installedPackagesFilename, &(s.InstalledPackages))
+}
+
+func (s *State) saveInstalledPackages() error {
+	return s.saveFile(installedPackagesFilename, &(s.InstalledPackages))
 }

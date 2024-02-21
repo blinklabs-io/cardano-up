@@ -68,5 +68,13 @@ func (p *PackageManager) AvailablePackages() []Package {
 }
 
 func (p *PackageManager) Install(pkg Package) error {
-	return pkg.install(p.config)
+	if err := pkg.install(p.config); err != nil {
+		return err
+	}
+	installedPkg := NewInstalledPackage(pkg, p.state.ActiveContext)
+	p.state.InstalledPackages = append(p.state.InstalledPackages, installedPkg)
+	if err := p.state.Save(); err != nil {
+		return err
+	}
+	return nil
 }
