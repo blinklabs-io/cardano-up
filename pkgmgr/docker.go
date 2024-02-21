@@ -91,6 +91,7 @@ func (d *DockerService) Start() error {
 		if err != nil {
 			return err
 		}
+		d.logger.Debug(fmt.Sprintf("starting container %s", d.ContainerName))
 		if err := client.ContainerStart(
 			context.Background(),
 			d.ContainerId,
@@ -112,6 +113,7 @@ func (d *DockerService) Stop() error {
 		if err != nil {
 			return err
 		}
+		d.logger.Debug(fmt.Sprintf("stopping container %s", d.ContainerName))
 		stopTimeout := 60
 		if err := client.ContainerStop(
 			context.Background(),
@@ -148,6 +150,7 @@ func (d *DockerService) Create() error {
 	if err != nil {
 		return err
 	}
+	d.logger.Debug(fmt.Sprintf("creating container %s", d.ContainerName))
 	resp, err := client.ContainerCreate(
 		context.Background(),
 		&container.Config{
@@ -190,6 +193,7 @@ func (d *DockerService) Remove() error {
 	if err != nil {
 		return err
 	}
+	d.logger.Debug(fmt.Sprintf("removing container %s", d.ContainerName))
 	if err := client.ContainerRemove(
 		context.Background(),
 		d.ContainerId,
@@ -201,11 +205,11 @@ func (d *DockerService) Remove() error {
 }
 
 func (d *DockerService) pullImage() error {
-	d.logger.Info(fmt.Sprintf("pulling image %s", d.Image))
 	client, err := d.getClient()
 	if err != nil {
 		return err
 	}
+	d.logger.Debug(fmt.Sprintf("pulling image %s", d.Image))
 	out, err := client.ImagePull(context.Background(), d.Image, types.ImagePullOptions{})
 	if err != nil {
 		return err
@@ -264,6 +268,10 @@ func (d *DockerService) refresh() error {
 	d.Binds = tmpBinds[:]
 	var tmpPorts []string
 	for port, portBindings := range container.NetworkSettings.Ports {
+		// Skip exposed container ports without a mapping
+		if len(portBindings) == 0 {
+			continue
+		}
 		tmpPort := fmt.Sprintf(
 			"0.0.0.0:%s:%s",
 			portBindings[0].HostPort,

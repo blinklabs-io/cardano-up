@@ -28,8 +28,8 @@ type Package struct {
 	InstallSteps []PackageInstallStep `yaml:"installSteps"`
 }
 
-func (p Package) install(cfg Config) error {
-	pkgName := fmt.Sprintf("%s-%s", p.Name, p.Version)
+func (p Package) install(cfg Config, context string) error {
+	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	for _, installStep := range p.InstallSteps {
 		// Make sure only one install method is specified per install step
 		if installStep.Docker != nil &&
@@ -42,6 +42,31 @@ func (p Package) install(cfg Config) error {
 			}
 		} else if installStep.File != nil {
 			if err := installStep.File.install(cfg, pkgName); err != nil {
+				return err
+			}
+		} else {
+			return ErrNoInstallMethods
+		}
+	}
+	return nil
+}
+
+func (p Package) uninstall(cfg Config, context string) error {
+	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
+	// Iterate over install steps in reverse
+	for idx := len(p.InstallSteps) - 1; idx >= 0; idx-- {
+		installStep := p.InstallSteps[idx]
+		// Make sure only one install method is specified per install step
+		if installStep.Docker != nil &&
+			installStep.File != nil {
+			return ErrMultipleInstallMethods
+		}
+		if installStep.Docker != nil {
+			if err := installStep.Docker.uninstall(cfg, pkgName); err != nil {
+				return err
+			}
+		} else if installStep.File != nil {
+			if err := installStep.File.uninstall(cfg, pkgName); err != nil {
 				return err
 			}
 		} else {
@@ -87,6 +112,23 @@ func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
 	return nil
 }
 
+func (p *PackageInstallStepDocker) uninstall(cfg Config, pkgName string) error {
+	containerName := fmt.Sprintf("%s-%s", pkgName, p.ContainerName)
+	svc, err := NewDockerServiceFromContainerName(containerName, cfg.Logger)
+	if err != nil {
+		return err
+	}
+	if running, _ := svc.Running(); running {
+		if err := svc.Stop(); err != nil {
+			return err
+		}
+	}
+	if err := svc.Remove(); err != nil {
+		return err
+	}
+	return nil
+}
+
 type PackageInstallStepFile struct {
 	Filename string      `yaml:"filename"`
 	Content  string      `yaml:"content"`
@@ -115,4 +157,15 @@ func (p *PackageInstallStepFile) install(cfg Config, pkgName string) error {
 	}
 	cfg.Logger.Debug(fmt.Sprintf("wrote file %s", filePath))
 	return nil
+}
+
+func (p *PackageInstallStepFile) uninstall(cfg Config, pkgName string) error {
+	filePath := filepath.Join(
+		cfg.ConfigDir,
+		"data",
+		pkgName,
+		p.Filename,
+	)
+	cfg.Logger.Debug(fmt.Sprintf("deleting file %s", filePath))
+	return os.Remove(filePath)
 }

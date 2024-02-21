@@ -66,6 +66,7 @@ func main() {
 		versionCommand(),
 		listAvailableCommand(),
 		installCommand(),
+		uninstallCommand(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {

@@ -23,10 +23,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func installCommand() *cobra.Command {
+func uninstallCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:   "install",
-		Short: "Install package",
+		Use:   "uninstall",
+		Short: "Uninstall package",
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(args) == 0 {
 				slog.Error("no package provided")
@@ -41,12 +41,12 @@ func installCommand() *cobra.Command {
 				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
 				os.Exit(1)
 			}
-			packages := pm.AvailablePackages()
+			installedPackages := pm.InstalledPackages()
 			foundPackage := false
-			for _, tmpPackage := range packages {
-				if tmpPackage.Name == args[0] {
+			for _, tmpPackage := range installedPackages {
+				if tmpPackage.Package.Name == args[0] {
 					foundPackage = true
-					if err := pm.Install(tmpPackage); err != nil {
+					if err := pm.Uninstall(tmpPackage); err != nil {
 						slog.Error(err.Error())
 						os.Exit(1)
 					}
@@ -54,10 +54,10 @@ func installCommand() *cobra.Command {
 				}
 			}
 			if !foundPackage {
-				slog.Error(fmt.Sprintf("no such package: %s", args[0]))
+				slog.Error(fmt.Sprintf("no such installed package: %s", args[0]))
 				os.Exit(1)
 			}
-			slog.Info(fmt.Sprintf("Successfully installed package %s", args[0]))
+			slog.Info(fmt.Sprintf("Successfully uninstalled package %s", args[0]))
 		},
 	}
 }
