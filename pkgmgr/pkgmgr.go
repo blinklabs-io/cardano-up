@@ -86,6 +86,31 @@ func (p *PackageManager) AvailablePackages() []Package {
 	return p.availablePackages[:]
 }
 
+func (p *PackageManager) Up() error {
+	// Find installed packages
+	installedPackages := p.InstalledPackages()
+	for _, tmpPackage := range installedPackages {
+		err := tmpPackage.Package.startService(p.config, tmpPackage.Context)
+		if err != nil {
+			return err
+		}
+
+	}
+	return nil
+}
+
+func (p *PackageManager) Down() error {
+	// Find installed packages
+	installedPackages := p.InstalledPackages()
+	for _, tmpPackage := range installedPackages {
+		err := tmpPackage.Package.stopService(p.config, tmpPackage.Context)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (p *PackageManager) InstalledPackages() []InstalledPackage {
 	var ret []InstalledPackage
 	for _, pkg := range p.state.InstalledPackages {
