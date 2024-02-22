@@ -63,6 +63,7 @@ func main() {
 
 	// Add subcommands
 	rootCmd.AddCommand(
+		contextCommand(),
 		versionCommand(),
 		listAvailableCommand(),
 		installCommand(),

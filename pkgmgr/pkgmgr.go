@@ -103,3 +103,44 @@ func (p *PackageManager) Uninstall(installedPkg InstalledPackage) error {
 	}
 	return nil
 }
+
+func (p *PackageManager) Contexts() map[string]Context {
+	return p.state.Contexts
+}
+
+func (p *PackageManager) ActiveContext() (string, Context) {
+	return p.state.ActiveContext, p.state.Contexts[p.state.ActiveContext]
+}
+
+func (p *PackageManager) AddContext(name string, context Context) error {
+	if _, ok := p.state.Contexts[name]; ok {
+		return ErrContextAlreadyExists
+	}
+	p.state.Contexts[name] = context
+	if err := p.state.Save(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *PackageManager) DeleteContext(name string) error {
+	if _, ok := p.state.Contexts[name]; !ok {
+		return ErrContextNotExist
+	}
+	delete(p.state.Contexts, name)
+	if err := p.state.Save(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *PackageManager) SetActiveContext(name string) error {
+	if _, ok := p.state.Contexts[name]; !ok {
+		return ErrContextNotExist
+	}
+	p.state.ActiveContext = name
+	if err := p.state.Save(); err != nil {
+		return err
+	}
+	return nil
+}

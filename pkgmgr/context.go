@@ -14,20 +14,16 @@
 
 package pkgmgr
 
-import (
-	"time"
+const (
+	defaultContextName = "default"
 )
 
-type InstalledPackage struct {
-	Package       Package
-	InstalledTime time.Time
-	Context       string
+var defaultContext = Context{
+	Network:     "preprod",
+	Description: "Default context",
 }
 
-func NewInstalledPackage(pkg Package, context string) InstalledPackage {
-	return InstalledPackage{
-		Package:       pkg,
-		InstalledTime: time.Now(),
-		Context:       context,
-	}
+type Context struct {
+	Description string `yaml:"description"`
+	Network     string `yaml:"network"`
 }
