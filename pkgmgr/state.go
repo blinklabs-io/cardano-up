@@ -1,3 +1,17 @@
+// Copyright 2024 Blink Labs Software
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package pkgmgr
 
 import (
@@ -8,9 +22,7 @@ import (
 )
 
 const (
-	defaultContext = "default"
-
-	environmentsFilename      = "environments.yaml"
+	contextsFilename          = "contexts.yaml"
 	activeContextFilename     = "active_context.yaml"
 	installedPackagesFilename = "installed_packages.yaml"
 )
@@ -18,19 +30,19 @@ const (
 type State struct {
 	config            Config
 	ActiveContext     string
-	Environments      []Environment
+	Contexts          map[string]Context
 	InstalledPackages []InstalledPackage
 }
 
 func NewState(cfg Config) *State {
 	return &State{
-		config:       cfg,
-		Environments: make([]Environment, 0),
+		config:   cfg,
+		Contexts: make(map[string]Context),
 	}
 }
 
 func (s *State) Load() error {
-	if err := s.loadEnvironments(); err != nil {
+	if err := s.loadContexts(); err != nil {
 		return err
 	}
 	if err := s.loadActiveContext(); err != nil {
@@ -43,7 +55,7 @@ func (s *State) Load() error {
 }
 
 func (s *State) Save() error {
-	if err := s.saveEnvironments(); err != nil {
+	if err := s.saveContexts(); err != nil {
 		return err
 	}
 	if err := s.saveActiveContext(); err != nil {
@@ -101,12 +113,18 @@ func (s *State) saveFile(filename string, src any) error {
 	return nil
 }
 
-func (s *State) loadEnvironments() error {
-	return s.loadFile(environmentsFilename, &(s.Environments))
+func (s *State) loadContexts() error {
+	if err := s.loadFile(contextsFilename, &(s.Contexts)); err != nil {
+		return err
+	}
+	if len(s.Contexts) == 0 {
+		s.Contexts[defaultContextName] = defaultContext
+	}
+	return nil
 }
 
-func (s *State) saveEnvironments() error {
-	return s.saveFile(environmentsFilename, &(s.Environments))
+func (s *State) saveContexts() error {
+	return s.saveFile(contextsFilename, &(s.Contexts))
 }
 
 func (s *State) loadActiveContext() error {
@@ -114,7 +132,7 @@ func (s *State) loadActiveContext() error {
 		return err
 	}
 	if s.ActiveContext == "" {
-		s.ActiveContext = defaultContext
+		s.ActiveContext = defaultContextName
 	}
 	return nil
 }

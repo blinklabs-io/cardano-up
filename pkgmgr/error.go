@@ -28,3 +28,9 @@ var ErrMultipleInstallMethods = errors.New("only one install method may be speci
 // ErrNoInstallMethods is returned when a package's install steps include an install step which has no
 // recognized install method specified
 var ErrNoInstallMethods = errors.New("no supported install method specified on install step")
+
+// ErrContextNotExist is returned when trying to selecting/managing a context that does not exist
+var ErrContextNotExist = errors.New("context does not exist")
+
+// ErrContextAlreadyExists is returned when creating a context with a name that is already in use
+var ErrContextAlreadyExists = errors.New("specified context already exists")
