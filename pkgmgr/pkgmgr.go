@@ -67,12 +67,37 @@ func (p *PackageManager) AvailablePackages() []Package {
 	return p.availablePackages[:]
 }
 
+func (p *PackageManager) InstalledPackages() []InstalledPackage {
+	return p.state.InstalledPackages
+}
+
 func (p *PackageManager) Install(pkg Package) error {
-	if err := pkg.install(p.config); err != nil {
+	if err := pkg.install(p.config, p.state.ActiveContext); err != nil {
 		return err
 	}
 	installedPkg := NewInstalledPackage(pkg, p.state.ActiveContext)
 	p.state.InstalledPackages = append(p.state.InstalledPackages, installedPkg)
+	if err := p.state.Save(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *PackageManager) Uninstall(installedPkg InstalledPackage) error {
+	if err := installedPkg.Package.uninstall(p.config, installedPkg.Context); err != nil {
+		return err
+	}
+	// Remove package from installed packages
+	var tmpInstalledPackages []InstalledPackage
+	for _, tmpInstalledPkg := range p.state.InstalledPackages {
+		if tmpInstalledPkg.Context == installedPkg.Context &&
+			tmpInstalledPkg.Package.Name == installedPkg.Package.Name &&
+			tmpInstalledPkg.Package.Version == installedPkg.Package.Version {
+			continue
+		}
+		tmpInstalledPackages = append(tmpInstalledPackages, tmpInstalledPkg)
+	}
+	p.state.InstalledPackages = tmpInstalledPackages[:]
 	if err := p.state.Save(); err != nil {
 		return err
 	}
