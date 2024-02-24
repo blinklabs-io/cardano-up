@@ -16,6 +16,7 @@ package pkgmgr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -26,6 +27,20 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
+)
+
+const (
+	dockerInstallError = `could not contact Docker daemon
+
+Docker is required to be already installed and running. Please refer to the following pages for more information
+about how to install Docker.
+
+ * https://docs.docker.com/get-docker/
+ * https://docs.docker.com/engine/install/
+
+If Docker is already installed but the socket is not in a standard location, you can use the DOCKER_HOST environment
+variable to point to it.
+`
 )
 
 type DockerService struct {
@@ -287,6 +302,7 @@ func (d *DockerService) getClient() (*client.Client, error) {
 	if d.client == nil {
 		tmpClient, err := client.NewClientWithOpts(
 			client.WithAPIVersionNegotiation(),
+			client.WithHostFromEnv(),
 		)
 		if err != nil {
 			return nil, err
@@ -294,4 +310,12 @@ func (d *DockerService) getClient() (*client.Client, error) {
 		d.client = tmpClient
 	}
 	return d.client, nil
+}
+
+func CheckDockerConnectivity() error {
+	tmpDockerService := &DockerService{}
+	if _, err := tmpDockerService.getClient(); err != nil {
+		return errors.New(dockerInstallError)
+	}
+	return nil
 }
