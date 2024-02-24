@@ -30,12 +30,21 @@ type Package struct {
 
 func (p Package) install(cfg Config, context string) error {
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
+	// Run pre-flight checks
 	for _, installStep := range p.InstallSteps {
 		// Make sure only one install method is specified per install step
 		if installStep.Docker != nil &&
 			installStep.File != nil {
 			return ErrMultipleInstallMethods
 		}
+		if installStep.Docker != nil {
+			if err := installStep.Docker.preflight(cfg, pkgName); err != nil {
+				return fmt.Errorf("pre-flight check failed: %s", err)
+			}
+		}
+	}
+	// Perform install
+	for _, installStep := range p.InstallSteps {
 		if installStep.Docker != nil {
 			if err := installStep.Docker.install(cfg, pkgName); err != nil {
 				return err
@@ -89,6 +98,21 @@ type PackageInstallStepDocker struct {
 	Args          []string          `yaml:"args,omitempty"`
 	Binds         []string          `yaml:"binds,omitempty"`
 	Ports         []string          `yaml:"ports,omitempty"`
+}
+
+func (p *PackageInstallStepDocker) preflight(cfg Config, pkgName string) error {
+	if err := CheckDockerConnectivity(); err != nil {
+		return err
+	}
+	containerName := fmt.Sprintf("%s-%s", pkgName, p.ContainerName)
+	svc, err := NewDockerServiceFromContainerName(containerName, cfg.Logger)
+	if err != nil {
+		return err
+	}
+	if svc != nil {
+		return ErrContainerAlreadyExists
+	}
+	return nil
 }
 
 func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {

@@ -34,3 +34,6 @@ var ErrContextNotExist = errors.New("context does not exist")
 
 // ErrContextAlreadyExists is returned when creating a context with a name that is already in use
 var ErrContextAlreadyExists = errors.New("specified context already exists")
+
+// ErrContainerAlreadyExists is returned when creating a new container with a name that is already in use
+var ErrContainerAlreadyExists = errors.New("specified container already exists")
