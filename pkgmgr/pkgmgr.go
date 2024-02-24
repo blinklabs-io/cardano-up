@@ -144,3 +144,14 @@ func (p *PackageManager) SetActiveContext(name string) error {
 	}
 	return nil
 }
+
+func (p *PackageManager) UpdateContext(name string, context Context) error {
+	if _, ok := p.state.Contexts[name]; !ok {
+		return ErrContextNotExist
+	}
+	p.state.Contexts[name] = context
+	if err := p.state.Save(); err != nil {
+		return err
+	}
+	return nil
+}

@@ -15,6 +15,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -23,23 +24,55 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var installFlags = struct {
+	network string
+}{}
+
 func installCommand() *cobra.Command {
-	return &cobra.Command{
+	installCmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install package",
-		Run: func(cmd *cobra.Command, args []string) {
+		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				slog.Error("no package provided")
-				os.Exit(1)
+				return errors.New("no package provided")
 			}
 			if len(args) > 1 {
-				slog.Error("only one package may be specified a a time")
-				os.Exit(1)
+				return errors.New("only one package may be specified a a time")
 			}
+			return nil
+		},
+		Run: func(cmd *cobra.Command, args []string) {
 			pm, err := pkgmgr.NewDefaultPackageManager()
 			if err != nil {
 				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
 				os.Exit(1)
+			}
+			if installFlags.network != "" {
+				activeContextName, activeContext := pm.ActiveContext()
+				if activeContext.Network == "" {
+					activeContext.Network = installFlags.network
+					if err := pm.UpdateContext(activeContextName, activeContext); err != nil {
+						slog.Error(err.Error())
+						os.Exit(1)
+					}
+					slog.Debug(
+						fmt.Sprintf(
+							"set active context network to %q",
+							installFlags.network,
+						),
+					)
+				} else {
+					if activeContext.Network != installFlags.network {
+						slog.Error(
+							fmt.Sprintf(
+								"active context already has network %q, cannot set to %q",
+								activeContext.Network,
+								installFlags.network,
+							),
+						)
+						os.Exit(1)
+					}
+				}
 			}
 			packages := pm.AvailablePackages()
 			foundPackage := false
@@ -60,4 +93,6 @@ func installCommand() *cobra.Command {
 			slog.Info(fmt.Sprintf("Successfully installed package %s", args[0]))
 		},
 	}
+	installCmd.Flags().StringVarP(&installFlags.network, "network", "n", "preprod", "specifies network for package")
+	return installCmd
 }
