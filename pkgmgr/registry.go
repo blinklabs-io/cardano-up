@@ -25,7 +25,8 @@ var RegistryPackages = []Package{
 					ContainerName: "cardano-node",
 					Image:         "ghcr.io/blinklabs-io/cardano-node:8.7.3",
 					Env: map[string]string{
-						"NETWORK": "preview",
+						"NETWORK":                  "{{ .Context.Network }}",
+						"CARDANO_NODE_SOCKET_PATH": "/ipc/node.socket",
 					},
 					Ports: []string{
 						"3001:3001",
@@ -33,11 +34,11 @@ var RegistryPackages = []Package{
 				},
 			},
 			{
-				// TODO: turn this into a template
 				File: &PackageInstallStepFile{
-					Filename: "test-cardano-cli",
+					Filename: "cardano-cli",
+					// TODO: figure out how to get network magic for named network
 					Content: `#!/bin/bash
-docker exec -ti cardano-node-8.7.3-cardano-node cardano-cli $@
+docker exec -ti {{ .Package.Name }}-cardano-node cardano-cli $@
 `,
 				},
 			},

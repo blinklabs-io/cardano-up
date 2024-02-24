@@ -29,7 +29,22 @@ type Package struct {
 }
 
 func (p Package) install(cfg Config, context string) error {
+	// Update template vars
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
+	cfg.Template = cfg.Template.WithVars(
+		map[string]any{
+			"Package": map[string]any{
+				"Name":      pkgName,
+				"ShortName": p.Name,
+				"Version":   p.Version,
+			},
+			"DataDir": filepath.Join(
+				cfg.ConfigDir,
+				"data",
+				pkgName,
+			),
+		},
+	)
 	// Run pre-flight checks
 	for _, installStep := range p.InstallSteps {
 		// Make sure only one install method is specified per install step
@@ -117,15 +132,64 @@ func (p *PackageInstallStepDocker) preflight(cfg Config, pkgName string) error {
 
 func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
 	containerName := fmt.Sprintf("%s-%s", pkgName, p.ContainerName)
+	extraVars := map[string]any{
+		"Container": map[string]any{
+			"Name": containerName,
+		},
+	}
+	tmpImage, err := cfg.Template.Render(p.Image, extraVars)
+	if err != nil {
+		return err
+	}
+	tmpEnv := make(map[string]string)
+	for k, v := range p.Env {
+		tmplVal, err := cfg.Template.Render(v, extraVars)
+		if err != nil {
+			return err
+		}
+		tmpEnv[k] = tmplVal
+	}
+	var tmpCommand []string
+	for _, cmd := range p.Command {
+		tmpCmd, err := cfg.Template.Render(cmd, extraVars)
+		if err != nil {
+			return err
+		}
+		tmpCommand = append(tmpCommand, tmpCmd)
+	}
+	var tmpArgs []string
+	for _, arg := range p.Args {
+		tmpArg, err := cfg.Template.Render(arg, extraVars)
+		if err != nil {
+			return err
+		}
+		tmpArgs = append(tmpArgs, tmpArg)
+	}
+	var tmpBinds []string
+	for _, bind := range p.Binds {
+		tmpBind, err := cfg.Template.Render(bind, extraVars)
+		if err != nil {
+			return err
+		}
+		tmpBinds = append(tmpBinds, tmpBind)
+	}
+	var tmpPorts []string
+	for _, port := range p.Ports {
+		tmpPort, err := cfg.Template.Render(port, extraVars)
+		if err != nil {
+			return err
+		}
+		tmpPorts = append(tmpPorts, tmpPort)
+	}
 	svc := DockerService{
 		logger:        cfg.Logger,
 		ContainerName: containerName,
-		Image:         p.Image,
-		Env:           p.Env,
-		Command:       p.Command,
-		Args:          p.Args,
-		Binds:         p.Binds,
-		Ports:         p.Ports,
+		Image:         tmpImage,
+		Env:           tmpEnv,
+		Command:       tmpCommand,
+		Args:          tmpArgs,
+		Binds:         tmpBinds,
+		Ports:         tmpPorts,
 	}
 	if err := svc.Create(); err != nil {
 		return err
@@ -156,17 +220,19 @@ func (p *PackageInstallStepDocker) uninstall(cfg Config, pkgName string) error {
 type PackageInstallStepFile struct {
 	Filename string      `yaml:"filename"`
 	Content  string      `yaml:"content"`
-	Template bool        `yaml:"template"`
 	Mode     fs.FileMode `yaml:"mode,omitempty"`
 }
 
 func (p *PackageInstallStepFile) install(cfg Config, pkgName string) error {
-	// TODO: add templating support
+	tmpFilePath, err := cfg.Template.Render(p.Filename, nil)
+	if err != nil {
+		return err
+	}
 	filePath := filepath.Join(
 		cfg.ConfigDir,
 		"data",
 		pkgName,
-		p.Filename,
+		tmpFilePath,
 	)
 	parentDir := filepath.Dir(filePath)
 	if err := os.MkdirAll(parentDir, fs.ModePerm); err != nil {
@@ -176,7 +242,11 @@ func (p *PackageInstallStepFile) install(cfg Config, pkgName string) error {
 	if p.Mode > 0 {
 		fileMode = p.Mode
 	}
-	if err := os.WriteFile(filePath, []byte(p.Content), fileMode); err != nil {
+	tmpContent, err := cfg.Template.Render(p.Content, nil)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filePath, []byte(tmpContent), fileMode); err != nil {
 		return err
 	}
 	cfg.Logger.Debug(fmt.Sprintf("wrote file %s", filePath))
