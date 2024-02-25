@@ -56,11 +56,26 @@ func (p *PackageManager) init() error {
 	}
 	// TODO: replace this with syncing a repo and reading from disk
 	p.availablePackages = append(p.availablePackages, RegistryPackages...)
-	// TODO: remove me
-	if err := p.state.Save(); err != nil {
-		return err
-	}
+	// Setup templating
+	p.initTemplate()
 	return nil
+}
+
+func (p *PackageManager) initTemplate() {
+	activeContextName, activeContext := p.ActiveContext()
+	tmplVars := map[string]any{
+		"Context": map[string]any{
+			"Name":    activeContextName,
+			"Network": activeContext.Network,
+		},
+	}
+	tmpConfig := p.config
+	if tmpConfig.Template == nil {
+		tmpConfig.Template = NewTemplate(tmplVars)
+	} else {
+		tmpConfig.Template = tmpConfig.Template.WithVars(tmplVars)
+	}
+	p.config = tmpConfig
 }
 
 func (p *PackageManager) AvailablePackages() []Package {

@@ -25,6 +25,7 @@ type Config struct {
 	ConfigDir string
 	CacheDir  string
 	Logger    *slog.Logger
+	Template  *Template
 }
 
 func NewDefaultConfig() (Config, error) {
