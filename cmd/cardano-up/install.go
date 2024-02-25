@@ -74,6 +74,14 @@ func installCommand() *cobra.Command {
 					}
 				}
 			}
+			// Check that context network is set
+			_, activeContext := pm.ActiveContext()
+			if activeContext.Network == "" {
+				slog.Error(
+					"no network specified for context, use -n/--network to specify a network",
+				)
+				os.Exit(1)
+			}
 			packages := pm.AvailablePackages()
 			foundPackage := false
 			for _, tmpPackage := range packages {
@@ -93,6 +101,6 @@ func installCommand() *cobra.Command {
 			slog.Info(fmt.Sprintf("Successfully installed package %s", args[0]))
 		},
 	}
-	installCmd.Flags().StringVarP(&installFlags.network, "network", "n", "preprod", "specifies network for package")
+	installCmd.Flags().StringVarP(&installFlags.network, "network", "n", "", "specifies network for package")
 	return installCmd
 }
