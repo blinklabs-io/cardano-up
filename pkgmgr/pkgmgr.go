@@ -83,22 +83,55 @@ func (p *PackageManager) AvailablePackages() []Package {
 }
 
 func (p *PackageManager) InstalledPackages() []InstalledPackage {
+	var ret []InstalledPackage
+	for _, pkg := range p.state.InstalledPackages {
+		if pkg.Context == p.state.ActiveContext {
+			ret = append(ret, pkg)
+		}
+	}
+	return ret
+}
+
+func (p *PackageManager) InstalledPackagesAllContexts() []InstalledPackage {
 	return p.state.InstalledPackages
 }
 
-func (p *PackageManager) Install(pkg Package) error {
-	if err := pkg.install(p.config, p.state.ActiveContext); err != nil {
+func (p *PackageManager) Install(pkgs ...string) error {
+	resolver, err := NewResolver(
+		p.InstalledPackages(),
+		p.AvailablePackages(),
+		p.config.Logger,
+	)
+	if err != nil {
 		return err
 	}
-	installedPkg := NewInstalledPackage(pkg, p.state.ActiveContext)
-	p.state.InstalledPackages = append(p.state.InstalledPackages, installedPkg)
-	if err := p.state.Save(); err != nil {
+	installPkgs, err := resolver.Install(pkgs...)
+	if err != nil {
 		return err
+	}
+	for _, installPkg := range installPkgs {
+		if err := installPkg.install(p.config, p.state.ActiveContext); err != nil {
+			return err
+		}
+		installedPkg := NewInstalledPackage(installPkg, p.state.ActiveContext)
+		p.state.InstalledPackages = append(p.state.InstalledPackages, installedPkg)
+		if err := p.state.Save(); err != nil {
+			return err
+		}
+		p.config.Logger.Info(
+			fmt.Sprintf(
+				"Successfully installed package %s (= %s) in context %q",
+				installPkg.Name,
+				installPkg.Version,
+				p.state.ActiveContext,
+			),
+		)
 	}
 	return nil
 }
 
 func (p *PackageManager) Uninstall(installedPkg InstalledPackage) error {
+	// TODO: resolve dependencies
 	if err := installedPkg.Package.uninstall(p.config, installedPkg.Context); err != nil {
 		return err
 	}

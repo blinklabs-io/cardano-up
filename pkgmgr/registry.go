@@ -65,4 +65,21 @@ docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.5.17 $@
 			},
 		},
 	},
+
+	// Test packages
+	{
+		Name:    "test-packageA",
+		Version: "1.0.2",
+	},
+	{
+		Name:    "test-packageA",
+		Version: "2.1.3",
+	},
+	{
+		Name:    "test-packageB",
+		Version: "0.1.0",
+		Dependencies: []string{
+			"test-packageA < 2.0.0, >= 1.0.2",
+		},
+	},
 }
