@@ -29,7 +29,7 @@ var RegistryPackages = []Package{
 						"CARDANO_NODE_SOCKET_PATH": "/ipc/node.socket",
 					},
 					Ports: []string{
-						"3001:3001",
+						"3001",
 					},
 				},
 			},
