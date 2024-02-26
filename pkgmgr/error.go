@@ -14,7 +14,10 @@
 
 package pkgmgr
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // ErrOperationFailed is a placeholder error for operations that directly log errors.
 // It's used to signify when an operation has failed when the actual error message is
@@ -37,3 +40,26 @@ var ErrContextAlreadyExists = errors.New("specified context already exists")
 
 // ErrContainerAlreadyExists is returned when creating a new container with a name that is already in use
 var ErrContainerAlreadyExists = errors.New("specified container already exists")
+
+func NewResolverPackageAlreadyInstalledError(pkgName string) error {
+	return fmt.Errorf(
+		"the package %q is already installed in the current context\n\nYou can use 'cardano-up context create' to create an empty context to install another instance of the package",
+		pkgName,
+	)
+}
+
+func NewResolverNoAvailablePackageDependencyError(depSpec string) error {
+	return fmt.Errorf(
+		"no available package found for dependency: %s",
+		depSpec,
+	)
+}
+
+func NewResolverInstalledPackageNoMatchVersionSpecError(pkgName string, pkgVersion string, depSpec string) error {
+	return fmt.Errorf(
+		"installed package \"%s = %s\" does not match dependency: %s",
+		pkgName,
+		pkgVersion,
+		depSpec,
+	)
+}

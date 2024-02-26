@@ -26,6 +26,7 @@ type Package struct {
 	Version      string               `yaml:"version"`
 	Description  string               `yaml:"description"`
 	InstallSteps []PackageInstallStep `yaml:"installSteps"`
+	Dependencies []string             `yaml:"dependencies"`
 }
 
 func (p Package) install(cfg Config, context string) error {

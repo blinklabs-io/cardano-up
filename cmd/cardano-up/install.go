@@ -82,23 +82,11 @@ func installCommand() *cobra.Command {
 				)
 				os.Exit(1)
 			}
-			packages := pm.AvailablePackages()
-			foundPackage := false
-			for _, tmpPackage := range packages {
-				if tmpPackage.Name == args[0] {
-					foundPackage = true
-					if err := pm.Install(tmpPackage); err != nil {
-						slog.Error(err.Error())
-						os.Exit(1)
-					}
-					break
-				}
-			}
-			if !foundPackage {
-				slog.Error(fmt.Sprintf("no such package: %s", args[0]))
+			// Install requested package
+			if err := pm.Install(args[0]); err != nil {
+				slog.Error(err.Error())
 				os.Exit(1)
 			}
-			slog.Info(fmt.Sprintf("Successfully installed package %s", args[0]))
 		},
 	}
 	installCmd.Flags().StringVarP(&installFlags.network, "network", "n", "", "specifies network for package")
