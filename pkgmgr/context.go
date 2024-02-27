@@ -19,11 +19,11 @@ const (
 )
 
 var defaultContext = Context{
-	Network:     "preprod",
 	Description: "Default context",
 }
 
 type Context struct {
-	Description string `yaml:"description"`
-	Network     string `yaml:"network"`
+	Description  string `yaml:"description"`
+	Network      string `yaml:"network"`
+	NetworkMagic uint32 `yaml:"networkMagic"`
 }
