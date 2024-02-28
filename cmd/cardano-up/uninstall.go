@@ -41,23 +41,11 @@ func uninstallCommand() *cobra.Command {
 				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
 				os.Exit(1)
 			}
-			installedPackages := pm.InstalledPackages()
-			foundPackage := false
-			for _, tmpPackage := range installedPackages {
-				if tmpPackage.Package.Name == args[0] {
-					foundPackage = true
-					if err := pm.Uninstall(tmpPackage); err != nil {
-						slog.Error(err.Error())
-						os.Exit(1)
-					}
-					break
-				}
-			}
-			if !foundPackage {
-				slog.Error(fmt.Sprintf("no such installed package: %s", args[0]))
+			// Uninstall package
+			if err := pm.Uninstall(args[0]); err != nil {
+				slog.Error(err.Error())
 				os.Exit(1)
 			}
-			slog.Info(fmt.Sprintf("Successfully uninstalled package %s", args[0]))
 		},
 	}
 }

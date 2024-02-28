@@ -113,6 +113,41 @@ func (r *Resolver) Install(pkgs ...string) ([]Package, error) {
 	return ret, nil
 }
 
+func (r *Resolver) Uninstall(pkgs ...InstalledPackage) error {
+	for _, pkg := range pkgs {
+		pkgVersion, err := version.NewVersion(pkg.Package.Version)
+		if err != nil {
+			return err
+		}
+		for _, installedPkg := range r.installedPkgs {
+			for _, dep := range installedPkg.Package.Dependencies {
+				depPkgName, depPkgVersionSpec := r.splitPackage(dep)
+				// Skip installed package if it doesn't match dep package name
+				if pkg.Package.Name != depPkgName {
+					continue
+				}
+				// Skip installed packages that don't match the specified dep version constraint
+				if depPkgVersionSpec != "" {
+					constraints, err := version.NewConstraint(depPkgVersionSpec)
+					if err != nil {
+						return err
+					}
+					if !constraints.Check(pkgVersion) {
+						continue
+					}
+				}
+				return NewPackageUninstallWouldBreakDepsError(
+					pkg.Package.Name,
+					pkg.Package.Version,
+					installedPkg.Package.Name,
+					installedPkg.Package.Version,
+				)
+			}
+		}
+	}
+	return nil
+}
+
 func (r *Resolver) getNeededDeps(pkg Package) ([]Package, error) {
 	// NOTE: this function is very naive and only works for a single level of dependencies
 	var ret []Package
