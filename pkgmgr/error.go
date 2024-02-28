@@ -79,3 +79,21 @@ func NewResolverInstalledPackageNoMatchVersionSpecError(pkgName string, pkgVersi
 		depSpec,
 	)
 }
+
+func NewPackageNotInstalledError(pkgName string, context string) error {
+	return fmt.Errorf(
+		"package %q is not installed in context %q",
+		pkgName,
+		context,
+	)
+}
+
+func NewPackageUninstallWouldBreakDepsError(uninstallPkgName string, uninstallPkgVersion string, dependentPkgName string, dependentPkgVersion string) error {
+	return fmt.Errorf(
+		`uninstall of package "%s = %s" would break dependencies for package "%s = %s"`,
+		uninstallPkgName,
+		uninstallPkgVersion,
+		dependentPkgName,
+		dependentPkgVersion,
+	)
+}

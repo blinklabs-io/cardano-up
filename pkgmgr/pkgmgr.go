@@ -138,24 +138,66 @@ func (p *PackageManager) Install(pkgs ...string) error {
 	return nil
 }
 
-func (p *PackageManager) Uninstall(installedPkg InstalledPackage) error {
-	// TODO: resolve dependencies
-	if err := installedPkg.Package.uninstall(p.config, installedPkg.Context); err != nil {
-		return err
-	}
-	// Remove package from installed packages
-	var tmpInstalledPackages []InstalledPackage
-	for _, tmpInstalledPkg := range p.state.InstalledPackages {
-		if tmpInstalledPkg.Context == installedPkg.Context &&
-			tmpInstalledPkg.Package.Name == installedPkg.Package.Name &&
-			tmpInstalledPkg.Package.Version == installedPkg.Package.Version {
-			continue
+func (p *PackageManager) Uninstall(pkgs ...string) error {
+	// Find installed packages
+	activeContextName, _ := p.ActiveContext()
+	installedPackages := p.InstalledPackages()
+	var uninstallPkgs []InstalledPackage
+	for _, pkg := range pkgs {
+		foundPackage := false
+		for _, tmpPackage := range installedPackages {
+			if tmpPackage.Package.Name == pkg {
+				foundPackage = true
+				uninstallPkgs = append(
+					uninstallPkgs,
+					tmpPackage,
+				)
+				break
+			}
 		}
-		tmpInstalledPackages = append(tmpInstalledPackages, tmpInstalledPkg)
+		if !foundPackage {
+			return NewPackageNotInstalledError(pkg, activeContextName)
+		}
 	}
-	p.state.InstalledPackages = tmpInstalledPackages[:]
-	if err := p.state.Save(); err != nil {
+	// Resolve dependencies
+	resolver, err := NewResolver(
+		p.InstalledPackages(),
+		p.AvailablePackages(),
+		p.config.Logger,
+	)
+	if err != nil {
 		return err
+	}
+	if err := resolver.Uninstall(uninstallPkgs...); err != nil {
+		return err
+	}
+	for _, uninstallPkg := range uninstallPkgs {
+		// Uninstall package
+		if err := uninstallPkg.Package.uninstall(p.config, uninstallPkg.Context); err != nil {
+			return err
+		}
+		// Remove package from installed packages
+		var tmpInstalledPackages []InstalledPackage
+		for _, tmpInstalledPkg := range p.state.InstalledPackages {
+			if tmpInstalledPkg.Context == uninstallPkg.Context &&
+				tmpInstalledPkg.Package.Name == uninstallPkg.Package.Name &&
+				tmpInstalledPkg.Package.Version == uninstallPkg.Package.Version {
+				continue
+			}
+			tmpInstalledPackages = append(tmpInstalledPackages, tmpInstalledPkg)
+		}
+		p.state.InstalledPackages = tmpInstalledPackages[:]
+		if err := p.state.Save(); err != nil {
+			return err
+		}
+		p.config.Logger.Info(
+			fmt.Sprintf(
+				"Successfully uninstalled package %s (= %s) from context %q",
+				uninstallPkg.Package.Name,
+				uninstallPkg.Package.Version,
+				activeContextName,
+			),
+		)
 	}
 	return nil
 }
