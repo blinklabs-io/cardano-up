@@ -52,7 +52,7 @@ docker exec -ti {{ .Package.Name }}-cardano-node cardano-cli $@
 			{
 				Docker: &PackageInstallStepDocker{
 					ContainerName: "mithril-client",
-					Image:         "ghcr.io/blinklabs-io/mithril-client:0.5.17",
+					Image:         "ghcr.io/blinklabs-io/mithril-client:0.5.17-1",
 				},
 			},
 			{
@@ -60,6 +60,27 @@ docker exec -ti {{ .Package.Name }}-cardano-node cardano-cli $@
 					Filename: "mithril-client",
 					Content: `#!/bin/bash
 docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.5.17 $@
+`,
+				},
+			},
+		},
+	},
+	{
+		Name:        "mithril-client",
+		Version:     "0.7.0",
+		Description: "Mithril client by Input Output Global",
+		InstallSteps: []PackageInstallStep{
+			{
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "mithril-client",
+					Image:         "ghcr.io/blinklabs-io/mithril-client:0.7.0-1",
+				},
+			},
+			{
+				File: &PackageInstallStepFile{
+					Filename: "mithril-client",
+					Content: `#!/bin/bash
+docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.7.0-1 $@
 `,
 				},
 			},
