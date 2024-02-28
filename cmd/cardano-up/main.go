@@ -65,6 +65,7 @@ func main() {
 	rootCmd.AddCommand(
 		contextCommand(),
 		versionCommand(),
+		listCommand(),
 		listAvailableCommand(),
 		installCommand(),
 		uninstallCommand(),

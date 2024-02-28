@@ -23,6 +23,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var listFlags = struct {
+	all bool
+}{}
+
 func listAvailableCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list-available",
@@ -34,11 +38,74 @@ func listAvailableCommand() *cobra.Command {
 				os.Exit(1)
 			}
 			packages := pm.AvailablePackages()
-			pkgOutput := "Available packages:\n\n"
+			slog.Info("Available packages:\n")
+			slog.Info(
+				fmt.Sprintf(
+					"%-20s %-12s %s",
+					"Name",
+					"Version",
+					"Description",
+				),
+			)
 			for _, tmpPackage := range packages {
-				pkgOutput += fmt.Sprintf("%s (%s)    %s\n", tmpPackage.Name, tmpPackage.Version, tmpPackage.Description)
+				slog.Info(
+					fmt.Sprintf(
+						"%-20s %-12s %s",
+						tmpPackage.Name,
+						tmpPackage.Version,
+						tmpPackage.Description,
+					),
+				)
 			}
-			slog.Info(pkgOutput)
 		},
 	}
+}
+
+func listCommand() *cobra.Command {
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List installed packages",
+		Run: func(cmd *cobra.Command, args []string) {
+			pm, err := pkgmgr.NewDefaultPackageManager()
+			if err != nil {
+				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
+				os.Exit(1)
+			}
+			activeContextName, _ := pm.ActiveContext()
+			var packages []pkgmgr.InstalledPackage
+			if listFlags.all {
+				packages = pm.InstalledPackagesAllContexts()
+				slog.Info("Installed packages (all contexts):\n")
+			} else {
+				packages = pm.InstalledPackages()
+				slog.Info(fmt.Sprintf("Installed packages (from context %q):\n", activeContextName))
+			}
+			if len(packages) > 0 {
+				slog.Info(
+					fmt.Sprintf(
+						"%-20s %-12s %-15s %s",
+						"Name",
+						"Version",
+						"Context",
+						"Description",
+					),
+				)
+				for _, tmpPackage := range packages {
+					slog.Info(
+						fmt.Sprintf(
+							"%-20s %-12s %-15s %s",
+							tmpPackage.Package.Name,
+							tmpPackage.Package.Version,
+							tmpPackage.Context,
+							tmpPackage.Package.Description,
+						),
+					)
+				}
+			} else {
+				slog.Info(`No packages installed`)
+			}
+		},
+	}
+	listCmd.Flags().BoolVarP(&listFlags.all, "all", "A", false, "show packages from all contexts (defaults to only active context)")
+	return listCmd
 }
