@@ -179,11 +179,6 @@ func contextDeleteCommand() *cobra.Command {
 				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
 				os.Exit(1)
 			}
-			activeContext, _ := pm.ActiveContext()
-			if args[0] == activeContext {
-				slog.Error("cannot delete active context")
-				os.Exit(1)
-			}
 			if err := pm.DeleteContext(args[0]); err != nil {
 				slog.Error(fmt.Sprintf("failed to delete context: %s", err))
 				os.Exit(1)
@@ -196,6 +191,5 @@ func contextDeleteCommand() *cobra.Command {
 			)
 		},
 	}
-	cmd.Flags().StringVarP(&contextFlags.description, "description", "d", "", "specifies description for context")
 	return cmd
 }

@@ -38,8 +38,24 @@ var ErrContextNotExist = errors.New("context does not exist")
 // ErrContextAlreadyExists is returned when creating a context with a name that is already in use
 var ErrContextAlreadyExists = errors.New("specified context already exists")
 
+// ErrContextNoChangeNetwork is returned when updating a context with a network different than what was previously configured
+var ErrContextNoChangeNetwork = errors.New("cannot change the configured network for a context")
+
+// ErrContextInstallNoNetwork is returned when performing an install with no network specified on the active context
+var ErrContextInstallNoNetwork = errors.New("no network specified for context")
+
+// ErrContextNoDeleteActive is returned when attempting to delete the active context
+var ErrContextNoDeleteActive = errors.New("cannot delete active context")
+
 // ErrContainerAlreadyExists is returned when creating a new container with a name that is already in use
 var ErrContainerAlreadyExists = errors.New("specified container already exists")
+
+func NewUnknownNetworkError(networkName string) error {
+	return fmt.Errorf(
+		"unknown network %q",
+		networkName,
+	)
+}
 
 func NewResolverPackageAlreadyInstalledError(pkgName string) error {
 	return fmt.Errorf(

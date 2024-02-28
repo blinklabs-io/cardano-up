@@ -24,6 +24,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	// The default network used when installing into an empty context
+	defaultNetwork = "preprod"
+)
+
 var installFlags = struct {
 	network string
 }{}
@@ -47,40 +52,35 @@ func installCommand() *cobra.Command {
 				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
 				os.Exit(1)
 			}
+			activeContextName, activeContext := pm.ActiveContext()
+			// Update context network if specified
 			if installFlags.network != "" {
-				activeContextName, activeContext := pm.ActiveContext()
-				if activeContext.Network == "" {
-					activeContext.Network = installFlags.network
-					if err := pm.UpdateContext(activeContextName, activeContext); err != nil {
-						slog.Error(err.Error())
-						os.Exit(1)
-					}
-					slog.Debug(
-						fmt.Sprintf(
-							"set active context network to %q",
-							installFlags.network,
-						),
-					)
-				} else {
-					if activeContext.Network != installFlags.network {
-						slog.Error(
-							fmt.Sprintf(
-								"active context already has network %q, cannot set to %q",
-								activeContext.Network,
-								installFlags.network,
-							),
-						)
-						os.Exit(1)
-					}
+				activeContext.Network = installFlags.network
+				if err := pm.UpdateContext(activeContextName, activeContext); err != nil {
+					slog.Error(err.Error())
+					os.Exit(1)
 				}
+				slog.Debug(
+					fmt.Sprintf(
+						"set active context network to %q",
+						installFlags.network,
+					),
+				)
 			}
 			// Check that context network is set
-			_, activeContext := pm.ActiveContext()
 			if activeContext.Network == "" {
-				slog.Error(
-					"no network specified for context, use -n/--network to specify a network",
+				activeContext.Network = defaultNetwork
+				if err := pm.UpdateContext(activeContextName, activeContext); err != nil {
+					slog.Error(err.Error())
+					os.Exit(1)
+				}
+				slog.Warn(
+					fmt.Sprintf(
+						"defaulting to network %q for context %q",
+						defaultNetwork,
+						activeContextName,
+					),
 				)
-				os.Exit(1)
 			}
 			// Install requested package
 			if err := pm.Install(args[0]); err != nil {
@@ -89,6 +89,6 @@ func installCommand() *cobra.Command {
 			}
 		},
 	}
-	installCmd.Flags().StringVarP(&installFlags.network, "network", "n", "", "specifies network for package")
+	installCmd.Flags().StringVarP(&installFlags.network, "network", "n", "", fmt.Sprintf("specifies network for package (defaults to %q for empty context)", defaultNetwork))
 	return installCmd
 }

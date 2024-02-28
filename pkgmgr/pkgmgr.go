@@ -17,6 +17,8 @@ package pkgmgr
 import (
 	"errors"
 	"fmt"
+
+	ouroboros "github.com/blinklabs-io/gouroboros"
 )
 
 type PackageManager struct {
@@ -65,8 +67,9 @@ func (p *PackageManager) initTemplate() {
 	activeContextName, activeContext := p.ActiveContext()
 	tmplVars := map[string]any{
 		"Context": map[string]any{
-			"Name":    activeContextName,
-			"Network": activeContext.Network,
+			"Name":         activeContextName,
+			"Network":      activeContext.Network,
+			"NetworkMagic": activeContext.NetworkMagic,
 		},
 	}
 	tmpConfig := p.config
@@ -97,6 +100,11 @@ func (p *PackageManager) InstalledPackagesAllContexts() []InstalledPackage {
 }
 
 func (p *PackageManager) Install(pkgs ...string) error {
+	// Check context for network
+	activeContextName, activeContext := p.ActiveContext()
+	if activeContext.Network == "" {
+		return ErrContextInstallNoNetwork
+	}
 	resolver, err := NewResolver(
 		p.InstalledPackages(),
 		p.AvailablePackages(),
@@ -110,10 +118,10 @@ func (p *PackageManager) Install(pkgs ...string) error {
 		return err
 	}
 	for _, installPkg := range installPkgs {
-		if err := installPkg.install(p.config, p.state.ActiveContext); err != nil {
+		if err := installPkg.install(p.config, activeContextName); err != nil {
 			return err
 		}
-		installedPkg := NewInstalledPackage(installPkg, p.state.ActiveContext)
+		installedPkg := NewInstalledPackage(installPkg, activeContextName)
 		p.state.InstalledPackages = append(p.state.InstalledPackages, installedPkg)
 		if err := p.state.Save(); err != nil {
 			return err
@@ -123,7 +131,7 @@ func (p *PackageManager) Install(pkgs ...string) error {
 				"Successfully installed package %s (= %s) in context %q",
 				installPkg.Name,
 				installPkg.Version,
-				p.state.ActiveContext,
+				activeContextName,
 			),
 		)
 	}
@@ -164,14 +172,19 @@ func (p *PackageManager) AddContext(name string, context Context) error {
 	if _, ok := p.state.Contexts[name]; ok {
 		return ErrContextAlreadyExists
 	}
-	p.state.Contexts[name] = context
-	if err := p.state.Save(); err != nil {
+	// Create dummy context entry
+	p.state.Contexts[name] = Context{}
+	// Update dummy context
+	if err := p.updateContext(name, context); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (p *PackageManager) DeleteContext(name string) error {
+	if name == p.state.ActiveContext {
+		return ErrContextNoDeleteActive
+	}
 	if _, ok := p.state.Contexts[name]; !ok {
 		return ErrContextNotExist
 	}
@@ -190,16 +203,44 @@ func (p *PackageManager) SetActiveContext(name string) error {
 	if err := p.state.Save(); err != nil {
 		return err
 	}
+	// Update templating values
+	p.initTemplate()
 	return nil
 }
 
 func (p *PackageManager) UpdateContext(name string, context Context) error {
-	if _, ok := p.state.Contexts[name]; !ok {
+	if err := p.updateContext(name, context); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *PackageManager) updateContext(name string, newContext Context) error {
+	// Get current state of named context
+	curContext, ok := p.state.Contexts[name]
+	if !ok {
 		return ErrContextNotExist
 	}
-	p.state.Contexts[name] = context
+	if curContext.Network != "" {
+		// Check that we're not changing the network once configured
+		if newContext.Network != curContext.Network {
+			return ErrContextNoChangeNetwork
+		}
+	} else {
+		// Check network name if setting it for new/empty context
+		if newContext.Network != "" {
+			tmpNetwork := ouroboros.NetworkByName(newContext.Network)
+			if tmpNetwork == ouroboros.NetworkInvalid {
+				return NewUnknownNetworkError(newContext.Network)
+			}
+			newContext.NetworkMagic = tmpNetwork.NetworkMagic
+		}
+	}
+	p.state.Contexts[name] = newContext
 	if err := p.state.Save(); err != nil {
 		return err
 	}
+	// Update templating values
+	p.initTemplate()
 	return nil
 }
