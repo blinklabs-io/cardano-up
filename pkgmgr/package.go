@@ -218,6 +218,7 @@ func (p *PackageInstallStepDocker) uninstall(cfg Config, pkgName string) error {
 }
 
 type PackageInstallStepFile struct {
+	Binary   bool        `yaml:"binary"`
 	Filename string      `yaml:"filename"`
 	Content  string      `yaml:"content"`
 	Mode     fs.FileMode `yaml:"mode,omitempty"`
@@ -249,6 +250,20 @@ func (p *PackageInstallStepFile) install(cfg Config, pkgName string) error {
 		return err
 	}
 	cfg.Logger.Debug(fmt.Sprintf("wrote file %s", filePath))
+	if p.Binary {
+		binPath := filepath.Join(
+			cfg.BinDir,
+			tmpFilePath,
+		)
+		parentDir := filepath.Dir(binPath)
+		if err := os.MkdirAll(parentDir, fs.ModePerm); err != nil {
+			return err
+		}
+		if err := os.Symlink(filePath, binPath); err != nil {
+			return err
+		}
+		cfg.Logger.Debug(fmt.Sprintf("wrote symlink from %s to %s", binPath, filePath))
+	}
 	return nil
 }
 
@@ -259,5 +274,17 @@ func (p *PackageInstallStepFile) uninstall(cfg Config, pkgName string) error {
 		p.Filename,
 	)
 	cfg.Logger.Debug(fmt.Sprintf("deleting file %s", filePath))
-	return os.Remove(filePath)
+	if err := os.Remove(filePath); err != nil {
+		cfg.Logger.Debug(fmt.Sprintf("failed to remove file %s", filePath))
+	}
+	if p.Binary {
+		binPath := filepath.Join(
+			cfg.BinDir,
+			p.Filename,
+		)
+		if err := os.Remove(binPath); err != nil {
+			cfg.Logger.Debug(fmt.Sprintf("failed to remove symlink %s", binPath))
+		}
+	}
+	return nil
 }
