@@ -15,10 +15,11 @@
 package pkgmgr
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"sort"
 	"strings"
@@ -224,13 +225,53 @@ func (d *DockerService) pullImage() error {
 	if err != nil {
 		return err
 	}
-	d.logger.Debug(fmt.Sprintf("pulling image %s", d.Image))
 	out, err := client.ImagePull(context.Background(), d.Image, types.ImagePullOptions{})
 	if err != nil {
 		return err
 	}
 	defer out.Close()
-	if _, err := io.Copy(io.Discard, out); err != nil {
+	// Log pull progress
+	scanner := bufio.NewScanner(out)
+	for scanner.Scan() {
+		var tmpStatus struct {
+			Status         string         `json:"status"`
+			ProgressDetail map[string]any `json:"progressDetail"`
+			Id             string         `json:"id"`
+		}
+		line := scanner.Text()
+		if err := json.Unmarshal([]byte(line), &tmpStatus); err != nil {
+			d.logger.Warn(
+				fmt.Sprintf("failed to unmarshal docker image pull status update: %s", err),
+			)
+		}
+		// Skip progress update lines
+		if len(tmpStatus.ProgressDetail) > 0 {
+			continue
+		}
+		if tmpStatus.Id == "" {
+			d.logger.Info(tmpStatus.Status)
+		} else {
+			if strings.HasPrefix(tmpStatus.Status, "Pulling from ") {
+				// We don't want a space after the colon for the "Pulling from..." lines
+				d.logger.Info(
+					fmt.Sprintf(
+						"%s:%s",
+						tmpStatus.Status,
+						tmpStatus.Id,
+					),
+				)
+			} else {
+				d.logger.Info(
+					fmt.Sprintf(
+						"%s: %s",
+						tmpStatus.Status,
+						tmpStatus.Id,
+					),
+				)
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
 		return err
 	}
 	return nil
