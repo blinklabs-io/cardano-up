@@ -17,6 +17,7 @@ package pkgmgr
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	ouroboros "github.com/blinklabs-io/gouroboros"
 )
@@ -117,7 +118,15 @@ func (p *PackageManager) Install(pkgs ...string) error {
 	if err != nil {
 		return err
 	}
+	var installedPkgs []string
 	for _, installPkg := range installPkgs {
+		p.config.Logger.Info(
+			fmt.Sprintf(
+				"Installing package %s (= %s)",
+				installPkg.Name,
+				installPkg.Version,
+			),
+		)
 		if err := installPkg.install(p.config, activeContextName); err != nil {
 			return err
 		}
@@ -126,15 +135,15 @@ func (p *PackageManager) Install(pkgs ...string) error {
 		if err := p.state.Save(); err != nil {
 			return err
 		}
-		p.config.Logger.Info(
-			fmt.Sprintf(
-				"Successfully installed package %s (= %s) in context %q",
-				installPkg.Name,
-				installPkg.Version,
-				activeContextName,
-			),
-		)
+		installedPkgs = append(installedPkgs, installPkg.Name)
 	}
+	p.config.Logger.Info(
+		fmt.Sprintf(
+			"Successfully installed package(s) in context %q: %s",
+			activeContextName,
+			strings.Join(installedPkgs, ", "),
+		),
+	)
 	return nil
 }
 
