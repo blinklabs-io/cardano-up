@@ -40,8 +40,7 @@ func (p Package) install(cfg Config, context string) error {
 				"Version":   p.Version,
 			},
 			"DataDir": filepath.Join(
-				cfg.ConfigDir,
-				"data",
+				cfg.DataDir,
 				pkgName,
 			),
 		},
@@ -230,8 +229,7 @@ func (p *PackageInstallStepFile) install(cfg Config, pkgName string) error {
 		return err
 	}
 	filePath := filepath.Join(
-		cfg.ConfigDir,
-		"data",
+		cfg.DataDir,
 		pkgName,
 		tmpFilePath,
 	)
@@ -256,8 +254,7 @@ func (p *PackageInstallStepFile) install(cfg Config, pkgName string) error {
 
 func (p *PackageInstallStepFile) uninstall(cfg Config, pkgName string) error {
 	filePath := filepath.Join(
-		cfg.ConfigDir,
-		"data",
+		cfg.DataDir,
 		pkgName,
 		p.Filename,
 	)

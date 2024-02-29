@@ -28,6 +28,9 @@ var RegistryPackages = []Package{
 						"NETWORK":                  "{{ .Context.Network }}",
 						"CARDANO_NODE_SOCKET_PATH": "/ipc/node.socket",
 					},
+					Binds: []string{
+						"{{ .DataDir }}/data:/data",
+					},
 					Ports: []string{
 						"3001",
 					},

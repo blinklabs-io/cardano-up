@@ -22,20 +22,24 @@ import (
 )
 
 type Config struct {
-	ConfigDir string
+	BinDir    string
 	CacheDir  string
+	ConfigDir string
+	DataDir   string
 	Logger    *slog.Logger
 	Template  *Template
 }
 
 func NewDefaultConfig() (Config, error) {
-	userConfigDir, err := os.UserConfigDir()
+	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
 		return Config{}, fmt.Errorf(
-			"could not determine user config directory: %s",
+			"could not determine user home directory: %s",
 			err,
 		)
 	}
+	userBinDir := fmt.Sprintf("%s/.local/bin", userHomeDir)
+	userDataDir := fmt.Sprintf("%s/.local/share", userHomeDir)
 	userCacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return Config{}, fmt.Errorf(
@@ -43,13 +47,25 @@ func NewDefaultConfig() (Config, error) {
 			err,
 		)
 	}
+	userConfigDir, err := os.UserConfigDir()
+	if err != nil {
+		return Config{}, fmt.Errorf(
+			"could not determine user config directory: %s",
+			err,
+		)
+	}
 	ret := Config{
+		BinDir: userBinDir,
+		CacheDir: filepath.Join(
+			userCacheDir,
+			"cardano-up",
+		),
 		ConfigDir: filepath.Join(
 			userConfigDir,
 			"cardano-up",
 		),
-		CacheDir: filepath.Join(
-			userCacheDir,
+		DataDir: filepath.Join(
+			userDataDir,
 			"cardano-up",
 		),
 		Logger: slog.Default(),

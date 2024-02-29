@@ -99,8 +99,8 @@ func TestNewDefaultConfigXdgConfigCacheEnvVars(t *testing.T) {
 
 func TestNewDefaultConfigEmptyHome(t *testing.T) {
 	expectedErrs := map[string]string{
-		"linux":  "could not determine user config directory: neither $XDG_CONFIG_HOME nor $HOME are defined",
-		"darwin": "could not determine user config directory: $HOME is not defined",
+		"linux":  "could not determine user home directory: $HOME is not defined",
+		"darwin": "could not determine user home directory: $HOME is not defined",
 	}
 	origEnvVars := setEnvVars(
 		map[string]string{
