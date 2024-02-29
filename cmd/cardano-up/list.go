@@ -56,6 +56,16 @@ func listAvailableCommand() *cobra.Command {
 						tmpPackage.Description,
 					),
 				)
+				if len(tmpPackage.Dependencies) > 0 {
+					tmpOutput := "    Requires: "
+					for idx, dep := range tmpPackage.Dependencies {
+						tmpOutput += dep
+						if idx < len(tmpPackage.Dependencies)-1 {
+							tmpOutput += ` | `
+						}
+					}
+					slog.Info(tmpOutput)
+				}
 			}
 		},
 	}
