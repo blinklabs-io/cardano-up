@@ -39,10 +39,16 @@ func (p Package) install(cfg Config, context string) error {
 				"ShortName": p.Name,
 				"Version":   p.Version,
 			},
-			"DataDir": filepath.Join(
-				cfg.DataDir,
-				pkgName,
-			),
+			"Paths": map[string]string{
+				"CacheDir": filepath.Join(
+					cfg.CacheDir,
+					pkgName,
+				),
+				"DataDir": filepath.Join(
+					cfg.DataDir,
+					pkgName,
+				),
+			},
 		},
 	)
 	// Run pre-flight checks
