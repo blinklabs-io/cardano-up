@@ -29,7 +29,8 @@ var RegistryPackages = []Package{
 						"CARDANO_NODE_SOCKET_PATH": "/ipc/node.socket",
 					},
 					Binds: []string{
-						"{{ .DataDir }}/data:/data",
+						"{{ .Paths.CacheDir }}/ipc:/ipc",
+						"{{ .Paths.DataDir }}/data:/data",
 					},
 					Ports: []string{
 						"3001",
