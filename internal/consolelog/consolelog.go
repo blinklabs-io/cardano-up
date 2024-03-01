@@ -22,9 +22,9 @@ import (
 )
 
 const (
-	colorBrightRed     = 91
-	colorBrightYellow  = 93
-	colorBrightMagenta = 95
+	colorBrightRed     = "91"
+	colorBrightYellow  = "93"
+	colorBrightMagenta = "95"
 )
 
 type Handler struct {
@@ -60,14 +60,14 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 	var levelTag string
 	switch r.Level {
 	case slog.LevelDebug:
-		levelTag = fmt.Sprintf("\033[%dmDEBUG:\033[0m ", colorBrightMagenta)
+		levelTag = fmt.Sprintf("\033[%smDEBUG:\033[0m ", colorBrightMagenta)
 	case slog.LevelInfo:
 		// No tag for INFO
 		levelTag = ""
 	case slog.LevelWarn:
-		levelTag = fmt.Sprintf("\033[%dmWARNING:\033[0m ", colorBrightYellow)
+		levelTag = fmt.Sprintf("\033[%smWARNING:\033[0m ", colorBrightYellow)
 	case slog.LevelError:
-		levelTag = fmt.Sprintf("\033[%dmERROR:\033[0m ", colorBrightRed)
+		levelTag = fmt.Sprintf("\033[%smERROR:\033[0m ", colorBrightRed)
 	}
 	msg := levelTag + r.Message + "\n"
 	if _, err := h.out.Write([]byte(msg)); err != nil {
