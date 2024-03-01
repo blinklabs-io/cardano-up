@@ -39,6 +39,7 @@ var RegistryPackages = []Package{
 			},
 			{
 				File: &PackageInstallStepFile{
+					Binary: true,
 					Filename: "cardano-cli",
 					// TODO: figure out how to get network magic for named network
 					Content: `#!/bin/bash
