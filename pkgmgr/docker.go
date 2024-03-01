@@ -251,24 +251,13 @@ func (d *DockerService) pullImage() error {
 		if tmpStatus.Id == "" {
 			d.logger.Info(tmpStatus.Status)
 		} else {
-			if strings.HasPrefix(tmpStatus.Status, "Pulling from ") {
-				// We don't want a space after the colon for the "Pulling from..." lines
-				d.logger.Info(
-					fmt.Sprintf(
-						"%s:%s",
-						tmpStatus.Status,
-						tmpStatus.Id,
-					),
-				)
-			} else {
-				d.logger.Info(
-					fmt.Sprintf(
-						"%s: %s",
-						tmpStatus.Status,
-						tmpStatus.Id,
-					),
-				)
-			}
+			d.logger.Info(
+				fmt.Sprintf(
+					"%s: %s",
+					tmpStatus.Id,
+					tmpStatus.Status,
+				),
+			)
 		}
 	}
 	if err := scanner.Err(); err != nil {
