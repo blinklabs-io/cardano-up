@@ -22,14 +22,15 @@ import (
 )
 
 type Package struct {
-	Name         string               `yaml:"name"`
-	Version      string               `yaml:"version"`
-	Description  string               `yaml:"description"`
-	InstallSteps []PackageInstallStep `yaml:"installSteps"`
-	Dependencies []string             `yaml:"dependencies"`
+	Name             string               `yaml:"name"`
+	Version          string               `yaml:"version"`
+	Description      string               `yaml:"description"`
+	InstallSteps     []PackageInstallStep `yaml:"installSteps"`
+	Dependencies     []string             `yaml:"dependencies"`
+	PostInstallNotes string               `yaml:"postInstallNotes"`
 }
 
-func (p Package) install(cfg Config, context string) error {
+func (p Package) install(cfg Config, context string) (string, error) {
 	// Update template vars
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	cfg.Template = cfg.Template.WithVars(
@@ -56,11 +57,11 @@ func (p Package) install(cfg Config, context string) error {
 		// Make sure only one install method is specified per install step
 		if installStep.Docker != nil &&
 			installStep.File != nil {
-			return ErrMultipleInstallMethods
+			return "", ErrMultipleInstallMethods
 		}
 		if installStep.Docker != nil {
 			if err := installStep.Docker.preflight(cfg, pkgName); err != nil {
-				return fmt.Errorf("pre-flight check failed: %s", err)
+				return "", fmt.Errorf("pre-flight check failed: %s", err)
 			}
 		}
 	}
@@ -68,17 +69,25 @@ func (p Package) install(cfg Config, context string) error {
 	for _, installStep := range p.InstallSteps {
 		if installStep.Docker != nil {
 			if err := installStep.Docker.install(cfg, pkgName); err != nil {
-				return err
+				return "", err
 			}
 		} else if installStep.File != nil {
 			if err := installStep.File.install(cfg, pkgName); err != nil {
-				return err
+				return "", err
 			}
 		} else {
-			return ErrNoInstallMethods
+			return "", ErrNoInstallMethods
 		}
 	}
-	return nil
+	// Render notes and return
+	if p.PostInstallNotes != "" {
+		tmpNotes, err := cfg.Template.Render(p.PostInstallNotes, nil)
+		if err != nil {
+			return "", err
+		}
+		return tmpNotes, nil
+	}
+	return "", nil
 }
 
 func (p Package) uninstall(cfg Config, context string) error {
