@@ -26,7 +26,6 @@ type PackageManager struct {
 	config            Config
 	state             *State
 	availablePackages []Package
-	// TODO
 }
 
 func NewPackageManager(cfg Config) (*PackageManager, error) {
@@ -222,6 +221,51 @@ func (p *PackageManager) Uninstall(pkgs ...string) error {
 			),
 		)
 	}
+	return nil
+}
+
+func (p *PackageManager) Info(pkgs ...string) error {
+	// Find installed packages
+	activeContextName, _ := p.ActiveContext()
+	installedPackages := p.InstalledPackages()
+	var infoPkgs []InstalledPackage
+	for _, pkg := range pkgs {
+		foundPackage := false
+		for _, tmpPackage := range installedPackages {
+			if tmpPackage.Package.Name == pkg {
+				foundPackage = true
+				infoPkgs = append(
+					infoPkgs,
+					tmpPackage,
+				)
+				break
+			}
+		}
+		if !foundPackage {
+			return NewPackageNotInstalledError(pkg, activeContextName)
+		}
+	}
+	var infoOutput string
+	for idx, infoPkg := range infoPkgs {
+		infoOutput += fmt.Sprintf(
+			"Name: %s\nVersion: %s\nContext: %s",
+			infoPkg.Package.Name,
+			infoPkg.Package.Version,
+			activeContextName,
+		)
+		if infoPkg.PostInstallNotes != "" {
+			infoOutput += fmt.Sprintf(
+				"\n\nPost-install notes:\n\n%s",
+				infoPkg.PostInstallNotes,
+			)
+		}
+		// TODO: list services
+		// TODO: list container ports
+		if idx < len(infoPkgs)-1 {
+			infoOutput += "\n\n---\n\n"
+		}
+	}
+	p.config.Logger.Info(infoOutput)
 	return nil
 }
 
