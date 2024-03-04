@@ -99,6 +99,11 @@ docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.7.0-1 $@
 		PostInstallNotes: "Notes for {{ .Package.Name }}",
 	},
 	{
+		Name:             "test-packageA",
+		Version:          "1.0.3",
+		PostInstallNotes: "Notes for {{ .Package.Name }}",
+	},
+	{
 		Name:    "test-packageA",
 		Version: "2.1.3",
 	},

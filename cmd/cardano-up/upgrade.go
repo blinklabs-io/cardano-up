@@ -24,10 +24,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func uninstallCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "uninstall",
-		Short: "Uninstall package",
+func upgradeCommand() *cobra.Command {
+	upgradeCmd := &cobra.Command{
+		Use:   "upgrade",
+		Short: "Upgrade package",
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return errors.New("no package provided")
@@ -43,11 +43,12 @@ func uninstallCommand() *cobra.Command {
 				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
 				os.Exit(1)
 			}
-			// Uninstall package
-			if err := pm.Uninstall(args[0]); err != nil {
+			// Upgrade requested package
+			if err := pm.Upgrade(args[0]); err != nil {
 				slog.Error(err.Error())
 				os.Exit(1)
 			}
 		},
 	}
+	return upgradeCmd
 }

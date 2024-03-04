@@ -42,7 +42,7 @@ func installCommand() *cobra.Command {
 				return errors.New("no package provided")
 			}
 			if len(args) > 1 {
-				return errors.New("only one package may be specified a a time")
+				return errors.New("only one package may be specified at a time")
 			}
 			return nil
 		},

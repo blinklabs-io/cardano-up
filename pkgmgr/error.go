@@ -97,3 +97,10 @@ func NewPackageUninstallWouldBreakDepsError(uninstallPkgName string, uninstallPk
 		dependentPkgVersion,
 	)
 }
+
+func NewNoPackageAvailableForUpgrade(pkgSpec string) error {
+	return fmt.Errorf(
+		"no package available for upgrade: %s",
+		pkgSpec,
+	)
+}

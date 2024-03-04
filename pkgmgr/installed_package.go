@@ -33,3 +33,7 @@ func NewInstalledPackage(pkg Package, context string, postInstallNotes string) I
 		PostInstallNotes: postInstallNotes,
 	}
 }
+
+func (i InstalledPackage) IsEmpty() bool {
+	return i.InstalledTime.IsZero()
+}
