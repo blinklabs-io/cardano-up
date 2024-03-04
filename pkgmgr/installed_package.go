@@ -19,15 +19,17 @@ import (
 )
 
 type InstalledPackage struct {
-	Package       Package
-	InstalledTime time.Time
-	Context       string
+	Package          Package
+	InstalledTime    time.Time
+	Context          string
+	PostInstallNotes string
 }
 
-func NewInstalledPackage(pkg Package, context string) InstalledPackage {
+func NewInstalledPackage(pkg Package, context string, postInstallNotes string) InstalledPackage {
 	return InstalledPackage{
-		Package:       pkg,
-		InstalledTime: time.Now(),
-		Context:       context,
+		Package:          pkg,
+		InstalledTime:    time.Now(),
+		Context:          context,
+		PostInstallNotes: postInstallNotes,
 	}
 }

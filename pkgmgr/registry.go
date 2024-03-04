@@ -39,7 +39,7 @@ var RegistryPackages = []Package{
 			},
 			{
 				File: &PackageInstallStepFile{
-					Binary: true,
+					Binary:   true,
 					Filename: "cardano-cli",
 					// TODO: figure out how to get network magic for named network
 					Content: `#!/bin/bash
@@ -94,8 +94,9 @@ docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.7.0-1 $@
 
 	// Test packages
 	{
-		Name:    "test-packageA",
-		Version: "1.0.2",
+		Name:             "test-packageA",
+		Version:          "1.0.2",
+		PostInstallNotes: "Notes for {{ .Package.Name }}",
 	},
 	{
 		Name:    "test-packageA",

@@ -119,6 +119,7 @@ func (p *PackageManager) Install(pkgs ...string) error {
 		return err
 	}
 	var installedPkgs []string
+	var notesOutput string
 	for _, installPkg := range installPkgs {
 		p.config.Logger.Info(
 			fmt.Sprintf(
@@ -127,15 +128,28 @@ func (p *PackageManager) Install(pkgs ...string) error {
 				installPkg.Version,
 			),
 		)
-		if err := installPkg.install(p.config, activeContextName); err != nil {
+		notes, err := installPkg.install(p.config, activeContextName)
+		if err != nil {
 			return err
 		}
-		installedPkg := NewInstalledPackage(installPkg, activeContextName)
+		installedPkg := NewInstalledPackage(installPkg, activeContextName, notes)
 		p.state.InstalledPackages = append(p.state.InstalledPackages, installedPkg)
 		if err := p.state.Save(); err != nil {
 			return err
 		}
 		installedPkgs = append(installedPkgs, installPkg.Name)
+		if notes != "" {
+			notesOutput += fmt.Sprintf(
+				"\nPost-install notes for %s (= %s):\n\n%s\n",
+				installPkg.Name,
+				installPkg.Version,
+				notes,
+			)
+		}
+	}
+	// Display post-install notes
+	if notesOutput != "" {
+		p.config.Logger.Info(notesOutput)
 	}
 	p.config.Logger.Info(
 		fmt.Sprintf(
