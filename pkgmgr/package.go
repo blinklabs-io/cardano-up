@@ -35,6 +35,14 @@ type Package struct {
 func (p Package) install(cfg Config, context string) (string, error) {
 	// Update template vars
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
+	pkgCacheDir := filepath.Join(
+		cfg.CacheDir,
+		pkgName,
+	)
+	pkgDataDir := filepath.Join(
+		cfg.DataDir,
+		pkgName,
+	)
 	cfg.Template = cfg.Template.WithVars(
 		map[string]any{
 			"Package": map[string]any{
@@ -43,14 +51,8 @@ func (p Package) install(cfg Config, context string) (string, error) {
 				"Version":   p.Version,
 			},
 			"Paths": map[string]string{
-				"CacheDir": filepath.Join(
-					cfg.CacheDir,
-					pkgName,
-				),
-				"DataDir": filepath.Join(
-					cfg.DataDir,
-					pkgName,
-				),
+				"CacheDir": pkgCacheDir,
+				"DataDir":  pkgDataDir,
 			},
 		},
 	)
@@ -66,6 +68,13 @@ func (p Package) install(cfg Config, context string) (string, error) {
 				return "", fmt.Errorf("pre-flight check failed: %s", err)
 			}
 		}
+	}
+	// Pre-create dirs
+	if err := os.MkdirAll(pkgCacheDir, fs.ModePerm); err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(pkgDataDir, fs.ModePerm); err != nil {
+		return "", err
 	}
 	// Perform install
 	for _, installStep := range p.InstallSteps {
