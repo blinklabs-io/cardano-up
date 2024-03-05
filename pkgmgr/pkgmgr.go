@@ -133,6 +133,7 @@ func (p *PackageManager) Install(pkgs ...string) error {
 	resolver, err := NewResolver(
 		p.InstalledPackages(),
 		p.AvailablePackages(),
+		activeContextName,
 		p.config.Logger,
 	)
 	if err != nil {
@@ -185,6 +186,73 @@ func (p *PackageManager) Install(pkgs ...string) error {
 	return nil
 }
 
+func (p *PackageManager) Upgrade(pkgs ...string) error {
+	activeContextName, _ := p.ActiveContext()
+	resolver, err := NewResolver(
+		p.InstalledPackages(),
+		p.AvailablePackages(),
+		activeContextName,
+		p.config.Logger,
+	)
+	if err != nil {
+		return err
+	}
+	upgradePkgs, err := resolver.Upgrade(pkgs...)
+	if err != nil {
+		return err
+	}
+	var installedPkgs []string
+	var notesOutput string
+	for _, upgradePkg := range upgradePkgs {
+		p.config.Logger.Info(
+			fmt.Sprintf(
+				"Upgrading package %s (%s => %s)",
+				upgradePkg.Installed.Package.Name,
+				upgradePkg.Installed.Package.Version,
+				upgradePkg.Upgrade.Version,
+			),
+		)
+		// Uninstall old version
+		if err := p.uninstallPackage(upgradePkg.Installed); err != nil {
+			return err
+		}
+		// Install new version
+		notes, err := upgradePkg.Upgrade.install(p.config, activeContextName)
+		if err != nil {
+			return err
+		}
+		installedPkg := NewInstalledPackage(upgradePkg.Upgrade, activeContextName, notes)
+		p.state.InstalledPackages = append(p.state.InstalledPackages, installedPkg)
+		if err := p.state.Save(); err != nil {
+			return err
+		}
+		installedPkgs = append(installedPkgs, upgradePkg.Upgrade.Name)
+		if notes != "" {
+			notesOutput += fmt.Sprintf(
+				"\nPost-install notes for %s (= %s):\n\n%s\n",
+				upgradePkg.Upgrade.Name,
+				upgradePkg.Upgrade.Version,
+				notes,
+			)
+		}
+		if err := p.state.Save(); err != nil {
+			return err
+		}
+	}
+	// Display post-install notes
+	if notesOutput != "" {
+		p.config.Logger.Info(notesOutput)
+	}
+	p.config.Logger.Info(
+		fmt.Sprintf(
+			"Successfully upgraded/installed package(s) in context %q: %s",
+			activeContextName,
+			strings.Join(installedPkgs, ", "),
+		),
+	)
+	return nil
+}
+
 func (p *PackageManager) Uninstall(pkgs ...string) error {
 	// Find installed packages
 	activeContextName, _ := p.ActiveContext()
@@ -210,6 +278,7 @@ func (p *PackageManager) Uninstall(pkgs ...string) error {
 	resolver, err := NewResolver(
 		p.InstalledPackages(),
 		p.AvailablePackages(),
+		activeContextName,
 		p.config.Logger,
 	)
 	if err != nil {
@@ -219,21 +288,9 @@ func (p *PackageManager) Uninstall(pkgs ...string) error {
 		return err
 	}
 	for _, uninstallPkg := range uninstallPkgs {
-		// Uninstall package
-		if err := uninstallPkg.Package.uninstall(p.config, uninstallPkg.Context); err != nil {
+		if err := p.uninstallPackage(uninstallPkg); err != nil {
 			return err
 		}
-		// Remove package from installed packages
-		var tmpInstalledPackages []InstalledPackage
-		for _, tmpInstalledPkg := range p.state.InstalledPackages {
-			if tmpInstalledPkg.Context == uninstallPkg.Context &&
-				tmpInstalledPkg.Package.Name == uninstallPkg.Package.Name &&
-				tmpInstalledPkg.Package.Version == uninstallPkg.Package.Version {
-				continue
-			}
-			tmpInstalledPackages = append(tmpInstalledPackages, tmpInstalledPkg)
-		}
-		p.state.InstalledPackages = tmpInstalledPackages[:]
 		if err := p.state.Save(); err != nil {
 			return err
 		}
@@ -291,6 +348,25 @@ func (p *PackageManager) Info(pkgs ...string) error {
 		}
 	}
 	p.config.Logger.Info(infoOutput)
+	return nil
+}
+
+func (p *PackageManager) uninstallPackage(uninstallPkg InstalledPackage) error {
+	// Uninstall package
+	if err := uninstallPkg.Package.uninstall(p.config, uninstallPkg.Context); err != nil {
+		return err
+	}
+	// Remove package from installed packages
+	var tmpInstalledPackages []InstalledPackage
+	for _, tmpInstalledPkg := range p.state.InstalledPackages {
+		if tmpInstalledPkg.Context == uninstallPkg.Context &&
+			tmpInstalledPkg.Package.Name == uninstallPkg.Package.Name &&
+			tmpInstalledPkg.Package.Version == uninstallPkg.Package.Version {
+			continue
+		}
+		tmpInstalledPackages = append(tmpInstalledPackages, tmpInstalledPkg)
+	}
+	p.state.InstalledPackages = tmpInstalledPackages[:]
 	return nil
 }
 

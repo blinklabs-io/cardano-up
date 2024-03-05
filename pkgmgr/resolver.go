@@ -23,14 +23,21 @@ import (
 )
 
 type Resolver struct {
+	context              string
 	logger               *slog.Logger
 	installedPkgs        []InstalledPackage
 	availablePkgs        []Package
 	installedConstraints map[string]version.Constraints
 }
 
-func NewResolver(installedPkgs []InstalledPackage, availablePkgs []Package, logger *slog.Logger) (*Resolver, error) {
+type ResolverUpgradeSet struct {
+	Installed InstalledPackage
+	Upgrade   Package
+}
+
+func NewResolver(installedPkgs []InstalledPackage, availablePkgs []Package, context string, logger *slog.Logger) (*Resolver, error) {
 	r := &Resolver{
+		context:              context,
 		logger:               logger,
 		installedPkgs:        installedPkgs[:],
 		availablePkgs:        availablePkgs[:],
@@ -38,28 +45,6 @@ func NewResolver(installedPkgs []InstalledPackage, availablePkgs []Package, logg
 	}
 	// Calculate package constraints from installed packages
 	for _, installedPkg := range installedPkgs {
-		pkgName := installedPkg.Package.Name
-		// Add implicit constraint for other versions of the same package
-		tmpConstraints, err := version.NewConstraint(
-			fmt.Sprintf("= %s", installedPkg.Package.Version),
-		)
-		if err != nil {
-			return nil, err
-		}
-		if _, ok := r.installedConstraints[pkgName]; !ok {
-			r.installedConstraints[pkgName] = make(version.Constraints, 0)
-		}
-		r.installedConstraints[pkgName] = append(
-			r.installedConstraints[pkgName],
-			tmpConstraints...,
-		)
-		logger.Debug(
-			fmt.Sprintf(
-				"added constraint for installed package %q: %s",
-				pkgName,
-				tmpConstraints.String(),
-			),
-		)
 		// Add constraint for each explicit dependency
 		for _, dep := range installedPkg.Package.Dependencies {
 			depPkgName, depPkgVersionSpec := r.splitPackage(dep)
@@ -74,7 +59,7 @@ func NewResolver(installedPkgs []InstalledPackage, availablePkgs []Package, logg
 			logger.Debug(
 				fmt.Sprintf(
 					"added constraint for installed package %q dependency: %q: %s",
-					pkgName,
+					installedPkg.Package.Name,
 					depPkgName,
 					tmpConstraints.String(),
 				),
@@ -87,17 +72,13 @@ func NewResolver(installedPkgs []InstalledPackage, availablePkgs []Package, logg
 func (r *Resolver) Install(pkgs ...string) ([]Package, error) {
 	var ret []Package
 	for _, pkg := range pkgs {
-		pkgName, pkgVersion := r.splitPackage(pkg)
+		pkgName, pkgVersionSpec := r.splitPackage(pkg)
 		if pkg, err := r.findInstalled(pkgName, ""); err != nil {
 			return nil, err
-		} else if !pkg.InstalledTime.IsZero() {
+		} else if !pkg.IsEmpty() {
 			return nil, NewResolverPackageAlreadyInstalledError(pkgName)
 		}
-		availablePkgs, err := r.findAvailable(pkgName, pkgVersion)
-		if err != nil {
-			return nil, err
-		}
-		latestPkg, err := r.latestPackage(availablePkgs...)
+		latestPkg, err := r.latestAvailablePackage(pkgName, pkgVersionSpec, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -109,6 +90,52 @@ func (r *Resolver) Install(pkgs ...string) ([]Package, error) {
 		ret = append(ret, neededPkgs...)
 		// Add selected package
 		ret = append(ret, latestPkg)
+	}
+	return ret, nil
+}
+
+func (r *Resolver) Upgrade(pkgs ...string) ([]ResolverUpgradeSet, error) {
+	var ret []ResolverUpgradeSet
+	for _, pkg := range pkgs {
+		pkgName, pkgVersionSpec := r.splitPackage(pkg)
+		installedPkg, err := r.findInstalled(pkgName, "")
+		if err != nil {
+			return nil, err
+		} else if installedPkg.IsEmpty() {
+			return nil, NewPackageNotInstalledError(pkgName, r.context)
+		}
+		latestPkg, err := r.latestAvailablePackage(pkgName, pkgVersionSpec, nil)
+		if err != nil {
+			return nil, err
+		}
+		if latestPkg.Version == "" || latestPkg.Version == installedPkg.Package.Version {
+			return nil, NewNoPackageAvailableForUpgrade(pkg)
+		}
+		ret = append(
+			ret,
+			ResolverUpgradeSet{
+				Installed: installedPkg,
+				Upgrade:   latestPkg,
+			},
+		)
+		// Calculate dependencies
+		neededPkgs, err := r.getNeededDeps(latestPkg)
+		if err != nil {
+			return nil, err
+		}
+		for _, neededPkg := range neededPkgs {
+			tmpInstalled, err := r.findInstalled(neededPkg.Name, "")
+			if err != nil {
+				return nil, err
+			}
+			ret = append(
+				ret,
+				ResolverUpgradeSet{
+					Installed: tmpInstalled,
+					Upgrade:   neededPkg,
+				},
+			)
+		}
 	}
 	return ret, nil
 }
@@ -156,23 +183,23 @@ func (r *Resolver) getNeededDeps(pkg Package) ([]Package, error) {
 		// Check if we already have an installed package that satisfies the dependency
 		if pkg, err := r.findInstalled(depPkgName, depPkgVersionSpec); err != nil {
 			return nil, err
-		} else if !pkg.InstalledTime.IsZero() {
+		} else if !pkg.IsEmpty() {
 			continue
 		}
 		// Check if we already have any installed version of the package
 		if pkg, err := r.findInstalled(depPkgName, depPkgVersionSpec); err != nil {
 			return nil, err
-		} else if !pkg.InstalledTime.IsZero() {
+		} else if !pkg.IsEmpty() {
 			return nil, NewResolverInstalledPackageNoMatchVersionSpecError(pkg.Package.Name, pkg.Package.Version, dep)
 		}
-		availablePkgs, err := r.findAvailable(depPkgName, depPkgVersionSpec)
+		availablePkgs, err := r.findAvailable(depPkgName, depPkgVersionSpec, nil)
 		if err != nil {
 			return nil, err
 		}
 		if len(availablePkgs) == 0 {
 			return nil, NewResolverNoAvailablePackageDependencyError(dep)
 		}
-		latestPkg, err := r.latestPackage(availablePkgs...)
+		latestPkg, err := r.latestPackage(availablePkgs, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -220,7 +247,7 @@ func (r *Resolver) findInstalled(pkgName string, pkgVersionSpec string) (Install
 	return InstalledPackage{}, nil
 }
 
-func (r *Resolver) findAvailable(pkgName string, pkgVersionSpec string) ([]Package, error) {
+func (r *Resolver) findAvailable(pkgName string, pkgVersionSpec string, extraConstraints version.Constraints) ([]Package, error) {
 	var constraints version.Constraints
 	// Filter to versions matching our version spec
 	if pkgVersionSpec != "" {
@@ -230,14 +257,20 @@ func (r *Resolver) findAvailable(pkgName string, pkgVersionSpec string) ([]Packa
 		}
 		constraints = tmpConstraints
 	}
-	// Filter to versions matching constraints from installed packages
-	if r.installedConstraints != nil {
-		if pkgConstraints, ok := r.installedConstraints[pkgName]; ok {
-			constraints = append(
-				constraints,
-				pkgConstraints...,
-			)
+	// Use installed package constraints if none provided
+	if extraConstraints == nil {
+		if r.installedConstraints != nil {
+			if pkgConstraints, ok := r.installedConstraints[pkgName]; ok {
+				extraConstraints = pkgConstraints
+			}
 		}
+	}
+	// Filter to versions matching provided constraints
+	if extraConstraints != nil {
+		constraints = append(
+			constraints,
+			extraConstraints...,
+		)
 	}
 	var ret []Package
 	for _, availablePkg := range r.availablePkgs {
@@ -266,7 +299,15 @@ func (r *Resolver) findAvailable(pkgName string, pkgVersionSpec string) ([]Packa
 	return ret, nil
 }
 
-func (r *Resolver) latestPackage(pkgs ...Package) (Package, error) {
+func (r *Resolver) latestAvailablePackage(pkgName string, pkgVersionSpec string, constraints version.Constraints) (Package, error) {
+	pkgs, err := r.findAvailable(pkgName, pkgVersionSpec, constraints)
+	if err != nil {
+		return Package{}, err
+	}
+	return r.latestPackage(pkgs, constraints)
+}
+
+func (r *Resolver) latestPackage(pkgs []Package, constraints version.Constraints) (Package, error) {
 	var ret Package
 	var retVer *version.Version
 	for _, pkg := range pkgs {
@@ -274,6 +315,13 @@ func (r *Resolver) latestPackage(pkgs ...Package) (Package, error) {
 		if err != nil {
 			return ret, err
 		}
+		// Skip package if it doesn't match provided constraints
+		if len(constraints) > 0 {
+			if !constraints.Check(pkgVer) {
+				continue
+			}
+		}
+		// Set this package as the latest if none set or newer than previous set
 		if retVer == nil || pkgVer.GreaterThan(retVer) {
 			ret = pkg
 			retVer = pkgVer

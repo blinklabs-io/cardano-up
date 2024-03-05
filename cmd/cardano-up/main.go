@@ -72,6 +72,7 @@ func main() {
 		uninstallCommand(),
 		upCommand(),
 		downCommand(),
+		upgradeCommand(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {
