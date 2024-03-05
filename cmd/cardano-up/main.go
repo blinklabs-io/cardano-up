@@ -70,6 +70,8 @@ func main() {
 		infoCommand(),
 		installCommand(),
 		uninstallCommand(),
+		upCommand(),
+		downCommand(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {

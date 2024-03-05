@@ -17,8 +17,10 @@ package pkgmgr
 import (
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Package struct {
@@ -112,6 +114,60 @@ func (p Package) uninstall(cfg Config, context string) error {
 			return ErrNoInstallMethods
 		}
 	}
+	return nil
+}
+
+func (p Package) startService(cfg Config, context string) error {
+	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
+
+	var startErrors []string
+	for _, step := range p.InstallSteps {
+		if step.Docker != nil {
+			dockerService, err := NewDockerServiceFromContainerName(fmt.Sprintf("%s-%s", pkgName, step.Docker.ContainerName), cfg.Logger)
+			if err != nil {
+				startErrors = append(startErrors, fmt.Sprintf("error initializing Docker service for container %s: %v", dockerService.ContainerName, err))
+				continue
+			}
+			// Start the Docker container if it's not running
+			slog.Info(fmt.Sprintf("Starting Docker container %s", dockerService.ContainerName))
+			if err := dockerService.Start(); err != nil {
+				startErrors = append(startErrors, fmt.Sprintf("failed to start Docker container %s: %v", dockerService.ContainerName, err))
+			}
+		}
+	}
+
+	if len(startErrors) > 0 {
+		slog.Error(strings.Join(startErrors, "\n"))
+		return ErrOperationFailed
+	}
+
+	return nil
+}
+
+func (p Package) stopService(cfg Config, context string) error {
+	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
+
+	var stopErrors []string
+	for _, step := range p.InstallSteps {
+		if step.Docker != nil {
+			dockerService, err := NewDockerServiceFromContainerName(fmt.Sprintf("%s-%s", pkgName, step.Docker.ContainerName), cfg.Logger)
+			if err != nil {
+				stopErrors = append(stopErrors, fmt.Sprintf("error initializing Docker service for container %s: %v", dockerService.ContainerName, err))
+				continue
+			}
+			// Stop the Docker container
+			slog.Info(fmt.Sprintf("Stopping container %s", dockerService.ContainerName))
+			if err := dockerService.Stop(); err != nil {
+				stopErrors = append(stopErrors, fmt.Sprintf("failed to stop Docker container %s: %v", dockerService.ContainerName, err))
+			}
+		}
+	}
+
+	if len(stopErrors) > 0 {
+		slog.Error(strings.Join(stopErrors, "\n"))
+		return ErrOperationFailed
+	}
+
 	return nil
 }
 
