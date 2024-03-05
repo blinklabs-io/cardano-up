@@ -341,8 +341,63 @@ func (p *PackageManager) Info(pkgs ...string) error {
 				infoPkg.PostInstallNotes,
 			)
 		}
-		// TODO: list services
-		// TODO: list container ports
+		// Gather package services
+		services, err := infoPkg.Package.services(p.config, infoPkg.Context)
+		if err != nil {
+			return err
+		}
+		// Build service status and port output
+		var statusOutput string
+		var portOutput string
+		for _, svc := range services {
+			running, err := svc.Running()
+			if err != nil {
+				return err
+			}
+			if running {
+				statusOutput += fmt.Sprintf(
+					"%-60s RUNNING\n",
+					svc.ContainerName,
+				)
+			} else {
+				statusOutput += fmt.Sprintf(
+					"%-60s NOT RUNNING\n",
+					svc.ContainerName,
+				)
+			}
+			for _, port := range svc.Ports {
+				var containerPort, hostPort string
+				portParts := strings.Split(port, ":")
+				switch len(portParts) {
+				case 1:
+					containerPort = portParts[0]
+					hostPort = portParts[0]
+				case 2:
+					containerPort = portParts[1]
+					hostPort = portParts[0]
+				case 3:
+					containerPort = portParts[2]
+					hostPort = portParts[1]
+				}
+				portOutput += fmt.Sprintf(
+					"%-5s (host) => %-5s (container)\n",
+					hostPort,
+					containerPort,
+				)
+			}
+		}
+		if statusOutput != "" {
+			infoOutput += fmt.Sprintf(
+				"\n\nServices:\n\n%s",
+				strings.TrimSuffix(statusOutput, "\n"),
+			)
+		}
+		if portOutput != "" {
+			infoOutput += fmt.Sprintf(
+				"\n\nMapped ports:\n\n%s",
+				strings.TrimSuffix(portOutput, "\n"),
+			)
+		}
 		if idx < len(infoPkgs)-1 {
 			infoOutput += "\n\n---\n\n"
 		}
