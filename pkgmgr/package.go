@@ -171,6 +171,24 @@ func (p Package) stopService(cfg Config, context string) error {
 	return nil
 }
 
+func (p Package) services(cfg Config, context string) ([]*DockerService, error) {
+	var ret []*DockerService
+	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
+	for _, step := range p.InstallSteps {
+		if step.Docker != nil {
+			dockerService, err := NewDockerServiceFromContainerName(fmt.Sprintf("%s-%s", pkgName, step.Docker.ContainerName), cfg.Logger)
+			if err != nil {
+				cfg.Logger.Error(
+					fmt.Sprintf("error initializing Docker service for container %s: %v", dockerService.ContainerName, err),
+				)
+				continue
+			}
+			ret = append(ret, dockerService)
+		}
+	}
+	return ret, nil
+}
+
 type PackageInstallStep struct {
 	Docker *PackageInstallStepDocker `yaml:"docker,omitempty"`
 	File   *PackageInstallStepFile   `yaml:"file,omitempty"`
