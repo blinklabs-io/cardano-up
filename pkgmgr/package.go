@@ -211,6 +211,7 @@ type PackageInstallStepDocker struct {
 	Args          []string          `yaml:"args,omitempty"`
 	Binds         []string          `yaml:"binds,omitempty"`
 	Ports         []string          `yaml:"ports,omitempty"`
+	PullOnly      bool              `yaml:"pullOnly"`
 }
 
 func (p *PackageInstallStepDocker) preflight(cfg Config, pkgName string) error {
@@ -289,16 +290,26 @@ func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
 		Binds:         tmpBinds,
 		Ports:         tmpPorts,
 	}
-	if err := svc.Create(); err != nil {
-		return err
-	}
-	if err := svc.Start(); err != nil {
-		return err
+	if p.PullOnly {
+		if err := svc.pullImage(); err != nil {
+			return err
+		}
+	} else {
+		if err := svc.Create(); err != nil {
+			return err
+		}
+		if err := svc.Start(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func (p *PackageInstallStepDocker) uninstall(cfg Config, pkgName string) error {
+	// Nothing to uninstall if we were only fetching the image
+	if p.PullOnly {
+		return nil
+	}
 	containerName := fmt.Sprintf("%s-%s", pkgName, p.ContainerName)
 	svc, err := NewDockerServiceFromContainerName(containerName, cfg.Logger)
 	if err != nil {

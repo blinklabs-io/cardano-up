@@ -58,6 +58,7 @@ docker exec -ti {{ .Package.Name }}-cardano-node cardano-cli $@
 				Docker: &PackageInstallStepDocker{
 					ContainerName: "mithril-client",
 					Image:         "ghcr.io/blinklabs-io/mithril-client:0.5.17-1",
+					PullOnly:      true,
 				},
 			},
 			{
@@ -79,6 +80,7 @@ docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.5.17 $@
 				Docker: &PackageInstallStepDocker{
 					ContainerName: "mithril-client",
 					Image:         "ghcr.io/blinklabs-io/mithril-client:0.7.0-1",
+					PullOnly:      true,
 				},
 			},
 			{
