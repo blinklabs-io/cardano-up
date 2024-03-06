@@ -323,22 +323,36 @@ func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
 }
 
 func (p *PackageInstallStepDocker) uninstall(cfg Config, pkgName string) error {
-	// Nothing to uninstall if we were only fetching the image
-	if p.PullOnly {
-		return nil
-	}
-	containerName := fmt.Sprintf("%s-%s", pkgName, p.ContainerName)
-	svc, err := NewDockerServiceFromContainerName(containerName, cfg.Logger)
-	if err != nil {
-		return err
-	}
-	if running, _ := svc.Running(); running {
-		if err := svc.Stop(); err != nil {
+	if !p.PullOnly {
+		containerName := fmt.Sprintf("%s-%s", pkgName, p.ContainerName)
+		svc, err := NewDockerServiceFromContainerName(containerName, cfg.Logger)
+		if err != nil {
+			return err
+		}
+		if running, _ := svc.Running(); running {
+			if err := svc.Stop(); err != nil {
+				return err
+			}
+		}
+		if err := svc.Remove(); err != nil {
 			return err
 		}
 	}
-	if err := svc.Remove(); err != nil {
-		return err
+	if err := RemoveDockerImage(p.Image); err != nil {
+		cfg.Logger.Debug(
+			fmt.Sprintf(
+				"failed to delete image %q: %s",
+				p.Image,
+				err,
+			),
+		)
+	} else {
+		cfg.Logger.Debug(
+			fmt.Sprintf(
+				"removed unused image %q",
+				p.Image,
+			),
+		)
 	}
 	return nil
 }
