@@ -29,7 +29,24 @@ type Package struct {
 	Description      string               `yaml:"description"`
 	InstallSteps     []PackageInstallStep `yaml:"installSteps"`
 	Dependencies     []string             `yaml:"dependencies"`
+	Tags             []string             `yaml:"tags"`
 	PostInstallNotes string               `yaml:"postInstallNotes"`
+}
+
+func (p Package) hasTags(tags []string) bool {
+	for _, tag := range tags {
+		foundTag := false
+		for _, pkgTag := range p.Tags {
+			if tag == pkgTag {
+				foundTag = true
+				break
+			}
+		}
+		if !foundTag {
+			return false
+		}
+	}
+	return true
 }
 
 func (p Package) install(cfg Config, context string) (string, error) {

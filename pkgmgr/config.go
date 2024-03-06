@@ -19,15 +19,17 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 type Config struct {
-	BinDir    string
-	CacheDir  string
-	ConfigDir string
-	DataDir   string
-	Logger    *slog.Logger
-	Template  *Template
+	BinDir              string
+	CacheDir            string
+	ConfigDir           string
+	DataDir             string
+	Logger              *slog.Logger
+	Template            *Template
+	RequiredPackageTags []string
 }
 
 func NewDefaultConfig() (Config, error) {
@@ -69,6 +71,11 @@ func NewDefaultConfig() (Config, error) {
 			"cardano-up",
 		),
 		Logger: slog.Default(),
+		RequiredPackageTags: []string{
+			"docker",
+			runtime.GOOS,
+			runtime.GOARCH,
+		},
 	}
 	return ret, nil
 }

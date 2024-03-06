@@ -19,6 +19,7 @@ var RegistryPackages = []Package{
 		Name:        "cardano-node",
 		Version:     "8.7.3",
 		Description: "Cardano node software by Input Output Global",
+		Tags:        []string{"docker", "linux", "darwin", "amd64", "arm64"},
 		InstallSteps: []PackageInstallStep{
 			{
 				Docker: &PackageInstallStepDocker{
@@ -53,6 +54,7 @@ docker exec -ti {{ .Package.Name }}-cardano-node cardano-cli $@
 		Name:        "mithril-client",
 		Version:     "0.5.17",
 		Description: "Mithril client by Input Output Global",
+		Tags:        []string{"docker", "linux", "darwin", "amd64", "arm64"},
 		InstallSteps: []PackageInstallStep{
 			{
 				Docker: &PackageInstallStepDocker{
@@ -75,6 +77,7 @@ docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.5.17 $@
 		Name:        "mithril-client",
 		Version:     "0.7.0",
 		Description: "Mithril client by Input Output Global",
+		Tags:        []string{"docker", "linux", "darwin", "amd64", "arm64"},
 		InstallSteps: []PackageInstallStep{
 			{
 				Docker: &PackageInstallStepDocker{
@@ -98,20 +101,24 @@ docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.7.0-1 $@
 	{
 		Name:             "test-packageA",
 		Version:          "1.0.2",
+		Tags:             []string{"docker", "linux", "darwin", "amd64", "arm64"},
 		PostInstallNotes: "Notes for {{ .Package.Name }}",
 	},
 	{
 		Name:             "test-packageA",
 		Version:          "1.0.3",
+		Tags:             []string{"docker", "linux", "darwin", "amd64", "arm64"},
 		PostInstallNotes: "Notes for {{ .Package.Name }}",
 	},
 	{
 		Name:    "test-packageA",
 		Version: "2.1.3",
+		Tags:    []string{"docker", "linux", "darwin", "amd64", "arm64"},
 	},
 	{
 		Name:    "test-packageB",
 		Version: "0.1.0",
+		Tags:    []string{"docker", "linux", "darwin", "amd64", "arm64"},
 		Dependencies: []string{
 			"test-packageA < 2.0.0, >= 1.0.2",
 		},
