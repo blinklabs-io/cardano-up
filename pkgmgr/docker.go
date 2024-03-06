@@ -86,7 +86,7 @@ func NewDockerServiceFromContainerName(containerName string, logger *slog.Logger
 			}
 		}
 	}
-	return nil, nil
+	return nil, ErrContainerNotExists
 }
 
 func (d *DockerService) Running() (bool, error) {

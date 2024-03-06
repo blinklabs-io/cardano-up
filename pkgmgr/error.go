@@ -50,6 +50,9 @@ var ErrContextNoDeleteActive = errors.New("cannot delete active context")
 // ErrContainerAlreadyExists is returned when creating a new container with a name that is already in use
 var ErrContainerAlreadyExists = errors.New("specified container already exists")
 
+// ErrContainerNotExists is returned when querying a container by name that doesn't exist
+var ErrContainerNotExists = errors.New("specified container does not exist")
+
 func NewUnknownNetworkError(networkName string) error {
 	return fmt.Errorf(
 		"unknown network %q",
