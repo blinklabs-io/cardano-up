@@ -219,7 +219,7 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 			),
 		)
 		// Uninstall old version
-		if err := p.uninstallPackage(upgradePkg.Installed); err != nil {
+		if err := p.uninstallPackage(upgradePkg.Installed, true); err != nil {
 			return err
 		}
 		// Install new version
@@ -259,7 +259,7 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 	return nil
 }
 
-func (p *PackageManager) Uninstall(pkgs ...string) error {
+func (p *PackageManager) Uninstall(keepData bool, pkgs ...string) error {
 	// Find installed packages
 	activeContextName, _ := p.ActiveContext()
 	installedPackages := p.InstalledPackages()
@@ -294,7 +294,7 @@ func (p *PackageManager) Uninstall(pkgs ...string) error {
 		return err
 	}
 	for _, uninstallPkg := range uninstallPkgs {
-		if err := p.uninstallPackage(uninstallPkg); err != nil {
+		if err := p.uninstallPackage(uninstallPkg, keepData); err != nil {
 			return err
 		}
 		if err := p.state.Save(); err != nil {
@@ -412,9 +412,9 @@ func (p *PackageManager) Info(pkgs ...string) error {
 	return nil
 }
 
-func (p *PackageManager) uninstallPackage(uninstallPkg InstalledPackage) error {
+func (p *PackageManager) uninstallPackage(uninstallPkg InstalledPackage, keepData bool) error {
 	// Uninstall package
-	if err := uninstallPkg.Package.uninstall(p.config, uninstallPkg.Context); err != nil {
+	if err := uninstallPkg.Package.uninstall(p.config, uninstallPkg.Context, keepData); err != nil {
 		return err
 	}
 	// Remove package from installed packages

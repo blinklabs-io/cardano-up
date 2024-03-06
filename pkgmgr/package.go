@@ -118,7 +118,7 @@ func (p Package) install(cfg Config, context string) (string, error) {
 	return "", nil
 }
 
-func (p Package) uninstall(cfg Config, context string) error {
+func (p Package) uninstall(cfg Config, context string, keepData bool) error {
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	// Iterate over install steps in reverse
 	for idx := len(p.InstallSteps) - 1; idx >= 0; idx-- {
@@ -129,7 +129,7 @@ func (p Package) uninstall(cfg Config, context string) error {
 			return ErrMultipleInstallMethods
 		}
 		if installStep.Docker != nil {
-			if err := installStep.Docker.uninstall(cfg, pkgName); err != nil {
+			if err := installStep.Docker.uninstall(cfg, pkgName, keepData); err != nil {
 				return err
 			}
 		} else if installStep.File != nil {
@@ -138,6 +138,54 @@ func (p Package) uninstall(cfg Config, context string) error {
 			}
 		} else {
 			return ErrNoInstallMethods
+		}
+	}
+	if keepData {
+		cfg.Logger.Debug(
+			"skipping cleanup of package data/cache directories",
+		)
+	} else {
+		// Remove package cache dir
+		pkgCacheDir := filepath.Join(
+			cfg.CacheDir,
+			pkgName,
+		)
+		if err := os.RemoveAll(pkgCacheDir); err != nil {
+			cfg.Logger.Warn(
+				fmt.Sprintf(
+					"failed to remove package cache directory %q: %s",
+					pkgCacheDir,
+					err,
+				),
+			)
+		} else {
+			cfg.Logger.Debug(
+				fmt.Sprintf(
+					"removed package cache directory %q",
+					pkgCacheDir,
+				),
+			)
+		}
+		// Remove package data dir
+		pkgDataDir := filepath.Join(
+			cfg.DataDir,
+			pkgName,
+		)
+		if err := os.RemoveAll(pkgDataDir); err != nil {
+			cfg.Logger.Warn(
+				fmt.Sprintf(
+					"failed to remove package data directory %q: %s",
+					pkgDataDir,
+					err,
+				),
+			)
+		} else {
+			cfg.Logger.Debug(
+				fmt.Sprintf(
+					"removed package data directory %q",
+					pkgCacheDir,
+				),
+			)
 		}
 	}
 	return nil
@@ -328,7 +376,7 @@ func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
 	return nil
 }
 
-func (p *PackageInstallStepDocker) uninstall(cfg Config, pkgName string) error {
+func (p *PackageInstallStepDocker) uninstall(cfg Config, pkgName string, keepData bool) error {
 	if !p.PullOnly {
 		containerName := fmt.Sprintf("%s-%s", pkgName, p.ContainerName)
 		svc, err := NewDockerServiceFromContainerName(containerName, cfg.Logger)
@@ -354,21 +402,30 @@ func (p *PackageInstallStepDocker) uninstall(cfg Config, pkgName string) error {
 			}
 		}
 	}
-	if err := RemoveDockerImage(p.Image); err != nil {
+	if keepData {
 		cfg.Logger.Debug(
 			fmt.Sprintf(
-				"failed to delete image %q: %s",
+				"skipping deletion of docker image %q",
 				p.Image,
-				err,
 			),
 		)
 	} else {
-		cfg.Logger.Debug(
-			fmt.Sprintf(
-				"removed unused image %q",
-				p.Image,
-			),
-		)
+		if err := RemoveDockerImage(p.Image); err != nil {
+			cfg.Logger.Debug(
+				fmt.Sprintf(
+					"failed to delete image %q: %s",
+					p.Image,
+					err,
+				),
+			)
+		} else {
+			cfg.Logger.Debug(
+				fmt.Sprintf(
+					"removed unused image %q",
+					p.Image,
+				),
+			)
+		}
 	}
 	return nil
 }
@@ -431,7 +488,7 @@ func (p *PackageInstallStepFile) uninstall(cfg Config, pkgName string) error {
 	)
 	cfg.Logger.Debug(fmt.Sprintf("deleting file %s", filePath))
 	if err := os.Remove(filePath); err != nil {
-		cfg.Logger.Debug(fmt.Sprintf("failed to remove file %s", filePath))
+		cfg.Logger.Warn(fmt.Sprintf("failed to remove file %s", filePath))
 	}
 	if p.Binary {
 		binPath := filepath.Join(
@@ -439,7 +496,7 @@ func (p *PackageInstallStepFile) uninstall(cfg Config, pkgName string) error {
 			p.Filename,
 		)
 		if err := os.Remove(binPath); err != nil {
-			cfg.Logger.Debug(fmt.Sprintf("failed to remove symlink %s", binPath))
+			cfg.Logger.Warn(fmt.Sprintf("failed to remove symlink %s", binPath))
 		}
 	}
 	return nil

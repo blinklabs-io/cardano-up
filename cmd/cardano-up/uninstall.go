@@ -24,8 +24,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var uninstallFlags = struct {
+	keepData bool
+}{}
+
 func uninstallCommand() *cobra.Command {
-	return &cobra.Command{
+	uninstallCmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Uninstall package",
 		Args: func(cmd *cobra.Command, args []string) error {
@@ -44,10 +48,12 @@ func uninstallCommand() *cobra.Command {
 				os.Exit(1)
 			}
 			// Uninstall package
-			if err := pm.Uninstall(args[0]); err != nil {
+			if err := pm.Uninstall(uninstallFlags.keepData, args[0]); err != nil {
 				slog.Error(err.Error())
 				os.Exit(1)
 			}
 		},
 	}
+	uninstallCmd.Flags().BoolVarP(&uninstallFlags.keepData, "keep-data", "k", false, "don't cleanup package data")
+	return uninstallCmd
 }
