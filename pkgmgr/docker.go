@@ -330,10 +330,7 @@ func (d *DockerService) refresh() error {
 
 func (d *DockerService) getClient() (*client.Client, error) {
 	if d.client == nil {
-		tmpClient, err := client.NewClientWithOpts(
-			client.WithAPIVersionNegotiation(),
-			client.WithHostFromEnv(),
-		)
+		tmpClient, err := NewDockerClient()
 		if err != nil {
 			return nil, err
 		}
@@ -342,10 +339,32 @@ func (d *DockerService) getClient() (*client.Client, error) {
 	return d.client, nil
 }
 
+func NewDockerClient() (*client.Client, error) {
+	tmpClient, err := client.NewClientWithOpts(
+		client.WithAPIVersionNegotiation(),
+		client.WithHostFromEnv(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return tmpClient, nil
+}
+
 func CheckDockerConnectivity() error {
-	tmpDockerService := &DockerService{}
-	if _, err := tmpDockerService.getClient(); err != nil {
+	if _, err := NewDockerClient(); err != nil {
 		return errors.New(dockerInstallError)
+	}
+	return nil
+}
+
+func RemoveDockerImage(image string) error {
+	client, err := NewDockerClient()
+	if err != nil {
+		return err
+	}
+	_, err = client.ImageRemove(context.Background(), image, types.ImageRemoveOptions{})
+	if err != nil {
+		return err
 	}
 	return nil
 }
