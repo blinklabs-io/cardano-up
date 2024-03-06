@@ -82,7 +82,13 @@ func (p *PackageManager) initTemplate() {
 }
 
 func (p *PackageManager) AvailablePackages() []Package {
-	return p.availablePackages[:]
+	var ret []Package
+	for _, pkg := range p.availablePackages {
+		if pkg.hasTags(p.config.RequiredPackageTags) {
+			ret = append(ret, pkg)
+		}
+	}
+	return ret
 }
 
 func (p *PackageManager) Up() error {
