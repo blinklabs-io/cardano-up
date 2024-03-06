@@ -96,6 +96,34 @@ docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.7.0-1 $@
 			},
 		},
 	},
+	{
+		Name:        "ogmios",
+		Version:     "v6.1.0",
+		Description: "Ogmios, a WebSocket & HTTP server for Cardano, providing a bridge between Cardano nodes and clients.",
+		Tags:        []string{"docker", "linux", "darwin", "amd64", "arm64"},
+		InstallSteps: []PackageInstallStep{
+			{
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "ogmios",
+					Image:         "cardanosolutions/ogmios:v6.1.0",
+					Binds: []string{
+						"{{ .Paths.CacheDir }}/ipc:/ipc",
+					},
+					Ports: []string{
+						"1337",
+					},
+					Command: []string{
+						"ogmios",
+						"--log-level", "info",
+						"--host", "0.0.0.0",
+						"--port", "1337",
+						"--node-socket", "/ipc/node.socket",
+						"--node-config", "/config/mainnet/cardano-node/config.json",
+					},
+				},
+			},
+		},
+	},
 
 	// Test packages
 	{
