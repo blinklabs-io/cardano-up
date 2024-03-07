@@ -146,11 +146,23 @@ func (p Package) uninstall(cfg Config, context string, keepData bool) error {
 		)
 	} else {
 		// Remove package cache dir
+		// We use Docker to deal with root-owned files from containers
 		pkgCacheDir := filepath.Join(
 			cfg.CacheDir,
 			pkgName,
 		)
-		if err := os.RemoveAll(pkgCacheDir); err != nil {
+		_, _, err := RunCommandInDocker(
+			dockerUtilityImage,
+			[]string{
+				"rm",
+				"-rf",
+				fmt.Sprintf("%s/%s", cfg.CacheDir, pkgName),
+			},
+			[]string{
+				fmt.Sprintf("%s:%s", cfg.CacheDir, cfg.CacheDir),
+			},
+		)
+		if err != nil {
 			cfg.Logger.Warn(
 				fmt.Sprintf(
 					"failed to remove package cache directory %q: %s",
@@ -167,11 +179,23 @@ func (p Package) uninstall(cfg Config, context string, keepData bool) error {
 			)
 		}
 		// Remove package data dir
+		// We use Docker to deal with root-owned files from containers
 		pkgDataDir := filepath.Join(
 			cfg.DataDir,
 			pkgName,
 		)
-		if err := os.RemoveAll(pkgDataDir); err != nil {
+		_, _, err = RunCommandInDocker(
+			dockerUtilityImage,
+			[]string{
+				"rm",
+				"-rf",
+				fmt.Sprintf("%s/%s", cfg.DataDir, pkgName),
+			},
+			[]string{
+				fmt.Sprintf("%s:%s", cfg.DataDir, cfg.DataDir),
+			},
+		)
+		if err != nil {
 			cfg.Logger.Warn(
 				fmt.Sprintf(
 					"failed to remove package data directory %q: %s",
@@ -183,7 +207,7 @@ func (p Package) uninstall(cfg Config, context string, keepData bool) error {
 			cfg.Logger.Debug(
 				fmt.Sprintf(
 					"removed package data directory %q",
-					pkgCacheDir,
+					pkgDataDir,
 				),
 			)
 		}
