@@ -31,6 +31,21 @@ type Package struct {
 	Dependencies     []string             `yaml:"dependencies"`
 	Tags             []string             `yaml:"tags"`
 	PostInstallNotes string               `yaml:"postInstallNotes"`
+	Options          []PackageOption      `yaml:"options"`
+}
+
+type PackageOption struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+	Default     bool   `yaml:"default"`
+}
+
+func (p Package) defaultOpts() map[string]bool {
+	ret := make(map[string]bool)
+	for _, opt := range p.Options {
+		ret[opt.Name] = opt.Default
+	}
+	return ret
 }
 
 func (p Package) hasTags(tags []string) bool {
@@ -49,7 +64,7 @@ func (p Package) hasTags(tags []string) bool {
 	return true
 }
 
-func (p Package) install(cfg Config, context string) (string, error) {
+func (p Package) install(cfg Config, context string, opts map[string]bool) (string, error) {
 	// Update template vars
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	pkgCacheDir := filepath.Join(
@@ -66,6 +81,7 @@ func (p Package) install(cfg Config, context string) (string, error) {
 				"Name":      pkgName,
 				"ShortName": p.Name,
 				"Version":   p.Version,
+				"Options":   opts,
 			},
 			"Paths": map[string]string{
 				"CacheDir": pkgCacheDir,
