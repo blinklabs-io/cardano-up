@@ -155,25 +155,31 @@ func (p *PackageManager) Install(pkgs ...string) error {
 		p.config.Logger.Info(
 			fmt.Sprintf(
 				"Installing package %s (= %s)",
-				installPkg.Name,
-				installPkg.Version,
+				installPkg.Install.Name,
+				installPkg.Install.Version,
 			),
 		)
-		notes, err := installPkg.install(p.config, activeContextName)
+		// Build package options
+		tmpPkgOpts := installPkg.Install.defaultOpts()
+		for k, v := range installPkg.Options {
+			tmpPkgOpts[k] = v
+		}
+		// Install package
+		notes, err := installPkg.Install.install(p.config, activeContextName, tmpPkgOpts)
 		if err != nil {
 			return err
 		}
-		installedPkg := NewInstalledPackage(installPkg, activeContextName, notes)
+		installedPkg := NewInstalledPackage(installPkg.Install, activeContextName, notes, tmpPkgOpts)
 		p.state.InstalledPackages = append(p.state.InstalledPackages, installedPkg)
 		if err := p.state.Save(); err != nil {
 			return err
 		}
-		installedPkgs = append(installedPkgs, installPkg.Name)
+		installedPkgs = append(installedPkgs, installPkg.Install.Name)
 		if notes != "" {
 			notesOutput += fmt.Sprintf(
 				"\nPost-install notes for %s (= %s):\n\n%s\n",
-				installPkg.Name,
-				installPkg.Version,
+				installPkg.Install.Name,
+				installPkg.Install.Version,
 				notes,
 			)
 		}
@@ -218,16 +224,18 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 				upgradePkg.Upgrade.Version,
 			),
 		)
+		// Capture options from existing package
+		pkgOpts := upgradePkg.Installed.Options
 		// Uninstall old version
 		if err := p.uninstallPackage(upgradePkg.Installed, true); err != nil {
 			return err
 		}
 		// Install new version
-		notes, err := upgradePkg.Upgrade.install(p.config, activeContextName)
+		notes, err := upgradePkg.Upgrade.install(p.config, activeContextName, pkgOpts)
 		if err != nil {
 			return err
 		}
-		installedPkg := NewInstalledPackage(upgradePkg.Upgrade, activeContextName, notes)
+		installedPkg := NewInstalledPackage(upgradePkg.Upgrade, activeContextName, notes, pkgOpts)
 		p.state.InstalledPackages = append(p.state.InstalledPackages, installedPkg)
 		if err := p.state.Save(); err != nil {
 			return err

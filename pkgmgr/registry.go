@@ -148,7 +148,8 @@ docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.7.0-1 $@
 		Version: "0.1.0",
 		Tags:    []string{"docker", "linux", "darwin", "amd64", "arm64"},
 		Dependencies: []string{
-			"test-packageA < 2.0.0, >= 1.0.2",
+			"test-packageA[fooA,-fooB] < 2.0.0, >= 1.0.2",
 		},
+		PostInstallNotes: "Values:\n\n{{ toPrettyJson . }}",
 	},
 }

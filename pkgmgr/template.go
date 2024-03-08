@@ -17,6 +17,8 @@ package pkgmgr
 import (
 	"bytes"
 	"text/template"
+
+	"github.com/Masterminds/sprig/v3"
 )
 
 type Template struct {
@@ -26,7 +28,7 @@ type Template struct {
 
 func NewTemplate(baseVars map[string]any) *Template {
 	return &Template{
-		tmpl:     template.New("main"),
+		tmpl:     template.New("main").Funcs(sprig.FuncMap()),
 		baseVars: baseVars,
 	}
 }
@@ -62,9 +64,6 @@ func (t *Template) WithVars(extraVars map[string]any) *Template {
 	for k, v := range extraVars {
 		tmpVars[k] = v
 	}
-	tmpl := &Template{
-		tmpl:     template.New("main"),
-		baseVars: tmpVars,
-	}
+	tmpl := NewTemplate(tmpVars)
 	return tmpl
 }
