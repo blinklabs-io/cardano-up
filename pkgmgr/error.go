@@ -101,9 +101,17 @@ func NewPackageUninstallWouldBreakDepsError(uninstallPkgName string, uninstallPk
 	)
 }
 
-func NewNoPackageAvailableForUpgrade(pkgSpec string) error {
+func NewNoPackageAvailableForUpgradeError(pkgSpec string) error {
 	return fmt.Errorf(
 		"no package available for upgrade: %s",
 		pkgSpec,
+	)
+}
+
+func NewInstallStepConditionError(condition string, err error) error {
+	return fmt.Errorf(
+		"failure evaluating install step condition %q: %s",
+		condition,
+		err,
 	)
 }

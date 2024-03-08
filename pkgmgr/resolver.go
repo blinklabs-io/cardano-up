@@ -123,7 +123,7 @@ func (r *Resolver) Upgrade(pkgs ...string) ([]ResolverUpgradeSet, error) {
 			return nil, err
 		}
 		if latestPkg.Version == "" || latestPkg.Version == installedPkg.Package.Version {
-			return nil, NewNoPackageAvailableForUpgrade(pkg)
+			return nil, NewNoPackageAvailableForUpgradeError(pkg)
 		}
 		ret = append(
 			ret,
