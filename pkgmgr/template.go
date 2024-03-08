@@ -16,6 +16,7 @@ package pkgmgr
 
 import (
 	"bytes"
+	"fmt"
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
@@ -66,4 +67,19 @@ func (t *Template) WithVars(extraVars map[string]any) *Template {
 	}
 	tmpl := NewTemplate(tmpVars)
 	return tmpl
+}
+
+func (t *Template) EvaluateCondition(condition string, extraVars map[string]any) (bool, error) {
+	tmpl := fmt.Sprintf(
+		`{{ if %s }}true{{ else }}false{{ end }}`,
+		condition,
+	)
+	rendered, err := t.Render(tmpl, extraVars)
+	if err != nil {
+		return false, err
+	}
+	if rendered == `true` {
+		return true, nil
+	}
+	return false, nil
 }

@@ -151,5 +151,21 @@ docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.7.0-1 $@
 			"test-packageA[fooA,-fooB] < 2.0.0, >= 1.0.2",
 		},
 		PostInstallNotes: "Values:\n\n{{ toPrettyJson . }}",
+		InstallSteps: []PackageInstallStep{
+			{
+				Condition: `eq .Package.ShortName "test-packageB"`,
+				File: &PackageInstallStepFile{
+					Filename: "test-file1",
+					Content:  `test1`,
+				},
+			},
+			{
+				Condition: `eq .Package.ShortName "test-packageZ"`,
+				File: &PackageInstallStepFile{
+					Filename: "test-file2",
+					Content:  `test2`,
+				},
+			},
+		},
 	},
 }

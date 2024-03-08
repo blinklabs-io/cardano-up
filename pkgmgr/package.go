@@ -111,6 +111,20 @@ func (p Package) install(cfg Config, context string, opts map[string]bool) (stri
 	}
 	// Perform install
 	for _, installStep := range p.InstallSteps {
+		// Evaluate condition if defined
+		if installStep.Condition != "" {
+			if ok, err := cfg.Template.EvaluateCondition(installStep.Condition, nil); err != nil {
+				return "", NewInstallStepConditionError(installStep.Condition, err)
+			} else if !ok {
+				cfg.Logger.Debug(
+					fmt.Sprintf(
+						"skipping install step due to condition: %s",
+						installStep.Condition,
+					),
+				)
+				continue
+			}
+		}
 		if installStep.Docker != nil {
 			if err := installStep.Docker.install(cfg, pkgName); err != nil {
 				return "", err
@@ -139,6 +153,20 @@ func (p Package) uninstall(cfg Config, context string, keepData bool) error {
 	// Iterate over install steps in reverse
 	for idx := len(p.InstallSteps) - 1; idx >= 0; idx-- {
 		installStep := p.InstallSteps[idx]
+		// Evaluate condition if defined
+		if installStep.Condition != "" {
+			if ok, err := cfg.Template.EvaluateCondition(installStep.Condition, nil); err != nil {
+				return NewInstallStepConditionError(installStep.Condition, err)
+			} else if !ok {
+				cfg.Logger.Debug(
+					fmt.Sprintf(
+						"skipping uninstall step due to condition: %s",
+						installStep.Condition,
+					),
+				)
+				continue
+			}
+		}
 		// Make sure only one install method is specified per install step
 		if installStep.Docker != nil &&
 			installStep.File != nil {
@@ -307,8 +335,9 @@ func (p Package) services(cfg Config, context string) ([]*DockerService, error) 
 }
 
 type PackageInstallStep struct {
-	Docker *PackageInstallStepDocker `yaml:"docker,omitempty"`
-	File   *PackageInstallStepFile   `yaml:"file,omitempty"`
+	Condition string                    `yaml:"condition"`
+	Docker    *PackageInstallStepDocker `yaml:"docker,omitempty"`
+	File      *PackageInstallStepFile   `yaml:"file,omitempty"`
 }
 
 type PackageInstallStepDocker struct {
