@@ -16,28 +16,52 @@ package pkgmgr
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 type Package struct {
-	Name             string               `yaml:"name"`
-	Version          string               `yaml:"version"`
-	Description      string               `yaml:"description"`
-	InstallSteps     []PackageInstallStep `yaml:"installSteps"`
-	Dependencies     []string             `yaml:"dependencies"`
-	Tags             []string             `yaml:"tags"`
-	PostInstallNotes string               `yaml:"postInstallNotes"`
-	Options          []PackageOption      `yaml:"options"`
+	Name             string               `yaml:"name,omitempty"`
+	Version          string               `yaml:"version,omitempty"`
+	Description      string               `yaml:"description,omitempty"`
+	InstallSteps     []PackageInstallStep `yaml:"installSteps,omitempty"`
+	Dependencies     []string             `yaml:"dependencies,omitempty"`
+	Tags             []string             `yaml:"tags,omitempty"`
+	PostInstallNotes string               `yaml:"postInstallNotes,omitempty"`
+	Options          []PackageOption      `yaml:"options,omitempty"`
 }
 
 type PackageOption struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
 	Default     bool   `yaml:"default"`
+}
+
+func NewPackageFromFile(path string) (Package, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return Package{}, err
+	}
+	defer f.Close()
+	return NewPackageFromReader(f)
+}
+
+func NewPackageFromReader(r io.Reader) (Package, error) {
+	var ret Package
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return Package{}, err
+	}
+	if err := yaml.Unmarshal(data, &ret); err != nil {
+		return Package{}, err
+	}
+	return ret, nil
 }
 
 func (p Package) defaultOpts() map[string]bool {
