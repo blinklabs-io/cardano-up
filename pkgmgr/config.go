@@ -30,6 +30,8 @@ type Config struct {
 	Logger              *slog.Logger
 	Template            *Template
 	RequiredPackageTags []string
+	RegistryUrl         string
+	RegistryDir         string
 }
 
 func NewDefaultConfig() (Config, error) {

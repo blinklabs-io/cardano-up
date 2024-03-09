@@ -56,8 +56,12 @@ func (p *PackageManager) init() error {
 	if err := p.state.Load(); err != nil {
 		return fmt.Errorf("failed to load state: %s", err)
 	}
-	// TODO: replace this with syncing a repo and reading from disk
-	p.availablePackages = append(p.availablePackages, RegistryPackages...)
+	// Get available packages from configured registry
+	if registryPkgs, err := registryPackages(p.config); err != nil {
+		return err
+	} else {
+		p.availablePackages = registryPkgs[:]
+	}
 	// Setup templating
 	p.initTemplate()
 	return nil
