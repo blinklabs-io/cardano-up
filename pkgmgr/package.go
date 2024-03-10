@@ -95,6 +95,10 @@ func (p Package) install(cfg Config, context string, opts map[string]bool) (stri
 		cfg.CacheDir,
 		pkgName,
 	)
+	pkgContextDir := filepath.Join(
+		cfg.DataDir,
+		context,
+	)
 	pkgDataDir := filepath.Join(
 		cfg.DataDir,
 		pkgName,
@@ -108,8 +112,9 @@ func (p Package) install(cfg Config, context string, opts map[string]bool) (stri
 				"Options":   opts,
 			},
 			"Paths": map[string]string{
-				"CacheDir": pkgCacheDir,
-				"DataDir":  pkgDataDir,
+				"CacheDir":   pkgCacheDir,
+				"ContextDir": pkgContextDir,
+				"DataDir":    pkgDataDir,
 			},
 		},
 	)
@@ -128,6 +133,9 @@ func (p Package) install(cfg Config, context string, opts map[string]bool) (stri
 	}
 	// Pre-create dirs
 	if err := os.MkdirAll(pkgCacheDir, fs.ModePerm); err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(pkgContextDir, fs.ModePerm); err != nil {
 		return "", err
 	}
 	if err := os.MkdirAll(pkgDataDir, fs.ModePerm); err != nil {
