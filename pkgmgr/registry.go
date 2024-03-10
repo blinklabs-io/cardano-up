@@ -14,7 +14,22 @@
 
 package pkgmgr
 
-var RegistryPackages = []Package{
+import (
+	"archive/zip"
+	"bytes"
+	"fmt"
+	"io"
+	"io/fs"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"gopkg.in/yaml.v3"
+)
+
+var registryBuiltinPackages = []Package{
 	{
 		Name:        "cardano-node",
 		Version:     "8.7.3",
@@ -168,4 +183,137 @@ docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.7.0-1 $@
 			},
 		},
 	},
+}
+
+func registryPackages(cfg Config) ([]Package, error) {
+	if cfg.RegistryDir != "" {
+		return registryPackagesDir(cfg)
+	} else if cfg.RegistryUrl != "" {
+		return registryPackagesUrl(cfg)
+	} else {
+		return registryBuiltinPackages[:], nil
+	}
+}
+
+func registryPackagesDir(cfg Config) ([]Package, error) {
+	tmpFs := os.DirFS("/").(fs.ReadFileFS)
+	return registryPackagesFs(cfg, tmpFs)
+}
+
+func registryPackagesFs(cfg Config, filesystem fs.ReadFileFS) ([]Package, error) {
+	var ret []Package
+	err := fs.WalkDir(
+		filesystem,
+		cfg.RegistryDir,
+		func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			// Skip dirs
+			if d.IsDir() {
+				// Skip all files inside dot-dirs
+				if strings.HasPrefix(d.Name(), `.`) && d.Name() != `.` {
+					return fs.SkipDir
+				}
+				return nil
+			}
+			// Skip non-YAML files based on file extension
+			if filepath.Ext(path) != ".yaml" && filepath.Ext(path) != ".yml" {
+				return nil
+			}
+			// Try to parse YAML file as package
+			fileData, err := filesystem.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			var tmpPkg Package
+			if err := yaml.Unmarshal(fileData, &tmpPkg); err != nil {
+				cfg.Logger.Warn(
+					fmt.Sprintf(
+						"failed to load %q as package: %s",
+						path,
+						err,
+					),
+				)
+				return nil
+			}
+			ret = append(ret, tmpPkg)
+			return nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return ret, nil
+}
+
+func registryPackagesUrl(cfg Config) ([]Package, error) {
+	cachePath := filepath.Join(
+		cfg.CacheDir,
+		"registry",
+	)
+	// Check age of existing cache
+	stat, err := os.Stat(cachePath)
+	if err != nil {
+		if err != fs.ErrNotExist {
+			return nil, err
+		}
+	}
+	// Fetch and extract registry ZIP into cache if it doesn't exist or is too old
+	if err == fs.ErrNotExist ||
+		stat.ModTime().Before(time.Now().Add(-24*time.Hour)) {
+		// Fetch registry ZIP
+		resp, err := http.Get(cfg.RegistryUrl)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+		zipData := bytes.NewReader(respBody)
+		zipReader, err := zip.NewReader(
+			zipData,
+			int64(zipData.Len()),
+		)
+		if err != nil {
+			return nil, err
+		}
+		// Clear out existing cache files
+		if err := os.RemoveAll(cachePath); err != nil {
+			return nil, err
+		}
+		if err := os.MkdirAll(cachePath, fs.ModePerm); err != nil {
+			return nil, err
+		}
+		// Extract files from ZIP into cache path
+		for _, zipFile := range zipReader.File {
+			outPath := filepath.Join(
+				cachePath,
+				zipFile.Name,
+			)
+			// Create parent dir
+			if err := os.MkdirAll(filepath.Dir(outPath), fs.ModePerm); err != nil {
+				return nil, err
+			}
+			// Read file bytes
+			zf, err := zipFile.Open()
+			if err != nil {
+				return nil, err
+			}
+			zfData, err := io.ReadAll(zf)
+			if err != nil {
+				return nil, err
+			}
+			zf.Close()
+			// Write file
+			if err := os.WriteFile(outPath, zfData, fs.ModePerm); err != nil {
+				return nil, err
+			}
+		}
+	}
+	// Process cache dir
+	cfg.RegistryDir = cachePath
+	return registryPackagesDir(cfg)
 }
