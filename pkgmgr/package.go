@@ -15,6 +15,7 @@
 package pkgmgr
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -283,6 +284,69 @@ func (p Package) uninstall(cfg Config, context string, keepData bool) error {
 	return nil
 }
 
+func (p Package) activate(cfg Config, context string) error {
+	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
+	for _, installStep := range p.InstallSteps {
+		// Evaluate condition if defined
+		if installStep.Condition != "" {
+			if ok, err := cfg.Template.EvaluateCondition(installStep.Condition, nil); err != nil {
+				return NewInstallStepConditionError(installStep.Condition, err)
+			} else if !ok {
+				cfg.Logger.Debug(
+					fmt.Sprintf(
+						"skipping install step due to condition: %s",
+						installStep.Condition,
+					),
+				)
+				continue
+			}
+		}
+		if installStep.Docker != nil {
+			if err := installStep.Docker.activate(cfg, pkgName); err != nil {
+				return err
+			}
+		} else if installStep.File != nil {
+			if err := installStep.File.activate(cfg, pkgName); err != nil {
+				return err
+			}
+		} else {
+			return ErrNoInstallMethods
+		}
+	}
+	return nil
+}
+
+func (p Package) deactivate(cfg Config, context string) error {
+	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
+	for _, installStep := range p.InstallSteps {
+		// Evaluate condition if defined
+		if installStep.Condition != "" {
+			if ok, err := cfg.Template.EvaluateCondition(installStep.Condition, nil); err != nil {
+				return NewInstallStepConditionError(installStep.Condition, err)
+			} else if !ok {
+				cfg.Logger.Debug(
+					fmt.Sprintf(
+						"skipping install step due to condition: %s",
+						installStep.Condition,
+					),
+				)
+				continue
+			}
+		}
+		if installStep.Docker != nil {
+			if err := installStep.Docker.deactivate(cfg, pkgName); err != nil {
+				return err
+			}
+		} else if installStep.File != nil {
+			if err := installStep.File.deactivate(cfg, pkgName); err != nil {
+				return err
+			}
+		} else {
+			return ErrNoInstallMethods
+		}
+	}
+	return nil
+}
 func (p Package) startService(cfg Config, context string) error {
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 
@@ -523,6 +587,16 @@ func (p *PackageInstallStepDocker) uninstall(cfg Config, pkgName string, keepDat
 	return nil
 }
 
+func (p *PackageInstallStepDocker) activate(cfg Config, pkgName string) error {
+	// Nothing to do
+	return nil
+}
+
+func (p *PackageInstallStepDocker) deactivate(cfg Config, pkgName string) error {
+	// Nothing to do
+	return nil
+}
+
 type PackageInstallStepFile struct {
 	Binary   bool        `yaml:"binary"`
 	Filename string      `yaml:"filename"`
@@ -556,20 +630,6 @@ func (p *PackageInstallStepFile) install(cfg Config, pkgName string) error {
 		return err
 	}
 	cfg.Logger.Debug(fmt.Sprintf("wrote file %s", filePath))
-	if p.Binary {
-		binPath := filepath.Join(
-			cfg.BinDir,
-			tmpFilePath,
-		)
-		parentDir := filepath.Dir(binPath)
-		if err := os.MkdirAll(parentDir, fs.ModePerm); err != nil {
-			return err
-		}
-		if err := os.Symlink(filePath, binPath); err != nil {
-			return err
-		}
-		cfg.Logger.Debug(fmt.Sprintf("wrote symlink from %s to %s", binPath, filePath))
-	}
 	return nil
 }
 
@@ -581,16 +641,80 @@ func (p *PackageInstallStepFile) uninstall(cfg Config, pkgName string) error {
 	)
 	cfg.Logger.Debug(fmt.Sprintf("deleting file %s", filePath))
 	if err := os.Remove(filePath); err != nil {
-		cfg.Logger.Warn(fmt.Sprintf("failed to remove file %s", filePath))
+		if !errors.Is(err, fs.ErrNotExist) {
+			cfg.Logger.Warn(fmt.Sprintf("failed to remove file %s", filePath))
+		}
 	}
+	return nil
+}
+
+func (p *PackageInstallStepFile) activate(cfg Config, pkgName string) error {
 	if p.Binary {
-		binPath := filepath.Join(
-			cfg.BinDir,
+		tmpFilePath, err := cfg.Template.Render(p.Filename, nil)
+		if err != nil {
+			return err
+		}
+		filePath := filepath.Join(
+			cfg.DataDir,
+			pkgName,
 			p.Filename,
 		)
-		if err := os.Remove(binPath); err != nil {
-			cfg.Logger.Warn(fmt.Sprintf("failed to remove symlink %s", binPath))
+		binPath := filepath.Join(
+			cfg.BinDir,
+			tmpFilePath,
+		)
+		parentDir := filepath.Dir(binPath)
+		if err := os.MkdirAll(parentDir, fs.ModePerm); err != nil {
+			return err
 		}
+		// Check for existing file at symlink location
+		if stat, err := os.Lstat(binPath); err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+		} else {
+			if (stat.Mode() & fs.ModeSymlink) > 0 {
+				// Remove existing symlink
+				if err := os.Remove(binPath); err != nil {
+					if !errors.Is(err, fs.ErrNotExist) {
+						return err
+					}
+				}
+				cfg.Logger.Debug(
+					fmt.Sprintf("removed existing symlink %q", binPath),
+				)
+			} else {
+				return fmt.Errorf("will not overwrite existing file %q with symlink", binPath)
+			}
+		}
+		if err := os.Symlink(filePath, binPath); err != nil {
+			return err
+		}
+		cfg.Logger.Debug(fmt.Sprintf("wrote symlink from %s to %s", binPath, filePath))
+	}
+	return nil
+}
+
+func (p *PackageInstallStepFile) deactivate(cfg Config, pkgName string) error {
+	if p.Binary {
+		tmpFilePath, err := cfg.Template.Render(p.Filename, nil)
+		if err != nil {
+			return err
+		}
+		binPath := filepath.Join(
+			cfg.BinDir,
+			tmpFilePath,
+		)
+		parentDir := filepath.Dir(binPath)
+		if err := os.MkdirAll(parentDir, fs.ModePerm); err != nil {
+			return err
+		}
+		if err := os.Remove(binPath); err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+		}
+		cfg.Logger.Debug(fmt.Sprintf("removed symlink %s", binPath))
 	}
 	return nil
 }
