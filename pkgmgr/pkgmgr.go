@@ -187,6 +187,12 @@ func (p *PackageManager) Install(pkgs ...string) error {
 				notes,
 			)
 		}
+		// Activate package
+		if err := installPkg.Install.activate(p.config, activeContextName); err != nil {
+			p.config.Logger.Warn(
+				fmt.Sprintf("failed to activate package: %s", err),
+			)
+		}
 	}
 	// Display post-install notes
 	if notesOutput != "" {
@@ -230,6 +236,12 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 		)
 		// Capture options from existing package
 		pkgOpts := upgradePkg.Installed.Options
+		// Deactivate old package
+		if err := upgradePkg.Installed.Package.deactivate(p.config, activeContextName); err != nil {
+			p.config.Logger.Warn(
+				fmt.Sprintf("failed to deactivate package: %s", err),
+			)
+		}
 		// Uninstall old version
 		if err := p.uninstallPackage(upgradePkg.Installed, true); err != nil {
 			return err
@@ -255,6 +267,12 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 		}
 		if err := p.state.Save(); err != nil {
 			return err
+		}
+		// Activate new package
+		if err := upgradePkg.Upgrade.activate(p.config, activeContextName); err != nil {
+			p.config.Logger.Warn(
+				fmt.Sprintf("failed to activate package: %s", err),
+			)
 		}
 	}
 	// Display post-install notes
@@ -306,6 +324,12 @@ func (p *PackageManager) Uninstall(keepData bool, pkgs ...string) error {
 		return err
 	}
 	for _, uninstallPkg := range uninstallPkgs {
+		// Deactivate package
+		if err := uninstallPkg.Package.deactivate(p.config, activeContextName); err != nil {
+			p.config.Logger.Warn(
+				fmt.Sprintf("failed to deactivate package: %s", err),
+			)
+		}
 		if err := p.uninstallPackage(uninstallPkg, keepData); err != nil {
 			return err
 		}
@@ -482,12 +506,29 @@ func (p *PackageManager) SetActiveContext(name string) error {
 	if _, ok := p.state.Contexts[name]; !ok {
 		return ErrContextNotExist
 	}
+	// Deactivate packages in current context
+	activeContextName, _ := p.ActiveContext()
+	for _, pkg := range p.InstalledPackages() {
+		if err := pkg.Package.deactivate(p.config, activeContextName); err != nil {
+			p.config.Logger.Warn(
+				fmt.Sprintf("failed to deactivate package: %s", err),
+			)
+		}
+	}
 	p.state.ActiveContext = name
 	if err := p.state.Save(); err != nil {
 		return err
 	}
 	// Update templating values
 	p.initTemplate()
+	// Activate packages in new context
+	for _, pkg := range p.InstalledPackages() {
+		if err := pkg.Package.activate(p.config, name); err != nil {
+			p.config.Logger.Warn(
+				fmt.Sprintf("failed to activate package: %s", err),
+			)
+		}
+	}
 	return nil
 }
 
