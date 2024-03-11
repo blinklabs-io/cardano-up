@@ -26,6 +26,7 @@ type Config struct {
 	BinDir              string
 	CacheDir            string
 	ConfigDir           string
+	ContextDir          string
 	DataDir             string
 	Logger              *slog.Logger
 	Template            *Template

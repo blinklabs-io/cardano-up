@@ -45,7 +45,7 @@ var registryBuiltinPackages = []Package{
 						"CARDANO_NODE_SOCKET_PATH": "/ipc/node.socket",
 					},
 					Binds: []string{
-						"{{ .Paths.CacheDir }}/ipc:/ipc",
+						"{{ .Paths.ContextDir }}/node-ipc:/ipc",
 						"{{ .Paths.DataDir }}/data:/data",
 					},
 					Ports: []string{
@@ -122,7 +122,7 @@ docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.7.0-1 $@
 					ContainerName: "ogmios",
 					Image:         "cardanosolutions/ogmios:v6.1.0",
 					Binds: []string{
-						"{{ .Paths.CacheDir }}/ipc:/ipc",
+						"{{ .Paths.ContextDir }}/node-ipc:/ipc",
 					},
 					Ports: []string{
 						"1337",
