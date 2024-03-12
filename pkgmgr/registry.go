@@ -17,6 +17,7 @@ package pkgmgr
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -29,190 +30,36 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var registryBuiltinPackages = []Package{
-	{
-		Name:        "cardano-node",
-		Version:     "8.7.3",
-		Description: "Cardano node software by Input Output Global",
-		Tags:        []string{"docker", "linux", "darwin", "amd64", "arm64"},
-		InstallSteps: []PackageInstallStep{
-			{
-				Docker: &PackageInstallStepDocker{
-					ContainerName: "cardano-node",
-					Image:         "ghcr.io/blinklabs-io/cardano-node:8.7.3",
-					Env: map[string]string{
-						"NETWORK":                  "{{ .Context.Network }}",
-						"CARDANO_NODE_SOCKET_PATH": "/ipc/node.socket",
-					},
-					Binds: []string{
-						"{{ .Paths.ContextDir }}/node-ipc:/ipc",
-						"{{ .Paths.DataDir }}/data:/data",
-					},
-					Ports: []string{
-						"3001",
-					},
-				},
-			},
-			{
-				File: &PackageInstallStepFile{
-					Binary:   true,
-					Filename: "cardano-cli",
-					// TODO: figure out how to get network magic for named network
-					Content: `#!/bin/bash
-docker exec -ti {{ .Package.Name }}-cardano-node cardano-cli $@
-`,
-				},
-			},
-		},
-	},
-	{
-		Name:        "mithril-client",
-		Version:     "0.5.17",
-		Description: "Mithril client by Input Output Global",
-		Tags:        []string{"docker", "linux", "darwin", "amd64", "arm64"},
-		InstallSteps: []PackageInstallStep{
-			{
-				Docker: &PackageInstallStepDocker{
-					ContainerName: "mithril-client",
-					Image:         "ghcr.io/blinklabs-io/mithril-client:0.5.17-1",
-					PullOnly:      true,
-				},
-			},
-			{
-				File: &PackageInstallStepFile{
-					Filename: "mithril-client",
-					Content: `#!/bin/bash
-docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.5.17 $@
-`,
-				},
-			},
-		},
-	},
-	{
-		Name:        "mithril-client",
-		Version:     "0.7.0",
-		Description: "Mithril client by Input Output Global",
-		Tags:        []string{"docker", "linux", "darwin", "amd64", "arm64"},
-		InstallSteps: []PackageInstallStep{
-			{
-				Docker: &PackageInstallStepDocker{
-					ContainerName: "mithril-client",
-					Image:         "ghcr.io/blinklabs-io/mithril-client:0.7.0-1",
-					PullOnly:      true,
-				},
-			},
-			{
-				File: &PackageInstallStepFile{
-					Filename: "mithril-client",
-					Content: `#!/bin/bash
-docker run --rm -ti ghcr.io/blinklabs-io/mithril-client:0.7.0-1 $@
-`,
-				},
-			},
-		},
-	},
-	{
-		Name:        "ogmios",
-		Version:     "v6.1.0",
-		Description: "Ogmios, a WebSocket & HTTP server for Cardano, providing a bridge between Cardano nodes and clients.",
-		Tags:        []string{"docker", "linux", "darwin", "amd64", "arm64"},
-		InstallSteps: []PackageInstallStep{
-			{
-				Docker: &PackageInstallStepDocker{
-					ContainerName: "ogmios",
-					Image:         "cardanosolutions/ogmios:v6.1.0",
-					Binds: []string{
-						"{{ .Paths.ContextDir }}/node-ipc:/ipc",
-					},
-					Ports: []string{
-						"1337",
-					},
-					Command: []string{
-						"ogmios",
-						"--log-level", "info",
-						"--host", "0.0.0.0",
-						"--port", "1337",
-						"--node-socket", "/ipc/node.socket",
-						"--node-config", "/config/mainnet/cardano-node/config.json",
-					},
-				},
-			},
-		},
-	},
-
-	// Test packages
-	{
-		Name:             "test-packageA",
-		Version:          "1.0.2",
-		Tags:             []string{"docker", "linux", "darwin", "amd64", "arm64"},
-		PostInstallNotes: "Notes for {{ .Package.Name }}",
-	},
-	{
-		Name:             "test-packageA",
-		Version:          "1.0.3",
-		Tags:             []string{"docker", "linux", "darwin", "amd64", "arm64"},
-		PostInstallNotes: "Notes for {{ .Package.Name }}",
-		Outputs: []PackageOutput{
-			{
-				Name:        "foo",
-				Description: "the 'foo' description",
-				Value:       `{{ .Package.Name }}`,
-			},
-		},
-	},
-	{
-		Name:    "test-packageA",
-		Version: "2.1.3",
-		Tags:    []string{"docker", "linux", "darwin", "amd64", "arm64"},
-	},
-	{
-		Name:    "test-packageB",
-		Version: "0.1.0",
-		Tags:    []string{"docker", "linux", "darwin", "amd64", "arm64"},
-		Dependencies: []string{
-			"test-packageA[fooA,-fooB] < 2.0.0, >= 1.0.2",
-		},
-		PostInstallNotes: "Values:\n\n{{ toPrettyJson . }}",
-		InstallSteps: []PackageInstallStep{
-			{
-				Condition: `eq .Package.ShortName "test-packageB"`,
-				File: &PackageInstallStepFile{
-					Filename: "test-file1",
-					Content:  `test1`,
-				},
-			},
-			{
-				Condition: `eq .Package.ShortName "test-packageZ"`,
-				File: &PackageInstallStepFile{
-					Filename: "test-file2",
-					Content:  `test2`,
-				},
-			},
-		},
-	},
-}
-
 func registryPackages(cfg Config) ([]Package, error) {
 	if cfg.RegistryDir != "" {
 		return registryPackagesDir(cfg)
 	} else if cfg.RegistryUrl != "" {
 		return registryPackagesUrl(cfg)
 	} else {
-		return registryBuiltinPackages[:], nil
+		return nil, ErrNoRegistryConfigured
 	}
 }
 
 func registryPackagesDir(cfg Config) ([]Package, error) {
-	tmpFs := os.DirFS("/").(fs.ReadFileFS)
+	tmpFs := os.DirFS(cfg.RegistryDir).(fs.ReadFileFS)
 	return registryPackagesFs(cfg, tmpFs)
 }
 
 func registryPackagesFs(cfg Config, filesystem fs.ReadFileFS) ([]Package, error) {
 	var ret []Package
-	err := fs.WalkDir(
+	absRegistryDir, err := filepath.Abs(cfg.RegistryDir)
+	if err != nil {
+		return nil, err
+	}
+	err = fs.WalkDir(
 		filesystem,
-		cfg.RegistryDir,
+		`.`,
 		func(path string, d fs.DirEntry, err error) error {
+			// Replacing leading dot with registry dir
+			fullPath := filepath.Join(
+				absRegistryDir,
+				path,
+			)
 			if err != nil {
 				return err
 			}
@@ -238,10 +85,13 @@ func registryPackagesFs(cfg Config, filesystem fs.ReadFileFS) ([]Package, error)
 				cfg.Logger.Warn(
 					fmt.Sprintf(
 						"failed to load %q as package: %s",
-						path,
+						fullPath,
 						err,
 					),
 				)
+				return nil
+			}
+			if tmpPkg.Name == "" || tmpPkg.Version == "" {
 				return nil
 			}
 			ret = append(ret, tmpPkg)
@@ -262,12 +112,12 @@ func registryPackagesUrl(cfg Config) ([]Package, error) {
 	// Check age of existing cache
 	stat, err := os.Stat(cachePath)
 	if err != nil {
-		if err != fs.ErrNotExist {
+		if !errors.Is(err, fs.ErrNotExist) {
 			return nil, err
 		}
 	}
 	// Fetch and extract registry ZIP into cache if it doesn't exist or is too old
-	if err == fs.ErrNotExist ||
+	if errors.Is(err, fs.ErrNotExist) ||
 		stat.ModTime().Before(time.Now().Add(-24*time.Hour)) {
 		// Fetch registry ZIP
 		resp, err := http.Get(cfg.RegistryUrl)
@@ -296,11 +146,15 @@ func registryPackagesUrl(cfg Config) ([]Package, error) {
 		}
 		// Extract files from ZIP into cache path
 		for _, zipFile := range zipReader.File {
+			// Skip directory entries
+			if (zipFile.Mode() & fs.ModeDir) > 0 {
+				continue
+			}
 			outPath := filepath.Join(
 				cachePath,
 				zipFile.Name,
 			)
-			// Create parent dir
+			// Create parent dir(s)
 			if err := os.MkdirAll(filepath.Dir(outPath), fs.ModePerm); err != nil {
 				return nil, err
 			}

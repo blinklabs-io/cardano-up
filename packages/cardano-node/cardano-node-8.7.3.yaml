@@ -1,0 +1,28 @@
+name: cardano-node
+version: 8.7.3
+description: Cardano node software by Input Output Global
+installSteps:
+  - docker:
+      containerName: cardano-node
+      image: ghcr.io/blinklabs-io/cardano-node:8.7.3
+      env:
+        CARDANO_NODE_SOCKET_PATH: /ipc/node.socket
+        NETWORK: '{{ .Context.Network }}'
+      binds:
+        - '{{ .Paths.ContextDir }}/node-ipc:/ipc'
+        - '{{ .Paths.DataDir }}/data:/data'
+      ports:
+        - "3001"
+      pullOnly: false
+  - file:
+      binary: true
+      filename: cardano-cli
+      content: |
+        #!/bin/bash
+        docker exec -ti {{ .Package.Name }}-cardano-node cardano-cli $@
+tags:
+  - docker
+  - linux
+  - darwin
+  - amd64
+  - arm64
