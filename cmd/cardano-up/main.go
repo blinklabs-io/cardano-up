@@ -15,10 +15,12 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 
 	"github.com/blinklabs-io/cardano-up/internal/consolelog"
+	"github.com/blinklabs-io/cardano-up/pkgmgr"
 
 	"github.com/spf13/cobra"
 )
@@ -79,4 +81,25 @@ func main() {
 		// NOTE: we purposely don't display the error, since cobra will have already displayed it
 		os.Exit(1)
 	}
+}
+
+func createPackageManager() *pkgmgr.PackageManager {
+	cfg, err := pkgmgr.NewDefaultConfig()
+	if err != nil {
+		slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
+		os.Exit(1)
+	}
+	// Allow setting registry URL/dir via env var
+	if url, ok := os.LookupEnv("REGISTRY_URL"); ok {
+		cfg.RegistryUrl = url
+	}
+	if dir, ok := os.LookupEnv("REGISTRY_DIR"); ok {
+		cfg.RegistryDir = dir
+	}
+	pm, err := pkgmgr.NewPackageManager(cfg)
+	if err != nil {
+		slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
+		os.Exit(1)
+	}
+	return pm
 }

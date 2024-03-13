@@ -17,7 +17,6 @@ package main
 import (
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/blinklabs-io/cardano-up/pkgmgr"
 	"github.com/spf13/cobra"
@@ -32,11 +31,7 @@ func listAvailableCommand() *cobra.Command {
 		Use:   "list-available",
 		Short: "List available packages",
 		Run: func(cmd *cobra.Command, args []string) {
-			pm, err := pkgmgr.NewDefaultPackageManager()
-			if err != nil {
-				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
-				os.Exit(1)
-			}
+			pm := createPackageManager()
 			packages := pm.AvailablePackages()
 			slog.Info("Available packages:\n")
 			slog.Info(
@@ -76,11 +71,7 @@ func listCommand() *cobra.Command {
 		Use:   "list",
 		Short: "List installed packages",
 		Run: func(cmd *cobra.Command, args []string) {
-			pm, err := pkgmgr.NewDefaultPackageManager()
-			if err != nil {
-				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
-				os.Exit(1)
-			}
+			pm := createPackageManager()
 			activeContextName, _ := pm.ActiveContext()
 			var packages []pkgmgr.InstalledPackage
 			if listFlags.all {

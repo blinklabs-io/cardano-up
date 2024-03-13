@@ -20,7 +20,6 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/blinklabs-io/cardano-up/pkgmgr"
 	"github.com/spf13/cobra"
 )
 
@@ -47,11 +46,7 @@ func installCommand() *cobra.Command {
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			pm, err := pkgmgr.NewDefaultPackageManager()
-			if err != nil {
-				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
-				os.Exit(1)
-			}
+			pm := createPackageManager()
 			activeContextName, activeContext := pm.ActiveContext()
 			// Update context network if specified
 			if installFlags.network != "" {
