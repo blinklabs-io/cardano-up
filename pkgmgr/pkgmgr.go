@@ -568,3 +568,13 @@ func (p *PackageManager) updateContext(name string, newContext Context) error {
 	p.initTemplate()
 	return nil
 }
+
+func (p *PackageManager) ContextEnv() map[string]string {
+	ret := make(map[string]string)
+	for _, pkg := range p.InstalledPackages() {
+		for k, v := range pkg.Outputs {
+			ret[k] = v
+		}
+	}
+	return ret
+}
