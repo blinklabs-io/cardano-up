@@ -53,6 +53,9 @@ var ErrContainerAlreadyExists = errors.New("specified container already exists")
 // ErrContainerNotExists is returned when querying a container by name that doesn't exist
 var ErrContainerNotExists = errors.New("specified container does not exist")
 
+// ErrNoRegistryConfigured is returned when no registry is configured
+var ErrNoRegistryConfigured = errors.New("no package registry is configured")
+
 func NewUnknownNetworkError(networkName string) error {
 	return fmt.Errorf(
 		"unknown network %q",

@@ -461,7 +461,7 @@ func (p Package) services(cfg Config, context string) ([]*DockerService, error) 
 }
 
 type PackageInstallStep struct {
-	Condition string                    `yaml:"condition"`
+	Condition string                    `yaml:"condition,omitempty"`
 	Docker    *PackageInstallStepDocker `yaml:"docker,omitempty"`
 	File      *PackageInstallStepFile   `yaml:"file,omitempty"`
 }

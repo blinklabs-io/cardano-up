@@ -1,0 +1,25 @@
+name: test-packageB
+version: 0.1.0
+installSteps:
+  - condition: eq .Package.ShortName "test-packageB"
+    file:
+      binary: false
+      filename: test-file1
+      content: test1
+  - condition: eq .Package.ShortName "test-packageZ"
+    file:
+      binary: false
+      filename: test-file2
+      content: test2
+dependencies:
+  - test-packageA[fooA,-fooB] < 2.0.0, >= 1.0.2
+tags:
+  - docker
+  - linux
+  - darwin
+  - amd64
+  - arm64
+postInstallNotes: |-
+  Values:
+
+  {{ toPrettyJson . }}
