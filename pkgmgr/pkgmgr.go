@@ -169,11 +169,11 @@ func (p *PackageManager) Install(pkgs ...string) error {
 			tmpPkgOpts[k] = v
 		}
 		// Install package
-		notes, err := installPkg.Install.install(p.config, activeContextName, tmpPkgOpts)
+		notes, outputs, err := installPkg.Install.install(p.config, activeContextName, tmpPkgOpts)
 		if err != nil {
 			return err
 		}
-		installedPkg := NewInstalledPackage(installPkg.Install, activeContextName, notes, tmpPkgOpts)
+		installedPkg := NewInstalledPackage(installPkg.Install, activeContextName, notes, outputs, tmpPkgOpts)
 		p.state.InstalledPackages = append(p.state.InstalledPackages, installedPkg)
 		if err := p.state.Save(); err != nil {
 			return err
@@ -247,11 +247,11 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 			return err
 		}
 		// Install new version
-		notes, err := upgradePkg.Upgrade.install(p.config, activeContextName, pkgOpts)
+		notes, outputs, err := upgradePkg.Upgrade.install(p.config, activeContextName, pkgOpts)
 		if err != nil {
 			return err
 		}
-		installedPkg := NewInstalledPackage(upgradePkg.Upgrade, activeContextName, notes, pkgOpts)
+		installedPkg := NewInstalledPackage(upgradePkg.Upgrade, activeContextName, notes, outputs, pkgOpts)
 		p.state.InstalledPackages = append(p.state.InstalledPackages, installedPkg)
 		if err := p.state.Save(); err != nil {
 			return err

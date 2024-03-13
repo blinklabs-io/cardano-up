@@ -22,6 +22,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -36,12 +37,19 @@ type Package struct {
 	Tags             []string             `yaml:"tags,omitempty"`
 	PostInstallNotes string               `yaml:"postInstallNotes,omitempty"`
 	Options          []PackageOption      `yaml:"options,omitempty"`
+	Outputs          []PackageOutput      `yaml:"outputs,omitempty"`
 }
 
 type PackageOption struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
 	Default     bool   `yaml:"default"`
+}
+
+type PackageOutput struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+	Value       string `yaml:"value"`
 }
 
 func NewPackageFromFile(path string) (Package, error) {
@@ -89,7 +97,7 @@ func (p Package) hasTags(tags []string) bool {
 	return true
 }
 
-func (p Package) install(cfg Config, context string, opts map[string]bool) (string, error) {
+func (p Package) install(cfg Config, context string, opts map[string]bool) (string, map[string]string, error) {
 	// Update template vars
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	pkgCacheDir := filepath.Join(
@@ -124,30 +132,30 @@ func (p Package) install(cfg Config, context string, opts map[string]bool) (stri
 		// Make sure only one install method is specified per install step
 		if installStep.Docker != nil &&
 			installStep.File != nil {
-			return "", ErrMultipleInstallMethods
+			return "", nil, ErrMultipleInstallMethods
 		}
 		if installStep.Docker != nil {
 			if err := installStep.Docker.preflight(cfg, pkgName); err != nil {
-				return "", fmt.Errorf("pre-flight check failed: %s", err)
+				return "", nil, fmt.Errorf("pre-flight check failed: %s", err)
 			}
 		}
 	}
 	// Pre-create dirs
 	if err := os.MkdirAll(pkgCacheDir, fs.ModePerm); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if err := os.MkdirAll(pkgContextDir, fs.ModePerm); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if err := os.MkdirAll(pkgDataDir, fs.ModePerm); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	// Perform install
 	for _, installStep := range p.InstallSteps {
 		// Evaluate condition if defined
 		if installStep.Condition != "" {
 			if ok, err := cfg.Template.EvaluateCondition(installStep.Condition, nil); err != nil {
-				return "", NewInstallStepConditionError(installStep.Condition, err)
+				return "", nil, NewInstallStepConditionError(installStep.Condition, err)
 			} else if !ok {
 				cfg.Logger.Debug(
 					fmt.Sprintf(
@@ -160,25 +168,47 @@ func (p Package) install(cfg Config, context string, opts map[string]bool) (stri
 		}
 		if installStep.Docker != nil {
 			if err := installStep.Docker.install(cfg, pkgName); err != nil {
-				return "", err
+				return "", nil, err
 			}
 		} else if installStep.File != nil {
 			if err := installStep.File.install(cfg, pkgName); err != nil {
-				return "", err
+				return "", nil, err
 			}
 		} else {
-			return "", ErrNoInstallMethods
+			return "", nil, ErrNoInstallMethods
 		}
 	}
+	// Generate outputs
+	retOutputs := make(map[string]string)
+	for _, output := range p.Outputs {
+		// Create key from package name and output name
+		key := fmt.Sprintf(
+			"%s_%s",
+			p.Name,
+			output.Name,
+		)
+		// Replace all characters that won't work in an env var
+		envRe := regexp.MustCompile(`[^A-Za-z0-9_]+`)
+		key = string(envRe.ReplaceAll([]byte(key), []byte(`_`)))
+		// Make uppercase
+		key = strings.ToUpper(key)
+		// Render value template
+		val, err := cfg.Template.Render(output.Value, nil)
+		if err != nil {
+			return "", nil, err
+		}
+		retOutputs[key] = val
+	}
 	// Render notes and return
+	var retNotes string
 	if p.PostInstallNotes != "" {
 		tmpNotes, err := cfg.Template.Render(p.PostInstallNotes, nil)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
-		return tmpNotes, nil
+		retNotes = tmpNotes
 	}
-	return "", nil
+	return retNotes, retOutputs, nil
 }
 
 func (p Package) uninstall(cfg Config, context string, keepData bool) error {
