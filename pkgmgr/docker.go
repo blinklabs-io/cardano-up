@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"sort"
 	"strings"
 
@@ -171,6 +172,11 @@ func (d *DockerService) Create() error {
 	if err != nil {
 		return err
 	}
+	// Set the desired user ID and group ID
+	userID := os.Getuid()
+	groupID := os.Getgid()
+	userAndGroup := fmt.Sprintf("%d:%d", userID, groupID)
+	// Create container
 	d.logger.Debug(fmt.Sprintf("creating container %s", d.ContainerName))
 	resp, err := client.ContainerCreate(
 		context.Background(),
@@ -180,6 +186,7 @@ func (d *DockerService) Create() error {
 			Entrypoint: d.Command,
 			Cmd:        d.Args,
 			Env:        tmpEnv[:],
+			User:       userAndGroup,
 		},
 		&container.HostConfig{
 			RestartPolicy: container.RestartPolicy{
