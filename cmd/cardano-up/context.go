@@ -50,11 +50,7 @@ func contextListCommand() *cobra.Command {
 		Use:   "list",
 		Short: "List available contexts",
 		Run: func(cmd *cobra.Command, args []string) {
-			pm, err := pkgmgr.NewDefaultPackageManager()
-			if err != nil {
-				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
-				os.Exit(1)
-			}
+			pm := createPackageManager()
 			activeContext, _ := pm.ActiveContext()
 			contexts := pm.Contexts()
 			slog.Info("Contexts (* is active):\n")
@@ -106,11 +102,7 @@ func contextSelectCommand() *cobra.Command {
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			pm, err := pkgmgr.NewDefaultPackageManager()
-			if err != nil {
-				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
-				os.Exit(1)
-			}
+			pm := createPackageManager()
 			if err := pm.SetActiveContext(args[0]); err != nil {
 				slog.Error(fmt.Sprintf("failed to set active context: %s", err))
 				os.Exit(1)
@@ -139,11 +131,7 @@ func contextCreateCommand() *cobra.Command {
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			pm, err := pkgmgr.NewDefaultPackageManager()
-			if err != nil {
-				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
-				os.Exit(1)
-			}
+			pm := createPackageManager()
 			tmpContextName := args[0]
 			tmpContext := pkgmgr.Context{
 				Description: contextFlags.description,
@@ -174,11 +162,7 @@ func contextDeleteCommand() *cobra.Command {
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			pm, err := pkgmgr.NewDefaultPackageManager()
-			if err != nil {
-				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
-				os.Exit(1)
-			}
+			pm := createPackageManager()
 			if err := pm.DeleteContext(args[0]); err != nil {
 				slog.Error(fmt.Sprintf("failed to delete context: %s", err))
 				os.Exit(1)

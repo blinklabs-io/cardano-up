@@ -16,11 +16,9 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 
-	"github.com/blinklabs-io/cardano-up/pkgmgr"
 	"github.com/spf13/cobra"
 )
 
@@ -38,11 +36,7 @@ func upgradeCommand() *cobra.Command {
 			return nil
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			pm, err := pkgmgr.NewDefaultPackageManager()
-			if err != nil {
-				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
-				os.Exit(1)
-			}
+			pm := createPackageManager()
 			// Upgrade requested package
 			if err := pm.Upgrade(args[0]); err != nil {
 				slog.Error(err.Error())
