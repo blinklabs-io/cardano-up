@@ -178,6 +178,37 @@ func (p Package) install(cfg Config, context string, opts map[string]bool) (stri
 			return "", nil, ErrNoInstallMethods
 		}
 	}
+	// Capture port details for output templates
+	tmpPorts := map[string]map[string]string{}
+	tmpServices, err := p.services(cfg, context)
+	if err != nil {
+		return "", nil, err
+	}
+	for _, svc := range tmpServices {
+		shortContainerName := strings.TrimPrefix(svc.ContainerName, pkgName+`-`)
+		tmpPorts[shortContainerName] = make(map[string]string)
+		for _, port := range svc.Ports {
+			var containerPort, hostPort string
+			portParts := strings.Split(port, ":")
+			switch len(portParts) {
+			case 1:
+				containerPort = portParts[0]
+				hostPort = portParts[0]
+			case 2:
+				containerPort = portParts[1]
+				hostPort = portParts[0]
+			case 3:
+				containerPort = portParts[2]
+				hostPort = portParts[1]
+			}
+			tmpPorts[shortContainerName][containerPort] = hostPort
+		}
+	}
+	cfg.Template = cfg.Template.WithVars(
+		map[string]any{
+			"Ports": tmpPorts,
+		},
+	)
 	// Generate outputs
 	retOutputs := make(map[string]string)
 	for _, output := range p.Outputs {
