@@ -40,6 +40,7 @@ func contextCommand() *cobra.Command {
 		contextSelectCommand(),
 		contextCreateCommand(),
 		contextDeleteCommand(),
+		contextEnvCommand(),
 	)
 
 	return contextCommand
@@ -173,6 +174,32 @@ func contextDeleteCommand() *cobra.Command {
 					args[0],
 				),
 			)
+		},
+	}
+	return cmd
+}
+
+func contextEnvCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "env",
+		Short: "Generate environment vars for current context",
+		Run: func(cmd *cobra.Command, args []string) {
+			pm := createPackageManager()
+			contextEnv := pm.ContextEnv()
+			var tmpKeys []string
+			for k := range contextEnv {
+				tmpKeys = append(tmpKeys, k)
+			}
+			sort.Strings(tmpKeys)
+			for _, key := range tmpKeys {
+				slog.Info(
+					fmt.Sprintf(
+						"export %s=%s",
+						key,
+						contextEnv[key],
+					),
+				)
+			}
 		},
 	}
 	return cmd
