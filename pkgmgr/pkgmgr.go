@@ -75,6 +75,7 @@ func (p *PackageManager) initTemplate() {
 			"Network":      activeContext.Network,
 			"NetworkMagic": activeContext.NetworkMagic,
 		},
+		"Env": p.ContextEnv(),
 	}
 	tmpConfig := p.config
 	if tmpConfig.Template == nil {
