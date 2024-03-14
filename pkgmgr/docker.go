@@ -225,6 +225,33 @@ func (d *DockerService) Remove() error {
 	return nil
 }
 
+func (d *DockerService) Logs(follow bool, tail string, stdoutWriter io.Writer, stderrWriter io.Writer) error {
+	client, err := d.getClient()
+	if err != nil {
+		return err
+	}
+	logsOut, err := client.ContainerLogs(
+		context.Background(),
+		d.ContainerName,
+		container.LogsOptions{
+			Follow:     follow,
+			Tail:       tail,
+			ShowStdout: true,
+			ShowStderr: true,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	defer logsOut.Close()
+	if _, err := stdcopy.StdCopy(stdoutWriter, stderrWriter, logsOut); err != nil {
+		if err != io.EOF {
+			return err
+		}
+	}
+	return nil
+}
+
 func (d *DockerService) pullImage() error {
 	client, err := d.getClient()
 	if err != nil {
