@@ -17,9 +17,7 @@ installSteps:
   - file:
       binary: true
       filename: cardano-cli
-      content: |
-        #!/bin/bash
-        docker exec -ti {{ .Package.Name }}-cardano-node cardano-cli $@
+      source: files/cardano-cli.sh.gotmpl
 tags:
   - docker
   - linux
