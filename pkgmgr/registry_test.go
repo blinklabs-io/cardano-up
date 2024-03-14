@@ -62,6 +62,11 @@ func TestRegistryPackagesFs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
+	// Remove filePath for easier comparison
+	for idx, pkg := range pkgs {
+		pkg.filePath = ""
+		pkgs[idx] = pkg
+	}
 	if !reflect.DeepEqual(pkgs, testExpectedPkgs) {
 		t.Fatalf("did not get expected packages\n  got: %#v\n  expected: %#v", pkgs, testExpectedPkgs)
 	}

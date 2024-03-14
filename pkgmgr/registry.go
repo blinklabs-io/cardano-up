@@ -91,9 +91,14 @@ func registryPackagesFs(cfg Config, filesystem fs.ReadFileFS) ([]Package, error)
 				)
 				return nil
 			}
+			// Skip "empty" packages
 			if tmpPkg.Name == "" || tmpPkg.Version == "" {
 				return nil
 			}
+			// Record on-disk path for package file
+			// This is used for relative paths for external file references
+			tmpPkg.filePath = fullPath
+			// Add package to results
 			ret = append(ret, tmpPkg)
 			return nil
 		},

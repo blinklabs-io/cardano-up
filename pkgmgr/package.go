@@ -38,6 +38,7 @@ type Package struct {
 	PostInstallNotes string               `yaml:"postInstallNotes,omitempty"`
 	Options          []PackageOption      `yaml:"options,omitempty"`
 	Outputs          []PackageOutput      `yaml:"outputs,omitempty"`
+	filePath         string
 }
 
 type PackageOption struct {
@@ -171,7 +172,7 @@ func (p Package) install(cfg Config, context string, opts map[string]bool) (stri
 				return "", nil, err
 			}
 		} else if installStep.File != nil {
-			if err := installStep.File.install(cfg, pkgName); err != nil {
+			if err := installStep.File.install(cfg, pkgName, p.filePath); err != nil {
 				return "", nil, err
 			}
 		} else {
@@ -669,11 +670,12 @@ func (p *PackageInstallStepDocker) deactivate(cfg Config, pkgName string) error 
 type PackageInstallStepFile struct {
 	Binary   bool        `yaml:"binary"`
 	Filename string      `yaml:"filename"`
+	Source   string      `yaml:"source"`
 	Content  string      `yaml:"content"`
 	Mode     fs.FileMode `yaml:"mode,omitempty"`
 }
 
-func (p *PackageInstallStepFile) install(cfg Config, pkgName string) error {
+func (p *PackageInstallStepFile) install(cfg Config, pkgName string, packagePath string) error {
 	tmpFilePath, err := cfg.Template.Render(p.Filename, nil)
 	if err != nil {
 		return err
@@ -691,11 +693,23 @@ func (p *PackageInstallStepFile) install(cfg Config, pkgName string) error {
 	if p.Mode > 0 {
 		fileMode = p.Mode
 	}
-	tmpContent, err := cfg.Template.Render(p.Content, nil)
+	fileContent := p.Content
+	if p.Source != "" {
+		fullSourcePath := filepath.Join(
+			filepath.Dir(packagePath),
+			p.Source,
+		)
+		tmpContent, err := os.ReadFile(fullSourcePath)
+		if err != nil {
+			return err
+		}
+		fileContent = string(tmpContent)
+	}
+	fileContent, err = cfg.Template.Render(fileContent, nil)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filePath, []byte(tmpContent), fileMode); err != nil {
+	if err := os.WriteFile(filePath, []byte(fileContent), fileMode); err != nil {
 		return err
 	}
 	cfg.Logger.Debug(fmt.Sprintf("wrote file %s", filePath))
