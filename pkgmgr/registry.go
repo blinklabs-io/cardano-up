@@ -120,6 +120,9 @@ func registryPackagesUrl(cfg Config) ([]Package, error) {
 	if errors.Is(err, fs.ErrNotExist) ||
 		stat.ModTime().Before(time.Now().Add(-24*time.Hour)) {
 		// Fetch registry ZIP
+		cfg.Logger.Info(
+			fmt.Sprintf("Fetching package registry %s", cfg.RegistryUrl),
+		)
 		resp, err := http.Get(cfg.RegistryUrl)
 		if err != nil {
 			return nil, err
