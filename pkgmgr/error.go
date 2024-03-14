@@ -118,3 +118,10 @@ func NewInstallStepConditionError(condition string, err error) error {
 		err,
 	)
 }
+
+func NewNoServicesFoundError(pkgName string) error {
+	return fmt.Errorf(
+		"no services found for package %q",
+		pkgName,
+	)
+}

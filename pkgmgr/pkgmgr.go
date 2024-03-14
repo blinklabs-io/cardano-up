@@ -17,6 +17,7 @@ package pkgmgr
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	ouroboros "github.com/blinklabs-io/gouroboros"
@@ -345,6 +346,37 @@ func (p *PackageManager) Uninstall(keepData bool, pkgs ...string) error {
 				activeContextName,
 			),
 		)
+	}
+	return nil
+}
+
+func (p *PackageManager) Logs(pkgName string, follow bool, tail string, stdoutWriter io.Writer, stderrWriter io.Writer) error {
+	// Find installed packages
+	activeContextName, _ := p.ActiveContext()
+	installedPackages := p.InstalledPackages()
+	var logsPkg InstalledPackage
+	foundPackage := false
+	for _, tmpPackage := range installedPackages {
+		if tmpPackage.Package.Name == pkgName {
+			foundPackage = true
+			logsPkg = tmpPackage
+			break
+		}
+	}
+	if !foundPackage {
+		return NewPackageNotInstalledError(pkgName, activeContextName)
+	}
+	services, err := logsPkg.Package.services(p.config, activeContextName)
+	if err != nil {
+		return err
+	}
+	if len(services) == 0 {
+		return NewNoServicesFoundError(pkgName)
+	}
+	// TODO: account for more than one service in a package
+	tmpSvc := services[0]
+	if err := tmpSvc.Logs(follow, tail, stdoutWriter, stderrWriter); err != nil {
+		return err
 	}
 	return nil
 }

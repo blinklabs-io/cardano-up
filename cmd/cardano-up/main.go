@@ -69,6 +69,7 @@ func main() {
 		versionCommand(),
 		listCommand(),
 		listAvailableCommand(),
+		logsCommand(),
 		infoCommand(),
 		installCommand(),
 		uninstallCommand(),
