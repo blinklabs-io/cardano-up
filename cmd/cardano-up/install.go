@@ -45,45 +45,47 @@ func installCommand() *cobra.Command {
 			}
 			return nil
 		},
-		Run: func(cmd *cobra.Command, args []string) {
-			pm := createPackageManager()
-			activeContextName, activeContext := pm.ActiveContext()
-			// Update context network if specified
-			if installFlags.network != "" {
-				activeContext.Network = installFlags.network
-				if err := pm.UpdateContext(activeContextName, activeContext); err != nil {
-					slog.Error(err.Error())
-					os.Exit(1)
-				}
-				slog.Debug(
-					fmt.Sprintf(
-						"set active context network to %q",
-						installFlags.network,
-					),
-				)
-			}
-			// Check that context network is set
-			if activeContext.Network == "" {
-				activeContext.Network = defaultNetwork
-				if err := pm.UpdateContext(activeContextName, activeContext); err != nil {
-					slog.Error(err.Error())
-					os.Exit(1)
-				}
-				slog.Warn(
-					fmt.Sprintf(
-						"defaulting to network %q for context %q",
-						defaultNetwork,
-						activeContextName,
-					),
-				)
-			}
-			// Install requested package
-			if err := pm.Install(args[0]); err != nil {
-				slog.Error(err.Error())
-				os.Exit(1)
-			}
-		},
+		Run: installCommandRun,
 	}
 	installCmd.Flags().StringVarP(&installFlags.network, "network", "n", "", fmt.Sprintf("specifies network for package (defaults to %q for empty context)", defaultNetwork))
 	return installCmd
+}
+
+func installCommandRun(cmd *cobra.Command, args []string) {
+	pm := createPackageManager()
+	activeContextName, activeContext := pm.ActiveContext()
+	// Update context network if specified
+	if installFlags.network != "" {
+		activeContext.Network = installFlags.network
+		if err := pm.UpdateContext(activeContextName, activeContext); err != nil {
+			slog.Error(err.Error())
+			os.Exit(1)
+		}
+		slog.Debug(
+			fmt.Sprintf(
+				"set active context network to %q",
+				installFlags.network,
+			),
+		)
+	}
+	// Check that context network is set
+	if activeContext.Network == "" {
+		activeContext.Network = defaultNetwork
+		if err := pm.UpdateContext(activeContextName, activeContext); err != nil {
+			slog.Error(err.Error())
+			os.Exit(1)
+		}
+		slog.Warn(
+			fmt.Sprintf(
+				"defaulting to network %q for context %q",
+				defaultNetwork,
+				activeContextName,
+			),
+		)
+	}
+	// Install requested package
+	if err := pm.Install(args[0]); err != nil {
+		slog.Error(err.Error())
+		os.Exit(1)
+	}
 }
