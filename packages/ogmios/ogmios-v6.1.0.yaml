@@ -16,7 +16,7 @@ installSteps:
         - --node-socket
         - /ipc/node.socket
         - --node-config
-        - /config/mainnet/cardano-node/config.json
+        - /config/{{ .Context.Network }}/cardano-node/config.json
       binds:
         - '{{ .Paths.ContextDir }}/node-ipc:/ipc'
       ports:
