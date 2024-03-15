@@ -521,10 +521,8 @@ func (p *PackageInstallStepDocker) preflight(cfg Config, pkgName string) error {
 		} else {
 			return err
 		}
-	} else {
-		return ErrContainerAlreadyExists
 	}
-	return nil
+	return ErrContainerAlreadyExists
 }
 
 func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
