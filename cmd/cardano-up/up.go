@@ -14,9 +14,15 @@ func upCommand() *cobra.Command {
 		Long:  `Starts all stopped Docker containers for installed packages in the current context.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			pm := createPackageManager()
-			if err := pm.Up(); err != nil {
-				slog.Error(err.Error())
-				os.Exit(1)
+			installedPackages := pm.InstalledPackages()
+			if len(installedPackages) == 0 {
+				slog.Warn("no packages installed...automatically installing cardano-node")
+				installCommandRun(cmd, []string{"cardano-node"})
+			} else {
+				if err := pm.Up(); err != nil {
+					slog.Error(err.Error())
+					os.Exit(1)
+				}
 			}
 			return nil
 		},
