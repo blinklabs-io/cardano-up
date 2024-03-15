@@ -42,7 +42,7 @@ func uninstallCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			pm := createPackageManager()
 			// Uninstall package
-			if err := pm.Uninstall(uninstallFlags.keepData, args[0]); err != nil {
+			if err := pm.Uninstall(args[0], uninstallFlags.keepData, false); err != nil {
 				slog.Error(err.Error())
 				os.Exit(1)
 			}

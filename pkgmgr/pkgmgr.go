@@ -291,39 +291,39 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 	return nil
 }
 
-func (p *PackageManager) Uninstall(keepData bool, pkgs ...string) error {
+func (p *PackageManager) Uninstall(pkgName string, keepData bool, force bool) error {
 	// Find installed packages
 	activeContextName, _ := p.ActiveContext()
 	installedPackages := p.InstalledPackages()
 	var uninstallPkgs []InstalledPackage
-	for _, pkg := range pkgs {
-		foundPackage := false
-		for _, tmpPackage := range installedPackages {
-			if tmpPackage.Package.Name == pkg {
-				foundPackage = true
-				uninstallPkgs = append(
-					uninstallPkgs,
-					tmpPackage,
-				)
-				break
-			}
-		}
-		if !foundPackage {
-			return NewPackageNotInstalledError(pkg, activeContextName)
+	foundPackage := false
+	for _, tmpPackage := range installedPackages {
+		if tmpPackage.Package.Name == pkgName {
+			foundPackage = true
+			uninstallPkgs = append(
+				uninstallPkgs,
+				tmpPackage,
+			)
+			break
 		}
 	}
-	// Resolve dependencies
-	resolver, err := NewResolver(
-		p.InstalledPackages(),
-		p.AvailablePackages(),
-		activeContextName,
-		p.config.Logger,
-	)
-	if err != nil {
-		return err
+	if !foundPackage {
+		return NewPackageNotInstalledError(pkgName, activeContextName)
 	}
-	if err := resolver.Uninstall(uninstallPkgs...); err != nil {
-		return err
+	if !force {
+		// Resolve dependencies
+		resolver, err := NewResolver(
+			p.InstalledPackages(),
+			p.AvailablePackages(),
+			activeContextName,
+			p.config.Logger,
+		)
+		if err != nil {
+			return err
+		}
+		if err := resolver.Uninstall(uninstallPkgs...); err != nil {
+			return err
+		}
 	}
 	for _, uninstallPkg := range uninstallPkgs {
 		// Deactivate package
