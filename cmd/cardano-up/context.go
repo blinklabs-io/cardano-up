@@ -28,6 +28,7 @@ import (
 var contextFlags = struct {
 	description string
 	network     string
+	force       bool
 }{}
 
 func contextCommand() *cobra.Command {
@@ -164,6 +165,42 @@ func contextDeleteCommand() *cobra.Command {
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			pm := createPackageManager()
+			// Store original context name
+			origContextName, _ := pm.ActiveContext()
+			// Make sure we're not deleting the active context
+			if args[0] == origContextName {
+				slog.Error(pkgmgr.ErrContextNoDeleteActive.Error())
+				os.Exit(1)
+			}
+			// Temporarily switch to selected context
+			if err := pm.SetActiveContext(args[0]); err != nil {
+				slog.Error(err.Error())
+				os.Exit(1)
+			}
+			installedPackages := pm.InstalledPackages()
+			if len(installedPackages) > 0 {
+				if !contextFlags.force {
+					// Switch back to original context
+					if err := pm.SetActiveContext(origContextName); err != nil {
+						slog.Warn(err.Error())
+					}
+					slog.Error(
+						"cannot delete context with packages installed. Uninstall packages or run with -f/--force",
+					)
+					os.Exit(1)
+				}
+				for _, installedPkg := range installedPackages {
+					// Uninstall package
+					if err := pm.Uninstall(installedPkg.Package.Name, false, true); err != nil {
+						slog.Warn(err.Error())
+					}
+				}
+			}
+			// Switch back to original context
+			if err := pm.SetActiveContext(origContextName); err != nil {
+				slog.Error(err.Error())
+				os.Exit(1)
+			}
 			if err := pm.DeleteContext(args[0]); err != nil {
 				slog.Error(fmt.Sprintf("failed to delete context: %s", err))
 				os.Exit(1)
@@ -176,6 +213,7 @@ func contextDeleteCommand() *cobra.Command {
 			)
 		},
 	}
+	cmd.Flags().BoolVarP(&contextFlags.force, "force", "f", false, "force removal of context with packages installed")
 	return cmd
 }
 
