@@ -18,6 +18,10 @@ installSteps:
       binary: true
       filename: cardano-cli
       source: files/cardano-cli.sh.gotmpl
+outputs:
+  - name: socket_path
+    description: Path to the Cardano Node UNIX socket
+    value: '{{ .Paths.ContextDir }}/node-ipc/node.socket'
 tags:
   - docker
   - linux
