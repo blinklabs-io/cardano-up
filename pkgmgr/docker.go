@@ -16,7 +16,6 @@ package pkgmgr
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -35,8 +34,6 @@ import (
 )
 
 const (
-	dockerUtilityImage = `alpine:3.19.1`
-
 	dockerInstallError = `could not contact Docker daemon
 
 Docker is required to be already installed and running. Please refer to the following pages for more information
@@ -406,70 +403,4 @@ func RemoveDockerImage(image string) error {
 		return err
 	}
 	return nil
-}
-
-func RunCommandInDocker(image string, cmd []string, binds []string) (string, string, error) {
-	client, err := NewDockerClient()
-	if err != nil {
-		return "", "", err
-	}
-	ctx := context.Background()
-	pullOut, err := client.ImagePull(context.Background(), image, types.ImagePullOptions{})
-	if err != nil {
-		return "", "", err
-	}
-	defer pullOut.Close()
-	// Discard the pull output
-	if _, err := io.Copy(io.Discard, pullOut); err != nil {
-		return "", "", err
-	}
-	resp, err := client.ContainerCreate(
-		ctx,
-		&container.Config{
-			Image: image,
-			Cmd:   cmd,
-			Tty:   false,
-		},
-		&container.HostConfig{
-			Binds: binds,
-		},
-		nil,
-		nil,
-		"",
-	)
-	if err != nil {
-		return "", "", err
-	}
-	// Start container and wait for it to exit
-	if err := client.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		return "", "", err
-	}
-	statusCh, errCh := client.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
-	select {
-	case err := <-errCh:
-		if err != nil {
-			return "", "", err
-		}
-	case <-statusCh:
-	}
-	// Get container stdout/stderr
-	logsOut, err := client.ContainerLogs(ctx, resp.ID, container.LogsOptions{ShowStdout: true})
-	if err != nil {
-		return "", "", err
-	}
-	defer logsOut.Close()
-	cmdStdout := bytes.NewBuffer(nil)
-	cmdStderr := bytes.NewBuffer(nil)
-	if _, err := stdcopy.StdCopy(cmdStdout, cmdStderr, logsOut); err != nil {
-		return "", "", err
-	}
-	// Remove container
-	if err := client.ContainerRemove(
-		context.Background(),
-		resp.ID,
-		container.RemoveOptions{},
-	); err != nil {
-		return "", "", err
-	}
-	return cmdStdout.String(), cmdStderr.String(), nil
 }
