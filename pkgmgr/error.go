@@ -56,6 +56,9 @@ var ErrContainerNotExists = errors.New("specified container does not exist")
 // ErrNoRegistryConfigured is returned when no registry is configured
 var ErrNoRegistryConfigured = errors.New("no package registry is configured")
 
+// ErrValidationFailed is returned when loading the package registry while doing package validation when a package failed to load
+var ErrValidationFailed = errors.New("validation failed")
+
 func NewUnknownNetworkError(networkName string) error {
 	return fmt.Errorf(
 		"unknown network %q",

@@ -25,6 +25,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/hashicorp/go-version"
 	"gopkg.in/yaml.v3"
 )
 
@@ -64,11 +65,9 @@ func NewPackageFromFile(path string) (Package, error) {
 
 func NewPackageFromReader(r io.Reader) (Package, error) {
 	var ret Package
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return Package{}, err
-	}
-	if err := yaml.Unmarshal(data, &ret); err != nil {
+	dec := yaml.NewDecoder(r)
+	dec.KnownFields(true)
+	if err := dec.Decode(&ret); err != nil {
 		return Package{}, err
 	}
 	return ret, nil
@@ -397,6 +396,60 @@ func (p Package) deactivate(cfg Config, context string) error {
 	}
 	return nil
 }
+
+func (p Package) validate(cfg Config) error {
+	// Check empty name
+	if p.Name == "" {
+		return fmt.Errorf("package name cannot be empty")
+	}
+	// Check name matches allowed characters
+	reName := regexp.MustCompile(`^[-a-zA-Z0-9]+$`)
+	if !reName.Match([]byte(p.Name)) {
+		return fmt.Errorf("invalid package name: %s", p.Name)
+	}
+	// Check empty version
+	if p.Version == "" {
+		return fmt.Errorf("package version cannot be empty")
+	}
+	// Check version is well formed
+	if _, err := version.NewVersion(p.Version); err != nil {
+		return fmt.Errorf("package version is malformed: %s", err)
+	}
+	// Check if package path matches package name/version
+	expectedFilePath := filepath.Join(
+		p.Name,
+		fmt.Sprintf(
+			"%s-%s.yaml",
+			p.Name,
+			p.Version,
+		),
+	)
+	if !strings.HasSuffix(p.filePath, expectedFilePath) {
+		return fmt.Errorf("package did not have expected file path: %s", expectedFilePath)
+	}
+	// Validate install steps
+	for _, installStep := range p.InstallSteps {
+		// Evaluate condition if defined
+		if installStep.Condition != "" {
+			if _, err := cfg.Template.EvaluateCondition(installStep.Condition, nil); err != nil {
+				return NewInstallStepConditionError(installStep.Condition, err)
+			}
+		}
+		if installStep.Docker != nil {
+			if err := installStep.Docker.validate(cfg); err != nil {
+				return err
+			}
+		} else if installStep.File != nil {
+			if err := installStep.File.validate(cfg); err != nil {
+				return err
+			}
+		} else {
+			return ErrNoInstallMethods
+		}
+	}
+	return nil
+}
+
 func (p Package) startService(cfg Config, context string) error {
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 
@@ -496,6 +549,14 @@ type PackageInstallStepDocker struct {
 	Binds         []string          `yaml:"binds,omitempty"`
 	Ports         []string          `yaml:"ports,omitempty"`
 	PullOnly      bool              `yaml:"pullOnly"`
+}
+
+func (p *PackageInstallStepDocker) validate(cfg Config) error {
+	if p.Image == "" {
+		return fmt.Errorf("docker image must be provided")
+	}
+	// TODO: add more checks
+	return nil
 }
 
 func (p *PackageInstallStepDocker) preflight(cfg Config, pkgName string) error {
@@ -672,6 +733,11 @@ type PackageInstallStepFile struct {
 	Source   string      `yaml:"source"`
 	Content  string      `yaml:"content"`
 	Mode     fs.FileMode `yaml:"mode,omitempty"`
+}
+
+func (p *PackageInstallStepFile) validate(cfg Config) error {
+	// TODO: add checks
+	return nil
 }
 
 func (p *PackageInstallStepFile) install(cfg Config, pkgName string, packagePath string) error {

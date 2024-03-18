@@ -58,7 +58,7 @@ func TestRegistryPackagesFs(t *testing.T) {
 		RegistryDir: testRegistryDir,
 		Logger:      slog.Default(),
 	}
-	pkgs, err := registryPackagesFs(cfg, testFs)
+	pkgs, err := registryPackagesFs(cfg, testFs, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}

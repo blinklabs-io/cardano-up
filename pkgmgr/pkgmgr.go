@@ -55,13 +55,14 @@ func NewDefaultPackageManager() (*PackageManager, error) {
 }
 
 func (p *PackageManager) init() error {
-	p.config.Logger.Debug("initializing package manager")
 	if err := p.state.Load(); err != nil {
 		return fmt.Errorf("failed to load state: %s", err)
 	}
 	// Get available packages from configured registry
-	if err := p.loadPackageRegistry(); err != nil {
-		return err
+	if p.config.RegistryPreload {
+		if err := p.loadPackageRegistry(false); err != nil {
+			return err
+		}
 	}
 	// Setup templating
 	p.initTemplate()
@@ -87,13 +88,19 @@ func (p *PackageManager) initTemplate() {
 	p.config = tmpConfig
 }
 
-func (p *PackageManager) loadPackageRegistry() error {
-	if registryPkgs, err := registryPackages(p.config); err != nil {
-		return err
-	} else {
-		p.availablePackages = registryPkgs[:]
+func (p *PackageManager) loadPackageRegistry(validate bool) error {
+	var retErr error
+	registryPkgs, err := registryPackages(p.config, validate)
+	if err != nil {
+		if err == ErrValidationFailed {
+			// We want to pass along the validation error, but only after we record the packages
+			retErr = err
+		} else {
+			return err
+		}
 	}
-	return nil
+	p.availablePackages = registryPkgs[:]
+	return retErr
 }
 
 func (p *PackageManager) AvailablePackages() []Package {
@@ -631,9 +638,48 @@ func (p *PackageManager) UpdatePackages() error {
 		return err
 	}
 	// (Re)load the package registry
-	if err := p.loadPackageRegistry(); err != nil {
+	if err := p.loadPackageRegistry(false); err != nil {
 		return err
 	}
 	return nil
+}
 
+func (p *PackageManager) ValidatePackages() error {
+	foundError := false
+	if len(p.availablePackages) == 0 {
+		if err := p.loadPackageRegistry(true); err != nil {
+			if err == ErrValidationFailed {
+				// Record error for later failure
+				// The error(s) will have already been output to the console
+				foundError = true
+			} else {
+				return err
+			}
+		}
+	}
+	for _, pkg := range p.availablePackages {
+		if pkg.filePath == "" {
+			continue
+		}
+		p.config.Logger.Debug(
+			fmt.Sprintf(
+				"checking package %s",
+				pkg.filePath,
+			),
+		)
+		if err := pkg.validate(p.config); err != nil {
+			foundError = true
+			p.config.Logger.Warn(
+				fmt.Sprintf(
+					"validation failed: %s: %s",
+					pkg.filePath,
+					err.Error(),
+				),
+			)
+		}
+	}
+	if foundError {
+		return ErrOperationFailed
+	}
+	return nil
 }
