@@ -18,6 +18,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 
 	ouroboros "github.com/blinklabs-io/gouroboros"
@@ -58,10 +60,8 @@ func (p *PackageManager) init() error {
 		return fmt.Errorf("failed to load state: %s", err)
 	}
 	// Get available packages from configured registry
-	if registryPkgs, err := registryPackages(p.config); err != nil {
+	if err := p.loadPackageRegistry(); err != nil {
 		return err
-	} else {
-		p.availablePackages = registryPkgs[:]
 	}
 	// Setup templating
 	p.initTemplate()
@@ -85,6 +85,15 @@ func (p *PackageManager) initTemplate() {
 		tmpConfig.Template = tmpConfig.Template.WithVars(tmplVars)
 	}
 	p.config = tmpConfig
+}
+
+func (p *PackageManager) loadPackageRegistry() error {
+	if registryPkgs, err := registryPackages(p.config); err != nil {
+		return err
+	} else {
+		p.availablePackages = registryPkgs[:]
+	}
+	return nil
 }
 
 func (p *PackageManager) AvailablePackages() []Package {
@@ -610,4 +619,21 @@ func (p *PackageManager) ContextEnv() map[string]string {
 		}
 	}
 	return ret
+}
+
+func (p *PackageManager) UpdatePackages() error {
+	// Clear out existing cache files
+	cachePath := filepath.Join(
+		p.config.CacheDir,
+		"registry",
+	)
+	if err := os.RemoveAll(cachePath); err != nil {
+		return err
+	}
+	// (Re)load the package registry
+	if err := p.loadPackageRegistry(); err != nil {
+		return err
+	}
+	return nil
+
 }

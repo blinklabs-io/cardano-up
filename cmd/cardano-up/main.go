@@ -75,6 +75,7 @@ func main() {
 		uninstallCommand(),
 		upCommand(),
 		downCommand(),
+		updateCommand(),
 		upgradeCommand(),
 	)
 
