@@ -77,6 +77,13 @@ func NewResolverNoAvailablePackageDependencyError(depSpec string) error {
 	)
 }
 
+func NewResolverNoAvailablePackage(pkgSpec string) error {
+	return fmt.Errorf(
+		"no available package found: %s",
+		pkgSpec,
+	)
+}
+
 func NewResolverInstalledPackageNoMatchVersionSpecError(pkgName string, pkgVersion string, depSpec string) error {
 	return fmt.Errorf(
 		"installed package \"%s = %s\" does not match dependency: %s",

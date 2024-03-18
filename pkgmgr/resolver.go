@@ -89,6 +89,9 @@ func (r *Resolver) Install(pkgs ...string) ([]ResolverInstallSet, error) {
 		if err != nil {
 			return nil, err
 		}
+		if latestPkg.IsEmpty() {
+			return nil, NewResolverNoAvailablePackage(pkg)
+		}
 		// Calculate dependencies
 		neededPkgs, err := r.getNeededDeps(latestPkg)
 		if err != nil {

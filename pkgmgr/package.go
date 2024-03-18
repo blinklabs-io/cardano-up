@@ -74,6 +74,10 @@ func NewPackageFromReader(r io.Reader) (Package, error) {
 	return ret, nil
 }
 
+func (p Package) IsEmpty() bool {
+	return p.Name == "" && p.Version == ""
+}
+
 func (p Package) defaultOpts() map[string]bool {
 	ret := make(map[string]bool)
 	for _, opt := range p.Options {
