@@ -403,6 +403,9 @@ func (p Package) startService(cfg Config, context string) error {
 	var startErrors []string
 	for _, step := range p.InstallSteps {
 		if step.Docker != nil {
+			if step.Docker.PullOnly {
+				continue
+			}
 			containerName := fmt.Sprintf("%s-%s", pkgName, step.Docker.ContainerName)
 			dockerService, err := NewDockerServiceFromContainerName(containerName, cfg.Logger)
 			if err != nil {
@@ -431,6 +434,9 @@ func (p Package) stopService(cfg Config, context string) error {
 	var stopErrors []string
 	for _, step := range p.InstallSteps {
 		if step.Docker != nil {
+			if step.Docker.PullOnly {
+				continue
+			}
 			containerName := fmt.Sprintf("%s-%s", pkgName, step.Docker.ContainerName)
 			dockerService, err := NewDockerServiceFromContainerName(containerName, cfg.Logger)
 			if err != nil {
@@ -458,6 +464,9 @@ func (p Package) services(cfg Config, context string) ([]*DockerService, error) 
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	for _, step := range p.InstallSteps {
 		if step.Docker != nil {
+			if step.Docker.PullOnly {
+				continue
+			}
 			containerName := fmt.Sprintf("%s-%s", pkgName, step.Docker.ContainerName)
 			dockerService, err := NewDockerServiceFromContainerName(containerName, cfg.Logger)
 			if err != nil {
