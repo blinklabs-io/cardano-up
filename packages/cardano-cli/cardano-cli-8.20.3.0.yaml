@@ -1,0 +1,18 @@
+name: cardano-cli
+version: 8.20.3.0
+description: CLI software for interfacing with Cardano node by Input Output Global
+installSteps:
+  - docker:
+      containerName: cardano-cli
+      image: ghcr.io/blinklabs-io/cardano-cli:8.20.3.0
+      pullOnly: true
+  - file:
+      binary: true
+      filename: cardano-cli
+      source: files/cardano-cli.sh.gotmpl
+tags:
+  - docker
+  - linux
+  - darwin
+  - amd64
+  - arm64
