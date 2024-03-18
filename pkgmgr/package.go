@@ -547,6 +547,18 @@ func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
 			return err
 		}
 		tmpBinds = append(tmpBinds, tmpBind)
+		// Precreate any host paths for container bind mounts. This is necessary to retain non-root ownership
+		bindParts := strings.SplitN(tmpBind, ":", 2)
+		hostPath := bindParts[0]
+		if err := os.MkdirAll(hostPath, fs.ModePerm); err != nil {
+			return err
+		}
+		cfg.Logger.Debug(
+			fmt.Sprintf(
+				"precreating host path for container bind mount: %q",
+				hostPath,
+			),
+		)
 	}
 	var tmpPorts []string
 	for _, port := range p.Ports {
