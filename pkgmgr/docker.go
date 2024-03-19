@@ -23,6 +23,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -376,10 +377,42 @@ func (d *DockerService) getClient() (*client.Client, error) {
 }
 
 func NewDockerClient() (*client.Client, error) {
-	tmpClient, err := client.NewClientWithOpts(
+	clientOpts := []client.Opt{
+		client.FromEnv,
 		client.WithAPIVersionNegotiation(),
-		client.WithHostFromEnv(),
-	)
+	}
+	// Determine Docker socket path if env override isn't set
+	if _, ok := os.LookupEnv("DOCKER_HOST"); !ok {
+		// Determine fallback path for socket on Docker Desktop for Mac
+		userHomeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		fallbackSocketPath := filepath.Join(
+			userHomeDir,
+			".docker",
+			"run",
+			"docker.sock",
+		)
+		if _, err := os.Stat(client.DefaultDockerHost); err == nil {
+			// Explicitly set the host to the default Docker socket path
+			clientOpts = append(
+				clientOpts,
+				client.WithHost(
+					`unix://`+client.DefaultDockerHost,
+				),
+			)
+		} else if _, err := os.Stat(fallbackSocketPath); err == nil {
+			// Set the host to the fallback socket path
+			clientOpts = append(
+				clientOpts,
+				client.WithHost(
+					`unix://`+fallbackSocketPath,
+				),
+			)
+		}
+	}
+	tmpClient, err := client.NewClientWithOpts(clientOpts...)
 	if err != nil {
 		return nil, err
 	}
