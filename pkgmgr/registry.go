@@ -26,27 +26,26 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
-func registryPackages(cfg Config) ([]Package, error) {
+func registryPackages(cfg Config, validate bool) ([]Package, error) {
 	if cfg.RegistryDir != "" {
-		return registryPackagesDir(cfg)
+		return registryPackagesDir(cfg, validate)
 	} else if cfg.RegistryUrl != "" {
-		return registryPackagesUrl(cfg)
+		return registryPackagesUrl(cfg, validate)
 	} else {
 		return nil, ErrNoRegistryConfigured
 	}
 }
 
-func registryPackagesDir(cfg Config) ([]Package, error) {
+func registryPackagesDir(cfg Config, validate bool) ([]Package, error) {
 	tmpFs := os.DirFS(cfg.RegistryDir).(fs.ReadFileFS)
-	return registryPackagesFs(cfg, tmpFs)
+	return registryPackagesFs(cfg, tmpFs, validate)
 }
 
-func registryPackagesFs(cfg Config, filesystem fs.ReadFileFS) ([]Package, error) {
+func registryPackagesFs(cfg Config, filesystem fs.ReadFileFS, validate bool) ([]Package, error) {
 	var ret []Package
+	var retErr error
 	absRegistryDir, err := filepath.Abs(cfg.RegistryDir)
 	if err != nil {
 		return nil, err
@@ -76,12 +75,16 @@ func registryPackagesFs(cfg Config, filesystem fs.ReadFileFS) ([]Package, error)
 				return nil
 			}
 			// Try to parse YAML file as package
-			fileData, err := filesystem.ReadFile(path)
+			fileReader, err := filesystem.Open(path)
 			if err != nil {
 				return err
 			}
-			var tmpPkg Package
-			if err := yaml.Unmarshal(fileData, &tmpPkg); err != nil {
+			tmpPkg, err := NewPackageFromReader(fileReader)
+			if err != nil {
+				if validate {
+					// Record error for deferred failure
+					retErr = ErrValidationFailed
+				}
 				cfg.Logger.Warn(
 					fmt.Sprintf(
 						"failed to load %q as package: %s",
@@ -106,10 +109,10 @@ func registryPackagesFs(cfg Config, filesystem fs.ReadFileFS) ([]Package, error)
 	if err != nil {
 		return nil, err
 	}
-	return ret, nil
+	return ret, retErr
 }
 
-func registryPackagesUrl(cfg Config) ([]Package, error) {
+func registryPackagesUrl(cfg Config, validate bool) ([]Package, error) {
 	cachePath := filepath.Join(
 		cfg.CacheDir,
 		"registry",
@@ -184,5 +187,5 @@ func registryPackagesUrl(cfg Config) ([]Package, error) {
 	}
 	// Process cache dir
 	cfg.RegistryDir = cachePath
-	return registryPackagesDir(cfg)
+	return registryPackagesDir(cfg, validate)
 }
