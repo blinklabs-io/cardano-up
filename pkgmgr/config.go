@@ -33,7 +33,6 @@ type Config struct {
 	RequiredPackageTags []string
 	RegistryUrl         string
 	RegistryDir         string
-	RegistryPreload     bool
 }
 
 func NewDefaultConfig() (Config, error) {
@@ -80,8 +79,7 @@ func NewDefaultConfig() (Config, error) {
 			runtime.GOOS,
 			runtime.GOARCH,
 		},
-		RegistryUrl:     "https://github.com/blinklabs-io/cardano-up/archive/refs/heads/main.zip",
-		RegistryPreload: true,
+		RegistryUrl: "https://github.com/blinklabs-io/cardano-up/archive/refs/heads/main.zip",
 	}
 	return ret, nil
 }
