@@ -58,12 +58,6 @@ func (p *PackageManager) init() error {
 	if err := p.state.Load(); err != nil {
 		return fmt.Errorf("failed to load state: %s", err)
 	}
-	// Get available packages from configured registry
-	if p.config.RegistryPreload {
-		if err := p.loadPackageRegistry(false); err != nil {
-			return err
-		}
-	}
 	// Setup templating
 	p.initTemplate()
 	return nil
@@ -105,6 +99,13 @@ func (p *PackageManager) loadPackageRegistry(validate bool) error {
 
 func (p *PackageManager) AvailablePackages() []Package {
 	var ret []Package
+	if p.availablePackages == nil {
+		if err := p.loadPackageRegistry(false); err != nil {
+			p.config.Logger.Warn(
+				fmt.Sprintf("failed to load packages: %s", err),
+			)
+		}
+	}
 	for _, pkg := range p.availablePackages {
 		if pkg.hasTags(p.config.RequiredPackageTags) {
 			ret = append(ret, pkg)

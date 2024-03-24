@@ -52,8 +52,6 @@ func validateCommand() *cobra.Command {
 			}
 			// Point at provided registry dir
 			cfg.RegistryDir = absPackagesDir
-			// Disable preloading of registry to prevent errors before we explicitly start validation
-			cfg.RegistryPreload = false
 			pm, err := pkgmgr.NewPackageManager(cfg)
 			if err != nil {
 				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
