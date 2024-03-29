@@ -29,6 +29,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
@@ -262,7 +263,7 @@ func (d *DockerService) pullImage() error {
 	if err != nil {
 		return err
 	}
-	out, err := client.ImagePull(context.Background(), d.Image, types.ImagePullOptions{})
+	out, err := client.ImagePull(context.Background(), d.Image, image.PullOptions{})
 	if err != nil {
 		return err
 	}
@@ -426,12 +427,12 @@ func CheckDockerConnectivity() error {
 	return nil
 }
 
-func RemoveDockerImage(image string) error {
+func RemoveDockerImage(imageName string) error {
 	client, err := NewDockerClient()
 	if err != nil {
 		return err
 	}
-	_, err = client.ImageRemove(context.Background(), image, types.ImageRemoveOptions{})
+	_, err = client.ImageRemove(context.Background(), imageName, image.RemoveOptions{})
 	if err != nil {
 		return err
 	}
