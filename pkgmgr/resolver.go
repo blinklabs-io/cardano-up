@@ -268,7 +268,7 @@ func (r *Resolver) splitPackage(pkg string) (string, string, map[string]bool) {
 }
 
 func (r *Resolver) findInstalled(pkgName string, pkgVersionSpec string) (InstalledPackage, error) {
-	var constraints version.Constraints
+	constraints := version.Constraints{}
 	if pkgVersionSpec != "" {
 		tmpConstraints, err := version.NewConstraint(pkgVersionSpec)
 		if err != nil {

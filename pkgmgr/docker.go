@@ -325,8 +325,10 @@ func (d *DockerService) refresh() error {
 	d.Env = make(map[string]string)
 	for _, tmpEnv := range container.Config.Env {
 		envVarParts := strings.SplitN(tmpEnv, `=`, 2)
-		envVarName, envVarValue := envVarParts[0], envVarParts[1]
-		d.Env[envVarName] = envVarValue
+		if envVarParts != nil {
+			envVarName, envVarValue := envVarParts[0], envVarParts[1]
+			d.Env[envVarName] = envVarValue
+		}
 	}
 	d.Command = container.Config.Entrypoint[:]
 	d.Args = container.Config.Cmd[:]
