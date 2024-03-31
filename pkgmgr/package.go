@@ -190,7 +190,7 @@ func (p Package) install(cfg Config, context string, opts map[string]bool) (stri
 	}
 	for _, svc := range tmpServices {
 		shortContainerName := strings.TrimPrefix(svc.ContainerName, pkgName+`-`)
-		tmpPorts[shortContainerName] = make(map[string]string)
+		tmpPortsContainer := make(map[string]string)
 		for _, port := range svc.Ports {
 			var containerPort, hostPort string
 			portParts := strings.Split(port, ":")
@@ -205,8 +205,9 @@ func (p Package) install(cfg Config, context string, opts map[string]bool) (stri
 				containerPort = portParts[2]
 				hostPort = portParts[1]
 			}
-			tmpPorts[shortContainerName][containerPort] = hostPort
+			tmpPortsContainer[containerPort] = hostPort
 		}
+		tmpPorts[shortContainerName] = tmpPortsContainer
 	}
 	cfg.Template = cfg.Template.WithVars(
 		map[string]any{
