@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/Masterminds/sprig/v3 v3.2.3
-	github.com/blinklabs-io/gouroboros v0.76.0
+	github.com/blinklabs-io/gouroboros v0.77.0
 	github.com/docker/docker v26.0.0+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/hashicorp/go-version v1.6.0
