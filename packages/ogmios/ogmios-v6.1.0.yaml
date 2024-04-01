@@ -1,6 +1,8 @@
 name: ogmios
 version: v6.1.0
 description: Ogmios, a WebSocket & HTTP server for Cardano, providing a bridge between Cardano nodes and clients.
+dependencies:
+  - cardano-node >= 8.7.3
 installSteps:
   - docker:
       containerName: ogmios
@@ -22,6 +24,13 @@ installSteps:
       ports:
         - "1337"
       pullOnly: false
+outputs:
+  - name: url
+    description: Ogmios WebSocket & HTTP server URL
+    value: 'http://localhost:{{ index (index .Ports "ogmios") "1337" }}'
+  - name: health_url
+    description: Ogmios health URL
+    value: 'http://localhost:{{ index (index .Ports "ogmios") "1337" }}/health'
 tags:
   - docker
   - linux
