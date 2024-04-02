@@ -84,6 +84,14 @@ Enable for all future sessions:
 cardano-up completion bash > /etc/bash_completion.d/cardano-up
 ```
 
+## Contexts
+
+Contexts are used to allow you to install multiple copies of the same package with different network configurations side by side. They allow you to do things
+such as running a `preprod` and `mainnet` Cardano node on the same machine, or even have multiple `preview` Cardano node instances running different versions
+of the node.
+
+Commands such as `install`, `uninstall`, and `list` work in the active context. You can use the `context` command to change the active context or manage available contexts.
+
 ## Command reference
 
 The `cardano-up` command consists of multiple subcommands. You can list all subcommands by running `cardano-up` with no arguments or with the `--help` option.
