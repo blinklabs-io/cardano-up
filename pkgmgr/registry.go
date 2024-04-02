@@ -124,11 +124,9 @@ func registryPackagesUrl(cfg Config, validate bool) ([]Package, error) {
 			return nil, err
 		}
 	}
-	if stat == nil {
-		return nil, fmt.Errorf("failed to stat cache path %s", cachePath)
-	}
 	// Fetch and extract registry ZIP into cache if it doesn't exist or is too old
 	if errors.Is(err, fs.ErrNotExist) ||
+		stat == nil ||
 		stat.ModTime().Before(time.Now().Add(-24*time.Hour)) {
 		// Fetch registry ZIP
 		cfg.Logger.Info(
