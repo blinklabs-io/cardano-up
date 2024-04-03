@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# setup options
+_options=(${@})
+for i in ${!_options[@]}; do
+        j=$((i+1))
+        k=${_options[i]}
+        v=${_options[j]}
+        _found=false
+	# remap absolute paths to /host in the container
+	if [[ ${k} =~ ^/ ]]; then
+		k="/host${k}"
+	fi
+	case ${k} in
+		--aggregator-endpoint) AGGREGATOR_ENDPOINT=${v}; _found=true ;;
+		--genesis-verification-key) GENESIS_VERIFICATION_KEY=${v}; _found=true ;;
+	esac
+        if [[ ${_found} == true ]]; then
+                _options[i]="";
+                _options[j]="";
+        fi
+done
+
+_network="{{ .Context.Network }}"
+
+case ${_network} in
+        mainnet|preprod) _path=release-${_network} ;;
+        preview) _path=pre-release-${_network} ;;
+        sanchonet) _path=testing-${_network} ;;
+esac
+AGGREGATOR_ENDPOINT=${AGGREGATOR_ENDPOINT:-https://aggregator.${_path}.api.mithril.network/aggregator}
+if [[ -z ${GENESIS_VERIFICATION_KEY} && -f ${GENESIS_VERIFICATION_KEY_PATH} ]]; then
+        GENESIS_VERIFICATION_KEY=$(<${GENESIS_VERIFICATION_KEY_PATH})
+fi
+
+_docker_args=()
+
+# flatten options into args
+for i in ${_options[@]}; do
+	_args+=" ${i}"
+done
+_args=$(echo ${_args} | sed -e 's/^ //')
+
+# Run mithril-client-cli via Docker
+# We map the host filesystem into the container
+docker run \
+	-ti \
+	--rm \
+	-u $(id -u):$(id -g) \
+	-v /:/host \
+	-w /host$(pwd) \
+	--entrypoint /bin/bash \
+	-e AGGREGATOR_ENDPOINT=${AGGREGATOR_ENDPOINT} \
+	-e GENESIS_VERIFICATION_KEY=${GENESIS_VERIFICATION_KEY} \
+	"${_docker_args[@]}" \
+	ghcr.io/blinklabs-io/mithril-client:{{ .Package.Version }} \
+	-c "GENESIS_VERIFICATION_KEY=\${GENESIS_VERIFICATION_KEY:-\$(</opt/cardano/config/{{ .Context.Network }}/genesis.vkey)} /bin/mithril-client ${_args}"
