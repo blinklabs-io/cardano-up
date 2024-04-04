@@ -1,8 +1,0 @@
-name: test-packageA
-version: 2.1.3
-tags:
-  - docker
-  - linux
-  - darwin
-  - amd64
-  - arm64

@@ -1,9 +1,0 @@
-name: test-packageA
-version: 1.0.2
-tags:
-  - docker
-  - linux
-  - darwin
-  - amd64
-  - arm64
-postInstallNotes: Notes for {{ .Package.Name }}
