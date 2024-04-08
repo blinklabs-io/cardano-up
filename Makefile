@@ -18,6 +18,12 @@ GO_LDFLAGS=-ldflags "-s -w -X '$(GOMODULE)/internal/version.Version=$(shell git 
 # Alias for building program binary
 build: $(BINARIES)
 
+# Builds and installs binary in ~/.local/bin
+install: build
+	mv $(BINARIES) $(HOME)/.local/bin
+
+uninstall:
+	rm -f $(HOME)/.local/bin/$(BINARIES)
 mod-tidy:
 	# Needed to fetch new dependencies and add them to go.mod
 	go mod tidy
