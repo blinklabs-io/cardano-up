@@ -21,6 +21,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -30,16 +31,20 @@ import (
 )
 
 type Package struct {
-	Name             string               `yaml:"name,omitempty"`
-	Version          string               `yaml:"version,omitempty"`
-	Description      string               `yaml:"description,omitempty"`
-	InstallSteps     []PackageInstallStep `yaml:"installSteps,omitempty"`
-	Dependencies     []string             `yaml:"dependencies,omitempty"`
-	Tags             []string             `yaml:"tags,omitempty"`
-	PostInstallNotes string               `yaml:"postInstallNotes,omitempty"`
-	Options          []PackageOption      `yaml:"options,omitempty"`
-	Outputs          []PackageOutput      `yaml:"outputs,omitempty"`
-	filePath         string
+	Name                string               `yaml:"name,omitempty"`
+	Version             string               `yaml:"version,omitempty"`
+	Description         string               `yaml:"description,omitempty"`
+	InstallSteps        []PackageInstallStep `yaml:"installSteps,omitempty"`
+	Dependencies        []string             `yaml:"dependencies,omitempty"`
+	Tags                []string             `yaml:"tags,omitempty"`
+	PreInstallScript    string               `yaml:"preInstallScript,omitempty"`
+	PostInstallScript   string               `yaml:"postInstallScript,omitempty"`
+	PreUninstallScript  string               `yaml:"preUninstallScript,omitempty"`
+	PostUninstallScript string               `yaml:"postUninstallScript,omitempty"`
+	PostInstallNotes    string               `yaml:"postInstallNotes,omitempty"`
+	Options             []PackageOption      `yaml:"options,omitempty"`
+	Outputs             []PackageOutput      `yaml:"outputs,omitempty"`
+	filePath            string
 }
 
 type PackageOption struct {
@@ -101,7 +106,7 @@ func (p Package) hasTags(tags []string) bool {
 	return true
 }
 
-func (p Package) install(cfg Config, context string, opts map[string]bool) (string, map[string]string, error) {
+func (p Package) install(cfg Config, context string, opts map[string]bool, runHooks bool) (string, map[string]string, error) {
 	// Update template vars
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	pkgCacheDir := filepath.Join(
@@ -153,6 +158,12 @@ func (p Package) install(cfg Config, context string, opts map[string]bool) (stri
 	}
 	if err := os.MkdirAll(pkgDataDir, fs.ModePerm); err != nil {
 		return "", nil, err
+	}
+	// Run pre-install script
+	if runHooks && p.PreInstallScript != "" {
+		if err := p.runHookScript(cfg, p.PreInstallScript); err != nil {
+			return "", nil, err
+		}
 	}
 	// Perform install
 	for _, installStep := range p.InstallSteps {
@@ -235,6 +246,12 @@ func (p Package) install(cfg Config, context string, opts map[string]bool) (stri
 		}
 		retOutputs[key] = val
 	}
+	// Run post-install script
+	if runHooks && p.PostInstallScript != "" {
+		if err := p.runHookScript(cfg, p.PostInstallScript); err != nil {
+			return "", nil, err
+		}
+	}
 	// Render notes and return
 	var retNotes string
 	if p.PostInstallNotes != "" {
@@ -247,8 +264,14 @@ func (p Package) install(cfg Config, context string, opts map[string]bool) (stri
 	return retNotes, retOutputs, nil
 }
 
-func (p Package) uninstall(cfg Config, context string, keepData bool) error {
+func (p Package) uninstall(cfg Config, context string, keepData bool, runHooks bool) error {
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
+	// Run pre-uninstall script
+	if runHooks && p.PreUninstallScript != "" {
+		if err := p.runHookScript(cfg, p.PreUninstallScript); err != nil {
+			return err
+		}
+	}
 	// Iterate over install steps in reverse
 	for idx := len(p.InstallSteps) - 1; idx >= 0; idx-- {
 		installStep := p.InstallSteps[idx]
@@ -329,6 +352,12 @@ func (p Package) uninstall(cfg Config, context string, keepData bool) error {
 					pkgDataDir,
 				),
 			)
+		}
+	}
+	// Run post-uninstall script
+	if runHooks && p.PostUninstallScript != "" {
+		if err := p.runHookScript(cfg, p.PostUninstallScript); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -533,6 +562,20 @@ func (p Package) services(cfg Config, context string) ([]*DockerService, error) 
 		}
 	}
 	return ret, nil
+}
+
+func (p Package) runHookScript(cfg Config, hookScript string) error {
+	renderedScript, err := cfg.Template.Render(hookScript, nil)
+	if err != nil {
+		return fmt.Errorf("failed to render hook script template: %s", err)
+	}
+	cmd := exec.Command("/bin/sh", "-c", renderedScript)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run hook script: %s", err)
+	}
+	return nil
 }
 
 type PackageInstallStep struct {

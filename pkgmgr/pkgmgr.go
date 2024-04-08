@@ -188,7 +188,7 @@ func (p *PackageManager) Install(pkgs ...string) error {
 			tmpPkgOpts[k] = v
 		}
 		// Install package
-		notes, outputs, err := installPkg.Install.install(p.config, activeContextName, tmpPkgOpts)
+		notes, outputs, err := installPkg.Install.install(p.config, activeContextName, tmpPkgOpts, true)
 		if err != nil {
 			return err
 		}
@@ -262,11 +262,11 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 			)
 		}
 		// Uninstall old version
-		if err := p.uninstallPackage(upgradePkg.Installed, true); err != nil {
+		if err := p.uninstallPackage(upgradePkg.Installed, true, false); err != nil {
 			return err
 		}
 		// Install new version
-		notes, outputs, err := upgradePkg.Upgrade.install(p.config, activeContextName, pkgOpts)
+		notes, outputs, err := upgradePkg.Upgrade.install(p.config, activeContextName, pkgOpts, false)
 		if err != nil {
 			return err
 		}
@@ -349,7 +349,7 @@ func (p *PackageManager) Uninstall(pkgName string, keepData bool, force bool) er
 				fmt.Sprintf("failed to deactivate package: %s", err),
 			)
 		}
-		if err := p.uninstallPackage(uninstallPkg, keepData); err != nil {
+		if err := p.uninstallPackage(uninstallPkg, keepData, true); err != nil {
 			return err
 		}
 		if err := p.state.Save(); err != nil {
@@ -498,9 +498,9 @@ func (p *PackageManager) Info(pkgs ...string) error {
 	return nil
 }
 
-func (p *PackageManager) uninstallPackage(uninstallPkg InstalledPackage, keepData bool) error {
+func (p *PackageManager) uninstallPackage(uninstallPkg InstalledPackage, keepData bool, runHooks bool) error {
 	// Uninstall package
-	if err := uninstallPkg.Package.uninstall(p.config, uninstallPkg.Context, keepData); err != nil {
+	if err := uninstallPkg.Package.uninstall(p.config, uninstallPkg.Context, keepData, runHooks); err != nil {
 		return err
 	}
 	// Remove package from installed packages
