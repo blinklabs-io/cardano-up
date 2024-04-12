@@ -10,6 +10,8 @@ for i in ${!_options[@]}; do
 	# remap absolute paths to /host in the container
 	if [[ ${k} =~ ^/ ]]; then
 		k="/host${k}"
+		_options[i]=${k};
+		continue
 	fi
 	case ${k} in
 		--aggregator-endpoint) AGGREGATOR_ENDPOINT=${v}; _found=true ;;
