@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/creack/pty"
 	"github.com/hashicorp/go-version"
 	"gopkg.in/yaml.v3"
 )
@@ -572,8 +573,14 @@ func (p Package) runHookScript(cfg Config, hookScript string) error {
 	cmd := exec.Command("/bin/sh", "-c", renderedScript)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	// We won't be reading or writing, so throw away the PTY file
+	_, err = pty.Start(cmd)
+	if err != nil {
 		return fmt.Errorf("failed to run hook script: %s", err)
+	}
+	err = cmd.Wait()
+	if err != nil {
+		return fmt.Errorf("run hook script exited with error: %s", err)
 	}
 	return nil
 }

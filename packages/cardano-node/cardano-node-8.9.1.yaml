@@ -3,6 +3,7 @@ version: 8.9.1
 description: Cardano node software by Input Output Global
 dependencies:
   - cardano-cli >= 8.20
+  - mithril-client >= 0.7
 installSteps:
   - docker:
       containerName: cardano-node
@@ -10,6 +11,7 @@ installSteps:
       env:
         CARDANO_NODE_SOCKET_PATH: /ipc/node.socket
         NETWORK: '{{ .Context.Network }}'
+        RESTORE_NETWORK: 'false'
       binds:
         - '{{ .Paths.ContextDir }}/node-ipc:/ipc'
         - '{{ .Paths.DataDir }}/data:/data'
@@ -20,6 +22,7 @@ outputs:
   - name: socket_path
     description: Path to the Cardano Node UNIX socket
     value: '{{ .Paths.ContextDir }}/node-ipc/node.socket'
+preInstallScript: 'test -e {{ .Paths.DataDir }}/data/db/protocolMagicId && exit 0 || mithril-client cardano-db download --download-dir {{ .Paths.DataDir }}/data latest'
 tags:
   - docker
   - linux
