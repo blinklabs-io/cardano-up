@@ -23,6 +23,7 @@ outputs:
     description: Path to the Cardano Node UNIX socket
     value: '{{ .Paths.ContextDir }}/node-ipc/node.socket'
 preInstallScript: 'test -e {{ .Paths.DataDir }}/data/db/protocolMagicId && exit 0 || mithril-client cardano-db download --download-dir {{ .Paths.DataDir }}/data latest'
+postInstallScript: 'mkdir -p {{ .Paths.ContextDir }}/config && docker cp {{ .Package.Name }}-{{ .Package.ShortName }}:/opt/cardano/config/{{ .Context.Network }}/ {{ .Paths.ContextDir }}/config/'
 tags:
   - docker
   - linux
