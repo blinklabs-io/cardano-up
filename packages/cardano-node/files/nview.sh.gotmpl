@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Run nview
+docker exec \
+	-ti \
+	{{ .Package.Name }}-cardano-node \
+	nview ${@}
