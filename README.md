@@ -2,34 +2,14 @@
 
 ## Installation
 
-### Install latest release
+### Install latest release (recommended)
 
 You can download the latest releases from the [Releases page](https://github.com/blinklabs-io/cardano-up/releases).
 Place the downloaded binary in `/usr/local/bin`, `~/.local/bin`, or some other convenient location and make sure
-that location has been added to your `$PATH`. 
+that location has been added to your `$PATH`. Our recommendation is to use `~/.local/bin` as that is where this
+tool will install wrapper scripts.
 
-### Install from source
-
-Before starting, make sure that you have at least Go 1.21 installed locally. Run the following
-to download the latest source code and build.
-
-```
-go install github.com/blinklabs-io/cardano-up/cmd/cardano-up@main
-```
-
-Once that completes, you should have a `cardano-up` binary in `~/go/bin`.
-
-```
-$ ls -lh ~/go/bin/cardano-up
--rwxrwxr-x 1 agaffney agaffney 16M Mar 16 08:13 /home/agaffney/go/bin/cardano-up
-```
-
-You may need to add a line like the following to your shell RC/profile to update your PATH
-to be able to find the binary.
-
-```
-export PATH=~/go/bin:$PATH
-```
+NOTE: On MacOS, you will need to allow `/` to be used by Docker Desktop
 
 ## Basic usage
 
@@ -204,3 +184,38 @@ Validates packages defined in specified path
 ### `version`
 
 Displays the version
+
+## Development
+
+### Install from source
+
+Before starting, make sure that you have at least Go 1.21 installed locally. Run the following
+to download the latest source code and build.
+
+```
+go install github.com/blinklabs-io/cardano-up/cmd/cardano-up@main
+```
+
+Once that completes, you should have a `cardano-up` binary in `~/go/bin`.
+
+```
+$ ls -lh ~/go/bin/cardano-up
+-rwxrwxr-x 1 agaffney agaffney 16M Mar 16 08:13 /home/agaffney/go/bin/cardano-up
+```
+
+You may need to add a line like the following to your shell RC/profile to update your PATH
+to be able to find the binary.
+
+```
+export PATH=~/go/bin:$PATH
+```
+
+### Compile from source
+
+There is a Makefile (you will need `make` installed) which you can invoke.
+
+```bash
+make
+```
+
+This will create a `cardano-up` binary in the repository root.
