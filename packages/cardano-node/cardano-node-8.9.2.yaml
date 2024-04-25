@@ -3,6 +3,7 @@ version: 8.9.2
 description: Cardano node software by Input Output Global
 dependencies:
   - cardano-cli >= 8.20
+  - mithril-client >= 0.7
 installSteps:
   - docker:
       containerName: cardano-node
