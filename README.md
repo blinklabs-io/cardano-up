@@ -219,3 +219,189 @@ make
 ```
 
 This will create a `cardano-up` binary in the repository root.
+
+### Creating and maintaining packages
+
+Packages and their versions are defined under `packages/` in this repo. Each separate package name has its own subdirectory,
+and each version of a particular package is defined in a separate file under that subdirectory. For example, package `foo` with
+version `1.2.3` would live in `packages/foo/foo-1.2.3.yaml`.
+
+#### Testing local changes to packages
+
+The remote package repo will be used by default when running `cardano-up`. To instead use the package files in a local directory, you
+can run it like:
+
+```bash
+REGISTRY_DIR=packages/ cardano-up ...
+```
+
+#### Validating package files
+
+There is a built-in subcommand for validating package files. It will be run automatically for a PR, but you can also run it manually.
+
+```bash
+cardano-up validate packages/
+```
+
+#### Templating
+
+Package manifest files are evaluated as a Go template before being parsed as YAML. The following values are available for use in templates.
+
+| Name | Description |
+| --- | --- |
+| `.Package` | |
+| `.Package.Name` | Full package name including the version |
+| `.Package.ShortName` | Package name |
+| `.Package.Version` | Package version |
+| `.Package.Options` | Provided package options |
+| `.Paths` | |
+| `.Paths.CacheDir` | Cache dir for package |
+| `.Paths.ContextDir` | Context dir for package |
+| `.Paths.DataDir` | Data dir for package |
+| `.Ports` | Container port mappings |
+
+#### Package manifest format
+
+The package manifest format is a YAML file with the following fields:
+
+| Field | Required | Description |
+| --- | :---: | --- |
+| `name` | x | Package name. This must match the prefix of the package manifest filename and the parent directory name |
+| `version` | x | Package version |
+| `description` | | Package description |
+| `preInstallScript` | | Arbitrary command that will be run before the package is installed |
+| `postInstallScript` | | Arbitrary command that will be run after the package is installed |
+| `preUninstallScript` | | Arbitrary command that will be run before the package is uninstalled |
+| `postUninstallScript` | | Arbitrary command that will be run after the package is uninstalled |
+| `installSteps` | | Steps to install package |
+| `dependencies` | | Dependencies for the package |
+| `tags` | | Tags for the package |
+| `options` | | Install-time options |
+| `outputs` | | Package outputs |
+
+##### `installSteps`
+
+The install steps for a package consist of a list of resources to manage. They are applied in order on install and reverse order on uninstall.
+
+Each install step may contain a condition that will make it's evaluation optional. A condition will be implicitly wrapped in `{{ if ` and ` }}True{{ else }}False{{ end }}` and evaluated by the templating engine.
+
+###### `docker`
+
+The `docker` install step type manages a Docker container.
+
+Example:
+
+```yaml
+installSteps:
+  - docker:
+      containerName: nginx
+      image: nginx
+```
+
+| Field | Required | Description |
+| --- | :---: | --- |
+| `containerName` | x | Name of the container to create. This will be automatically prefixed by the package name |
+| `image` | x | Docker image to use for container |
+| `env` | | Environment variables for container (expects a map) |
+| `command` | | Override container command (expects a list) |
+| `args` | | Override container args (expects a list) |
+| `binds` | | Volume binds in the Docker `-v` flag format (expects a list) |
+| `ports` | | Ports to map in the Docker `-p` flag format (expects a list). NOTE: assigning a static port mapping may cause conflicts |
+| `pullOnly` | | Only pull the image to pre-fetch it (expects a bool, defaults to creating container) |
+
+###### `file`
+
+The `file` install step type manages a file.
+
+Example:
+
+```yaml
+installSteps:
+  - file:
+      filename: my-file
+      source: my-source-file
+```
+
+| Field | Required | Description |
+| --- | :---: | --- |
+| `filename` | x | Name of destination file. This will be created within the package's data directory |
+| `source` | | Path to source file. This should be a relative path within the package manifest directory. This takes precedence over `content` if both are provided |
+| `content` | | Inline content for destination file |
+| `mode` | | Octal file mode for destination file |
+| `binary` | | Whether this file is an executable file for the package (expects bool, defaults to `false`) |
+
+##### `dependencies`
+
+Dependencies for a package are specified in the following format. At minimum they contain a package name. They may optionally contain a list of required package
+options and version range(s).
+
+Examples:
+
+Package `foo` with at least version `1.0.2`
+
+```
+foo >= 1.0.2
+```
+
+Package `foo` with at least version `1.0.2` but less than `2.0.0`
+
+```
+foo < 2.0.0, >= 1.0.2
+```
+
+Package `bar` with at least version `3.0.0`, option `optA` turned on, and option `optB` turned off
+
+```
+bar[optA,-optB] >= 3.0.0
+```
+
+##### `tags`
+
+The tags for a package should be a list of arbitrary string values corresponding to the supported platforms and architectures. They should be one or more of:
+
+* `docker`
+* `linux`
+* `darwin`
+* `amd64`
+* `arm`
+
+##### `options`
+
+The options for a package allow defining optional feature flags. The value of these flags is available to templates in the package manifest.
+
+Example:
+
+```yaml
+options:
+  - name: foo
+    description: Option foo
+    default: false
+```
+
+This option could then be referenced as `.Package.Options.foo` in package templates.
+
+| Field | Required | Description |
+| --- | :---: | --- |
+| `name` | x | Name of the option |
+| `description` | | Description of the option |
+| `default` | | Default value for option (defaults to `false`) |
+
+##### `outputs`
+
+The outputs defined in a package will be translated into environment variables for the user to consume.
+
+Example:
+
+```yaml
+  - name: socket_path
+    description: Path to the Cardano Node UNIX socket
+    value: '{{ .Paths.ContextDir }}/node-ipc/node.socket'
+```
+
+When used in package `cardano-node`, this will generate an env var named `CARDANO_NODE_SOCKET_PATH` with a path inside the package's data directory.
+
+| Field | Required | Description |
+| --- | :---: | --- |
+| `name` | x | Name of the output. This will have the package name automatically prepended and be made upper case |
+| `description` | | Description of the output |
+| `value` | x | Template that will be evaluated to generate the static output value |
