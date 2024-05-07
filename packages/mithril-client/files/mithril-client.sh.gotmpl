@@ -1,5 +1,13 @@
 #!/bin/bash
 
+declare -a _darwin_allowed_paths=(
+    "/Users"
+    "/Volumes"
+    "/private"
+    "/tmp"
+    "/var/folders"
+)
+
 # setup options
 _options=(${@})
 for i in ${!_options[@]}; do
@@ -36,6 +44,13 @@ if [[ -z ${GENESIS_VERIFICATION_KEY} && -f ${GENESIS_VERIFICATION_KEY_PATH} ]]; 
 fi
 
 _docker_args=()
+if [[ $(uname -s) == Darwin ]]; then
+       for _path in "${_darwin_allowed_paths[@]}"; do
+               _docker_args+=( "-v" "${_path}:/host${_path}" )
+       done
+else
+       _docker_args+=( "-v" "/:/host" )
+fi
 
 # flatten options into args
 for i in ${_options[@]}; do
@@ -49,11 +64,10 @@ docker run \
 	-ti \
 	--rm \
 	-u $(id -u):$(id -g) \
-	-v /:/host \
 	-w /host$(pwd) \
 	--entrypoint /bin/bash \
-	-e AGGREGATOR_ENDPOINT=${AGGREGATOR_ENDPOINT} \
-	-e GENESIS_VERIFICATION_KEY=${GENESIS_VERIFICATION_KEY} \
+	-e AGGREGATOR_ENDPOINT="${AGGREGATOR_ENDPOINT}" \
+	-e GENESIS_VERIFICATION_KEY="${GENESIS_VERIFICATION_KEY}" \
 	"${_docker_args[@]}" \
 	ghcr.io/blinklabs-io/mithril-client:{{ .Package.Version }} \
 	-c "GENESIS_VERIFICATION_KEY=\${GENESIS_VERIFICATION_KEY:-\$(</opt/cardano/config/{{ .Context.Network }}/genesis.vkey)} /bin/mithril-client ${_args}"

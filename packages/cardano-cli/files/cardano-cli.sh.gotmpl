@@ -1,5 +1,13 @@
 #!/bin/bash
 
+declare -a valid_paths=(
+    "/Users"
+    "/Volumes"
+    "/private"
+    "/tmp"
+    "/var/folders"
+)
+
 _args=()
 
 # Remap absolute paths to /host in the container
@@ -26,13 +34,20 @@ else
 	_docker_args+=( "-v" "{{ .Paths.ContextDir }}/node-ipc:/ipc" )
 fi
 
+if [[ $(uname -s) == Darwin ]]; then
+       for _path in "${_darwin_allowed_paths[@]}"; do
+               _docker_args+=( "-v" "${_path}:/host${_path}" )
+       done
+else
+       _docker_args+=( "-v" "/:/host" )
+fi
+
 # Run cardano-cli via Docker
 # We map the host filesystem and node socket into the container
 docker run \
 	-ti \
 	--rm \
 	-u $(id -u):$(id -g) \
-	-v /:/host \
 	-w /host$(pwd) \
 	-e CARDANO_NODE_SOCKET_PATH=/ipc/node.socket \
 	"${_docker_args[@]}" \
