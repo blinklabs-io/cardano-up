@@ -1,0 +1,18 @@
+name: mithril-client
+version: 0.8.0
+description: Mithril client by Input Output Global
+installSteps:
+  - docker:
+      containerName: mithril-client
+      image: ghcr.io/blinklabs-io/mithril-client:0.8.0
+      pullOnly: true
+  - file:
+      binary: true
+      filename: mithril-client
+      source: files/mithril-client.sh.gotmpl
+tags:
+  - docker
+  - linux
+  - darwin
+  - amd64
+  - arm64
