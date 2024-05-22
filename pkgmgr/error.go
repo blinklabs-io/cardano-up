@@ -26,11 +26,15 @@ var ErrOperationFailed = errors.New("the operation has failed")
 
 // ErrMultipleInstallMethods is returned when a package's install steps specify more than one install method
 // on a single install step
-var ErrMultipleInstallMethods = errors.New("only one install method may be specified in an install step")
+var ErrMultipleInstallMethods = errors.New(
+	"only one install method may be specified in an install step",
+)
 
 // ErrNoInstallMethods is returned when a package's install steps include an install step which has no
 // recognized install method specified
-var ErrNoInstallMethods = errors.New("no supported install method specified on install step")
+var ErrNoInstallMethods = errors.New(
+	"no supported install method specified on install step",
+)
 
 // ErrContextNotExist is returned when trying to selecting/managing a context that does not exist
 var ErrContextNotExist = errors.New("context does not exist")
@@ -39,7 +43,9 @@ var ErrContextNotExist = errors.New("context does not exist")
 var ErrContextAlreadyExists = errors.New("specified context already exists")
 
 // ErrContextNoChangeNetwork is returned when updating a context with a network different than what was previously configured
-var ErrContextNoChangeNetwork = errors.New("cannot change the configured network for a context")
+var ErrContextNoChangeNetwork = errors.New(
+	"cannot change the configured network for a context",
+)
 
 // ErrContextInstallNoNetwork is returned when performing an install with no network specified on the active context
 var ErrContextInstallNoNetwork = errors.New("no network specified for context")
@@ -87,7 +93,11 @@ func NewResolverNoAvailablePackage(pkgSpec string) error {
 	)
 }
 
-func NewResolverInstalledPackageNoMatchVersionSpecError(pkgName string, pkgVersion string, depSpec string) error {
+func NewResolverInstalledPackageNoMatchVersionSpecError(
+	pkgName string,
+	pkgVersion string,
+	depSpec string,
+) error {
 	return fmt.Errorf(
 		"installed package \"%s = %s\" does not match dependency: %s",
 		pkgName,
@@ -104,7 +114,12 @@ func NewPackageNotInstalledError(pkgName string, context string) error {
 	)
 }
 
-func NewPackageUninstallWouldBreakDepsError(uninstallPkgName string, uninstallPkgVersion string, dependentPkgName string, dependentPkgVersion string) error {
+func NewPackageUninstallWouldBreakDepsError(
+	uninstallPkgName string,
+	uninstallPkgVersion string,
+	dependentPkgName string,
+	dependentPkgVersion string,
+) error {
 	return fmt.Errorf(
 		`uninstall of package "%s = %s" would break dependencies for package "%s = %s"`,
 		uninstallPkgName,

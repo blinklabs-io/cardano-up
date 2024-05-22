@@ -188,12 +188,26 @@ func (p *PackageManager) Install(pkgs ...string) error {
 			tmpPkgOpts[k] = v
 		}
 		// Install package
-		notes, outputs, err := installPkg.Install.install(p.config, activeContextName, tmpPkgOpts, true)
+		notes, outputs, err := installPkg.Install.install(
+			p.config,
+			activeContextName,
+			tmpPkgOpts,
+			true,
+		)
 		if err != nil {
 			return err
 		}
-		installedPkg := NewInstalledPackage(installPkg.Install, activeContextName, notes, outputs, tmpPkgOpts)
-		p.state.InstalledPackages = append(p.state.InstalledPackages, installedPkg)
+		installedPkg := NewInstalledPackage(
+			installPkg.Install,
+			activeContextName,
+			notes,
+			outputs,
+			tmpPkgOpts,
+		)
+		p.state.InstalledPackages = append(
+			p.state.InstalledPackages,
+			installedPkg,
+		)
 		if err := p.state.Save(); err != nil {
 			return err
 		}
@@ -266,12 +280,26 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 			return err
 		}
 		// Install new version
-		notes, outputs, err := upgradePkg.Upgrade.install(p.config, activeContextName, pkgOpts, false)
+		notes, outputs, err := upgradePkg.Upgrade.install(
+			p.config,
+			activeContextName,
+			pkgOpts,
+			false,
+		)
 		if err != nil {
 			return err
 		}
-		installedPkg := NewInstalledPackage(upgradePkg.Upgrade, activeContextName, notes, outputs, pkgOpts)
-		p.state.InstalledPackages = append(p.state.InstalledPackages, installedPkg)
+		installedPkg := NewInstalledPackage(
+			upgradePkg.Upgrade,
+			activeContextName,
+			notes,
+			outputs,
+			pkgOpts,
+		)
+		p.state.InstalledPackages = append(
+			p.state.InstalledPackages,
+			installedPkg,
+		)
 		if err := p.state.Save(); err != nil {
 			return err
 		}
@@ -308,7 +336,11 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 	return nil
 }
 
-func (p *PackageManager) Uninstall(pkgName string, keepData bool, force bool) error {
+func (p *PackageManager) Uninstall(
+	pkgName string,
+	keepData bool,
+	force bool,
+) error {
 	// Find installed packages
 	activeContextName, _ := p.ActiveContext()
 	installedPackages := p.InstalledPackages()
@@ -367,7 +399,13 @@ func (p *PackageManager) Uninstall(pkgName string, keepData bool, force bool) er
 	return nil
 }
 
-func (p *PackageManager) Logs(pkgName string, follow bool, tail string, stdoutWriter io.Writer, stderrWriter io.Writer) error {
+func (p *PackageManager) Logs(
+	pkgName string,
+	follow bool,
+	tail string,
+	stdoutWriter io.Writer,
+	stderrWriter io.Writer,
+) error {
 	// Find installed packages
 	activeContextName, _ := p.ActiveContext()
 	installedPackages := p.InstalledPackages()
@@ -498,7 +536,11 @@ func (p *PackageManager) Info(pkgs ...string) error {
 	return nil
 }
 
-func (p *PackageManager) uninstallPackage(uninstallPkg InstalledPackage, keepData bool, runHooks bool) error {
+func (p *PackageManager) uninstallPackage(
+	uninstallPkg InstalledPackage,
+	keepData bool,
+	runHooks bool,
+) error {
 	// Uninstall package
 	if err := uninstallPkg.Package.uninstall(p.config, uninstallPkg.Context, keepData, runHooks); err != nil {
 		return err

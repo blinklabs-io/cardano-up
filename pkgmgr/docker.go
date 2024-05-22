@@ -62,7 +62,10 @@ type DockerService struct {
 	Ports         []string
 }
 
-func NewDockerServiceFromContainerName(containerName string, logger *slog.Logger) (*DockerService, error) {
+func NewDockerServiceFromContainerName(
+	containerName string,
+	logger *slog.Logger,
+) (*DockerService, error) {
 	ret := &DockerService{
 		logger: logger,
 	}
@@ -231,7 +234,12 @@ func (d *DockerService) Remove() error {
 	return nil
 }
 
-func (d *DockerService) Logs(follow bool, tail string, stdoutWriter io.Writer, stderrWriter io.Writer) error {
+func (d *DockerService) Logs(
+	follow bool,
+	tail string,
+	stdoutWriter io.Writer,
+	stderrWriter io.Writer,
+) error {
 	client, err := d.getClient()
 	if err != nil {
 		return err
@@ -263,7 +271,11 @@ func (d *DockerService) pullImage() error {
 	if err != nil {
 		return err
 	}
-	out, err := client.ImagePull(context.Background(), d.Image, image.PullOptions{})
+	out, err := client.ImagePull(
+		context.Background(),
+		d.Image,
+		image.PullOptions{},
+	)
 	if err != nil {
 		return err
 	}
@@ -279,7 +291,10 @@ func (d *DockerService) pullImage() error {
 		line := scanner.Text()
 		if err := json.Unmarshal([]byte(line), &tmpStatus); err != nil {
 			d.logger.Warn(
-				fmt.Sprintf("failed to unmarshal docker image pull status update: %s", err),
+				fmt.Sprintf(
+					"failed to unmarshal docker image pull status update: %s",
+					err,
+				),
 			)
 		}
 		// Skip progress update lines
@@ -309,7 +324,10 @@ func (d *DockerService) inspect() (types.ContainerJSON, error) {
 	if err != nil {
 		return types.ContainerJSON{}, err
 	}
-	container, err := client.ContainerInspect(context.Background(), d.ContainerId)
+	container, err := client.ContainerInspect(
+		context.Background(),
+		d.ContainerId,
+	)
 	if err != nil {
 		return types.ContainerJSON{}, err
 	}
@@ -434,7 +452,11 @@ func RemoveDockerImage(imageName string) error {
 	if err != nil {
 		return err
 	}
-	_, err = client.ImageRemove(context.Background(), imageName, image.RemoveOptions{})
+	_, err = client.ImageRemove(
+		context.Background(),
+		imageName,
+		image.RemoveOptions{},
+	)
 	if err != nil {
 		return err
 	}

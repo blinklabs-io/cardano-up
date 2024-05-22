@@ -18,7 +18,10 @@ func TestNewDefaultConfig(t *testing.T) {
 		expectedConfigDir = filepath.Join(testHome, ".config/cardano-up")
 	case "darwin":
 		expectedCacheDir = filepath.Join(testHome, "Library/Caches/cardano-up")
-		expectedConfigDir = filepath.Join(testHome, "Library/Application Support/cardano-up")
+		expectedConfigDir = filepath.Join(
+			testHome,
+			"Library/Application Support/cardano-up",
+		)
 	default:
 		t.Fatalf("unsupported OS: %s", runtime.GOOS)
 	}
@@ -63,7 +66,10 @@ func TestNewDefaultConfigXdgConfigCacheEnvVars(t *testing.T) {
 		expectedConfigDir = filepath.Join(testXdgConfigHome, "cardano-up")
 	case "darwin":
 		expectedCacheDir = filepath.Join(testHome, "Library/Caches/cardano-up")
-		expectedConfigDir = filepath.Join(testHome, "Library/Application Support/cardano-up")
+		expectedConfigDir = filepath.Join(
+			testHome,
+			"Library/Application Support/cardano-up",
+		)
 	default:
 		t.Fatalf("unsupported OS: %s", runtime.GOOS)
 	}

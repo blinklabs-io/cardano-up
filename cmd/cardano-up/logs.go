@@ -48,7 +48,9 @@ func logsCommand() *cobra.Command {
 			}
 		},
 	}
-	logsCmd.Flags().StringVarP(&logsFlags.tail, "tail", "n", "", "display at most X lines from the end of the log")
-	logsCmd.Flags().BoolVarP(&logsFlags.follow, "follow", "f", false, "follow log output")
+	logsCmd.Flags().
+		StringVarP(&logsFlags.tail, "tail", "n", "", "display at most X lines from the end of the log")
+	logsCmd.Flags().
+		BoolVarP(&logsFlags.follow, "follow", "f", false, "follow log output")
 	return logsCmd
 }

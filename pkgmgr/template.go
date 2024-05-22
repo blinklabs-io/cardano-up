@@ -34,7 +34,10 @@ func NewTemplate(baseVars map[string]any) *Template {
 	}
 }
 
-func (t *Template) Render(tmplBody string, extraVars map[string]any) (string, error) {
+func (t *Template) Render(
+	tmplBody string,
+	extraVars map[string]any,
+) (string, error) {
 	// Build our vars
 	tmpVars := map[string]any{}
 	for k, v := range t.baseVars {
@@ -69,7 +72,10 @@ func (t *Template) WithVars(extraVars map[string]any) *Template {
 	return tmpl
 }
 
-func (t *Template) EvaluateCondition(condition string, extraVars map[string]any) (bool, error) {
+func (t *Template) EvaluateCondition(
+	condition string,
+	extraVars map[string]any,
+) (bool, error) {
 	tmpl := fmt.Sprintf(
 		`{{ if %s }}true{{ else }}false{{ end }}`,
 		condition,

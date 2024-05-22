@@ -51,16 +51,30 @@ func TestSplitPackage(t *testing.T) {
 	}
 	for _, testDef := range testDefs {
 		tmpResolver := &Resolver{}
-		pkgName, pkgVersionSpec, pkgOpts := tmpResolver.splitPackage(testDef.Package)
+		pkgName, pkgVersionSpec, pkgOpts := tmpResolver.splitPackage(
+			testDef.Package,
+		)
 		if pkgName != testDef.Name {
-			t.Fatalf("did not get expected package name: got %q, expected %q", pkgName, testDef.Name)
+			t.Fatalf(
+				"did not get expected package name: got %q, expected %q",
+				pkgName,
+				testDef.Name,
+			)
 		}
 		if pkgVersionSpec != testDef.VersionSpec {
-			t.Fatalf("did not get expected package version spec: got %q, expected %q", pkgVersionSpec, testDef.VersionSpec)
+			t.Fatalf(
+				"did not get expected package version spec: got %q, expected %q",
+				pkgVersionSpec,
+				testDef.VersionSpec,
+			)
 		}
 		if len(pkgOpts) > 0 && len(testDef.Options) > 0 {
 			if !reflect.DeepEqual(pkgOpts, testDef.Options) {
-				t.Fatalf("did not get expected package options\n  got: %#v\n  expected: %#v", pkgOpts, testDef.Options)
+				t.Fatalf(
+					"did not get expected package options\n  got: %#v\n  expected: %#v",
+					pkgOpts,
+					testDef.Options,
+				)
 			}
 		}
 	}
