@@ -1,8 +1,6 @@
 name: dolos
 version: 0.7.0
-description: Description of dolos package
-dependencies:
-  - cardano-node >= 8.9.1
+description: Dolos is a Cardano data node
 installSteps:
   - docker:
       containerName: dolos
@@ -23,11 +21,11 @@ installSteps:
       source: files/daemon.toml.gotmpl
 outputs:
   - name: dolos-grpc
-    description: Dolos grpc service
-    value: 'http://localhost:{{ index (index .Ports "dolos") "50051" }}'
+    description: Dolos gRPC service
+    value: 'http://localhost:50051'
   - name: dolos-ouroboros
-    description: Dolos ouroboros service
-    value: 'http://localhost:{{ index (index .Ports "dolos") "30013" }}'
+    description: Dolos Ouroboros Node-to-Node service
+    value: 'localhost:30013'
 tags:
   - docker
   - linux
