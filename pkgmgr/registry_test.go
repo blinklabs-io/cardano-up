@@ -68,6 +68,10 @@ func TestRegistryPackagesFs(t *testing.T) {
 		pkgs[idx] = pkg
 	}
 	if !reflect.DeepEqual(pkgs, testExpectedPkgs) {
-		t.Fatalf("did not get expected packages\n  got: %#v\n  expected: %#v", pkgs, testExpectedPkgs)
+		t.Fatalf(
+			"did not get expected packages\n  got: %#v\n  expected: %#v",
+			pkgs,
+			testExpectedPkgs,
+		)
 	}
 }

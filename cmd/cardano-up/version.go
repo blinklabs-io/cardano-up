@@ -27,7 +27,9 @@ func versionCommand() *cobra.Command {
 		Use:   "version",
 		Short: "Displays the version",
 		Run: func(cmd *cobra.Command, args []string) {
-			slog.Info(fmt.Sprintf("%s %s", programName, version.GetVersionString()))
+			slog.Info(
+				fmt.Sprintf("%s %s", programName, version.GetVersionString()),
+			)
 		},
 	}
 }

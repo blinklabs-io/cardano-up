@@ -16,7 +16,9 @@ func upCommand() *cobra.Command {
 			pm := createPackageManager()
 			installedPackages := pm.InstalledPackages()
 			if len(installedPackages) == 0 {
-				slog.Warn("no packages installed...automatically installing cardano-node")
+				slog.Warn(
+					"no packages installed...automatically installing cardano-node",
+				)
 				installCommandRun(cmd, []string{"cardano-node"})
 			} else {
 				if err := pm.Up(); err != nil {

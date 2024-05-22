@@ -31,7 +31,9 @@ func validateCommand() *cobra.Command {
 		Short: "Validate package file(s) in the given directory",
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 1 {
-				return errors.New("only one package directory may be specified at a time")
+				return errors.New(
+					"only one package directory may be specified at a time",
+				)
 			}
 			return nil
 		},
@@ -47,14 +49,18 @@ func validateCommand() *cobra.Command {
 			}
 			cfg, err := pkgmgr.NewDefaultConfig()
 			if err != nil {
-				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
+				slog.Error(
+					fmt.Sprintf("failed to create package manager: %s", err),
+				)
 				os.Exit(1)
 			}
 			// Point at provided registry dir
 			cfg.RegistryDir = absPackagesDir
 			pm, err := pkgmgr.NewPackageManager(cfg)
 			if err != nil {
-				slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
+				slog.Error(
+					fmt.Sprintf("failed to create package manager: %s", err),
+				)
 				os.Exit(1)
 			}
 			slog.Info(

@@ -48,6 +48,7 @@ func uninstallCommand() *cobra.Command {
 			}
 		},
 	}
-	uninstallCmd.Flags().BoolVarP(&uninstallFlags.keepData, "keep-data", "k", false, "don't cleanup package data")
+	uninstallCmd.Flags().
+		BoolVarP(&uninstallFlags.keepData, "keep-data", "k", false, "don't cleanup package data")
 	return uninstallCmd
 }

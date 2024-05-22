@@ -43,7 +43,11 @@ func registryPackagesDir(cfg Config, validate bool) ([]Package, error) {
 	return registryPackagesFs(cfg, tmpFs, validate)
 }
 
-func registryPackagesFs(cfg Config, filesystem fs.ReadFileFS, validate bool) ([]Package, error) {
+func registryPackagesFs(
+	cfg Config,
+	filesystem fs.ReadFileFS,
+	validate bool,
+) ([]Package, error) {
 	var ret []Package
 	var retErr error
 	absRegistryDir, err := filepath.Abs(cfg.RegistryDir)

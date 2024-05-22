@@ -52,7 +52,8 @@ func main() {
 	}
 
 	// Global flags
-	rootCmd.PersistentFlags().BoolVarP(&globalFlags.debug, "debug", "D", false, "enable debug logging")
+	rootCmd.PersistentFlags().
+		BoolVarP(&globalFlags.debug, "debug", "D", false, "enable debug logging")
 
 	// Add subcommands
 	rootCmd.AddCommand(

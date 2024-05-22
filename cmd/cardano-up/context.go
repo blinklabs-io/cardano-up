@@ -145,8 +145,10 @@ func contextCreateCommand() *cobra.Command {
 			}
 		},
 	}
-	cmd.Flags().StringVarP(&contextFlags.description, "description", "d", "", "specifies description for context")
-	cmd.Flags().StringVarP(&contextFlags.network, "network", "n", "", "specifies network for context. if not specified, it's set automatically on the first package install")
+	cmd.Flags().
+		StringVarP(&contextFlags.description, "description", "d", "", "specifies description for context")
+	cmd.Flags().
+		StringVarP(&contextFlags.network, "network", "n", "", "specifies network for context. if not specified, it's set automatically on the first package install")
 	return cmd
 }
 
@@ -213,7 +215,8 @@ func contextDeleteCommand() *cobra.Command {
 			)
 		},
 	}
-	cmd.Flags().BoolVarP(&contextFlags.force, "force", "f", false, "force removal of context with packages installed")
+	cmd.Flags().
+		BoolVarP(&contextFlags.force, "force", "f", false, "force removal of context with packages installed")
 	return cmd
 }
 

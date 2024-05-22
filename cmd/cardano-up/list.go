@@ -107,6 +107,7 @@ func listCommand() *cobra.Command {
 			}
 		},
 	}
-	listCmd.Flags().BoolVarP(&listFlags.all, "all", "A", false, "show packages from all contexts (defaults to only active context)")
+	listCmd.Flags().
+		BoolVarP(&listFlags.all, "all", "A", false, "show packages from all contexts (defaults to only active context)")
 	return listCmd
 }

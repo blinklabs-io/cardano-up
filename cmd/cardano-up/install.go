@@ -47,7 +47,8 @@ func installCommand() *cobra.Command {
 		},
 		Run: installCommandRun,
 	}
-	installCmd.Flags().StringVarP(&installFlags.network, "network", "n", "", fmt.Sprintf("specifies network for package (defaults to %q for empty context)", defaultNetwork))
+	installCmd.Flags().
+		StringVarP(&installFlags.network, "network", "n", "", fmt.Sprintf("specifies network for package (defaults to %q for empty context)", defaultNetwork))
 	return installCmd
 }
 

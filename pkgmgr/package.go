@@ -107,7 +107,12 @@ func (p Package) hasTags(tags []string) bool {
 	return true
 }
 
-func (p Package) install(cfg Config, context string, opts map[string]bool, runHooks bool) (string, map[string]string, error) {
+func (p Package) install(
+	cfg Config,
+	context string,
+	opts map[string]bool,
+	runHooks bool,
+) (string, map[string]string, error) {
 	// Update template vars
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	pkgCacheDir := filepath.Join(
@@ -171,7 +176,10 @@ func (p Package) install(cfg Config, context string, opts map[string]bool, runHo
 		// Evaluate condition if defined
 		if installStep.Condition != "" {
 			if ok, err := cfg.Template.EvaluateCondition(installStep.Condition, nil); err != nil {
-				return "", nil, NewInstallStepConditionError(installStep.Condition, err)
+				return "", nil, NewInstallStepConditionError(
+					installStep.Condition,
+					err,
+				)
 			} else if !ok {
 				cfg.Logger.Debug(
 					fmt.Sprintf(
@@ -265,7 +273,12 @@ func (p Package) install(cfg Config, context string, opts map[string]bool, runHo
 	return retNotes, retOutputs, nil
 }
 
-func (p Package) uninstall(cfg Config, context string, keepData bool, runHooks bool) error {
+func (p Package) uninstall(
+	cfg Config,
+	context string,
+	keepData bool,
+	runHooks bool,
+) error {
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	// Run pre-uninstall script
 	if runHooks && p.PreUninstallScript != "" {
@@ -456,7 +469,10 @@ func (p Package) validate(cfg Config) error {
 		),
 	)
 	if !strings.HasSuffix(p.filePath, expectedFilePath) {
-		return fmt.Errorf("package did not have expected file path: %s", expectedFilePath)
+		return fmt.Errorf(
+			"package did not have expected file path: %s",
+			expectedFilePath,
+		)
 	}
 	// Validate install steps
 	for _, installStep := range p.InstallSteps {
@@ -490,16 +506,39 @@ func (p Package) startService(cfg Config, context string) error {
 			if step.Docker.PullOnly {
 				continue
 			}
-			containerName := fmt.Sprintf("%s-%s", pkgName, step.Docker.ContainerName)
-			dockerService, err := NewDockerServiceFromContainerName(containerName, cfg.Logger)
+			containerName := fmt.Sprintf(
+				"%s-%s",
+				pkgName,
+				step.Docker.ContainerName,
+			)
+			dockerService, err := NewDockerServiceFromContainerName(
+				containerName,
+				cfg.Logger,
+			)
 			if err != nil {
-				startErrors = append(startErrors, fmt.Sprintf("error initializing Docker service for container %s: %v", containerName, err))
+				startErrors = append(
+					startErrors,
+					fmt.Sprintf(
+						"error initializing Docker service for container %s: %v",
+						containerName,
+						err,
+					),
+				)
 				continue
 			}
 			// Start the Docker container if it's not running
-			slog.Info(fmt.Sprintf("Starting Docker container %s", containerName))
+			slog.Info(
+				fmt.Sprintf("Starting Docker container %s", containerName),
+			)
 			if err := dockerService.Start(); err != nil {
-				startErrors = append(startErrors, fmt.Sprintf("failed to start Docker container %s: %v", containerName, err))
+				startErrors = append(
+					startErrors,
+					fmt.Sprintf(
+						"failed to start Docker container %s: %v",
+						containerName,
+						err,
+					),
+				)
 			}
 		}
 	}
@@ -521,16 +560,37 @@ func (p Package) stopService(cfg Config, context string) error {
 			if step.Docker.PullOnly {
 				continue
 			}
-			containerName := fmt.Sprintf("%s-%s", pkgName, step.Docker.ContainerName)
-			dockerService, err := NewDockerServiceFromContainerName(containerName, cfg.Logger)
+			containerName := fmt.Sprintf(
+				"%s-%s",
+				pkgName,
+				step.Docker.ContainerName,
+			)
+			dockerService, err := NewDockerServiceFromContainerName(
+				containerName,
+				cfg.Logger,
+			)
 			if err != nil {
-				stopErrors = append(stopErrors, fmt.Sprintf("error initializing Docker service for container %s: %v", containerName, err))
+				stopErrors = append(
+					stopErrors,
+					fmt.Sprintf(
+						"error initializing Docker service for container %s: %v",
+						containerName,
+						err,
+					),
+				)
 				continue
 			}
 			// Stop the Docker container
 			slog.Info(fmt.Sprintf("Stopping container %s", containerName))
 			if err := dockerService.Stop(); err != nil {
-				stopErrors = append(stopErrors, fmt.Sprintf("failed to stop Docker container %s: %v", containerName, err))
+				stopErrors = append(
+					stopErrors,
+					fmt.Sprintf(
+						"failed to stop Docker container %s: %v",
+						containerName,
+						err,
+					),
+				)
 			}
 		}
 	}
@@ -543,7 +603,10 @@ func (p Package) stopService(cfg Config, context string) error {
 	return nil
 }
 
-func (p Package) services(cfg Config, context string) ([]*DockerService, error) {
+func (p Package) services(
+	cfg Config,
+	context string,
+) ([]*DockerService, error) {
 	var ret []*DockerService
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	for _, step := range p.InstallSteps {
@@ -551,11 +614,22 @@ func (p Package) services(cfg Config, context string) ([]*DockerService, error) 
 			if step.Docker.PullOnly {
 				continue
 			}
-			containerName := fmt.Sprintf("%s-%s", pkgName, step.Docker.ContainerName)
-			dockerService, err := NewDockerServiceFromContainerName(containerName, cfg.Logger)
+			containerName := fmt.Sprintf(
+				"%s-%s",
+				pkgName,
+				step.Docker.ContainerName,
+			)
+			dockerService, err := NewDockerServiceFromContainerName(
+				containerName,
+				cfg.Logger,
+			)
 			if err != nil {
 				cfg.Logger.Error(
-					fmt.Sprintf("error initializing Docker service for container %s: %v", containerName, err),
+					fmt.Sprintf(
+						"error initializing Docker service for container %s: %v",
+						containerName,
+						err,
+					),
 				)
 				continue
 			}
@@ -716,7 +790,11 @@ func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
 	return nil
 }
 
-func (p *PackageInstallStepDocker) uninstall(cfg Config, pkgName string, keepData bool) error {
+func (p *PackageInstallStepDocker) uninstall(
+	cfg Config,
+	pkgName string,
+	keepData bool,
+) error {
 	if !p.PullOnly {
 		containerName := fmt.Sprintf("%s-%s", pkgName, p.ContainerName)
 		svc, err := NewDockerServiceFromContainerName(containerName, cfg.Logger)
@@ -775,7 +853,10 @@ func (p *PackageInstallStepDocker) activate(cfg Config, pkgName string) error {
 	return nil
 }
 
-func (p *PackageInstallStepDocker) deactivate(cfg Config, pkgName string) error {
+func (p *PackageInstallStepDocker) deactivate(
+	cfg Config,
+	pkgName string,
+) error {
 	// Nothing to do
 	return nil
 }
@@ -793,7 +874,11 @@ func (p *PackageInstallStepFile) validate(cfg Config) error {
 	return nil
 }
 
-func (p *PackageInstallStepFile) install(cfg Config, pkgName string, packagePath string) error {
+func (p *PackageInstallStepFile) install(
+	cfg Config,
+	pkgName string,
+	packagePath string,
+) error {
 	tmpFilePath, err := cfg.Template.Render(p.Filename, nil)
 	if err != nil {
 		return err
@@ -891,7 +976,9 @@ func (p *PackageInstallStepFile) activate(cfg Config, pkgName string) error {
 		if err := os.Symlink(filePath, binPath); err != nil {
 			return err
 		}
-		cfg.Logger.Debug(fmt.Sprintf("wrote symlink from %s to %s", binPath, filePath))
+		cfg.Logger.Debug(
+			fmt.Sprintf("wrote symlink from %s to %s", binPath, filePath),
+		)
 	}
 	return nil
 }

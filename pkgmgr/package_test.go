@@ -43,7 +43,11 @@ func TestNewPackageFromReader(t *testing.T) {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		if !reflect.DeepEqual(p, testDef.packageObj) {
-			t.Fatalf("did not get expected package object\n  got: %#v\n  expected: %#v", p, testDef.packageObj)
+			t.Fatalf(
+				"did not get expected package object\n  got: %#v\n  expected: %#v",
+				p,
+				testDef.packageObj,
+			)
 		}
 	}
 }
@@ -56,7 +60,11 @@ func TestPackageToYaml(t *testing.T) {
 		}
 		trimmedData := strings.TrimRight(string(data), "\r\n")
 		if trimmedData != testDef.yaml {
-			t.Fatalf("did not get expected package YAML\n  got: %s\n  expected: %s", trimmedData, testDef.yaml)
+			t.Fatalf(
+				"did not get expected package YAML\n  got: %s\n  expected: %s",
+				trimmedData,
+				testDef.yaml,
+			)
 		}
 	}
 }

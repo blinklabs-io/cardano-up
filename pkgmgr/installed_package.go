@@ -27,7 +27,13 @@ type InstalledPackage struct {
 	Outputs          map[string]string
 }
 
-func NewInstalledPackage(pkg Package, context string, postInstallNotes string, outputs map[string]string, options map[string]bool) InstalledPackage {
+func NewInstalledPackage(
+	pkg Package,
+	context string,
+	postInstallNotes string,
+	outputs map[string]string,
+	options map[string]bool,
+) InstalledPackage {
 	return InstalledPackage{
 		Package:          pkg,
 		InstalledTime:    time.Now(),
