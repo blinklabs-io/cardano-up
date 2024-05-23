@@ -1,6 +1,8 @@
 name: dolos
 version: 0.7.0
 description: Dolos is a Cardano data node
+dependencies:
+  - cardano-config >= 20240515
 installSteps:
   - docker:
       containerName: dolos
@@ -9,11 +11,12 @@ installSteps:
         - dolos
         - daemon
       binds:
-        - '{{ .Paths.DataDir }}/:/etc/dolos/'
+        - '{{ .Paths.DataDir }}:/etc/dolos'
+        - '{{ .Paths.DataDir }}/data:/data'
         - '{{ .Paths.ContextDir }}/config/{{ .Context.Network }}:/config'
       ports:
-        - "30013"
-        - "50051"
+        - "30013:30013"
+        - "50051:50051"
       pullOnly: false
   - file:
       binary: true
