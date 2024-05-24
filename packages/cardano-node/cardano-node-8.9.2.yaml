@@ -12,6 +12,7 @@ installSteps:
       env:
         CARDANO_NODE_SOCKET_PATH: /ipc/node.socket
         NETWORK: '{{ .Context.Network }}'
+        RESTORE_NETWORK: 'false'
       binds:
         - '{{ .Paths.ContextDir }}/config:/opt/cardano/config'
         - '{{ .Paths.ContextDir }}/node-ipc:/ipc'
@@ -33,7 +34,10 @@ outputs:
   - name: socket_path
     description: Path to the Cardano Node UNIX socket
     value: '{{ .Paths.ContextDir }}/node-ipc/node.socket'
-preInstallScript: 'test -e {{ .Paths.DataDir }}/data/db/protocolMagicId && exit 0 || mithril-client cardano-db download --download-dir {{ .Paths.DataDir }}/data latest'
+preInstallScript: |
+  set -e
+  test -e {{ .Paths.DataDir }}/data/db/protocolMagicId && exit 0
+  mithril-client cardano-db download --download-dir {{ .Paths.DataDir }}/data latest
 tags:
   - docker
   - linux
