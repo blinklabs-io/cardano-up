@@ -174,6 +174,13 @@ func (d *DockerService) Create() error {
 	if err != nil {
 		return err
 	}
+
+	// Create a new PortSet to expose all ports
+	exposePorts := make(nat.PortSet)
+	for port := range tmpPorts {
+		exposePorts[port] = struct{}{}
+	}
+
 	// Set the desired user ID and group ID
 	userID := os.Getuid()
 	groupID := os.Getgid()
@@ -183,12 +190,13 @@ func (d *DockerService) Create() error {
 	resp, err := client.ContainerCreate(
 		context.Background(),
 		&container.Config{
-			Hostname:   d.ContainerName,
-			Image:      d.Image,
-			Entrypoint: d.Command,
-			Cmd:        d.Args,
-			Env:        tmpEnv[:],
-			User:       userAndGroup,
+			Hostname:     d.ContainerName,
+			Image:        d.Image,
+			Entrypoint:   d.Command,
+			Cmd:          d.Args,
+			Env:          tmpEnv[:],
+			User:         userAndGroup,
+			ExposedPorts: exposePorts,
 		},
 		&container.HostConfig{
 			RestartPolicy: container.RestartPolicy{
