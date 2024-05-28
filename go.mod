@@ -8,7 +8,7 @@ require (
 	github.com/creack/pty v1.1.21
 	github.com/docker/docker v26.1.3+incompatible
 	github.com/docker/go-connections v0.5.0
-	github.com/hashicorp/go-version v1.6.0
+	github.com/hashicorp/go-version v1.7.0
 	github.com/spf13/cobra v1.8.0
 	gopkg.in/yaml.v3 v3.0.1
 )
