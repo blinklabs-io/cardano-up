@@ -31,7 +31,7 @@ outputs:
     value: 'localhost:{{ index (index .Ports "dolos") "30013" }}'
   - name: socket-path
     description: Path to the Dolos Ouroboros Node-to-Client UNIX socket
-    value: '{{ .Paths.ContextDir }}/dolos-ipc/node.socket'
+    value: '{{ .Paths.ContextDir }}/dolos-ipc/dolos.socket'
 tags:
   - docker
   - linux
