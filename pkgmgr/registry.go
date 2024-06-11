@@ -170,6 +170,10 @@ func registryPackagesUrl(cfg Config, validate bool) ([]Package, error) {
 			if (zipFile.Mode() & fs.ModeDir) > 0 {
 				continue
 			}
+			// Ensure there are no parent dir references in path
+			if strings.Contains(zipFile.Name, "..") {
+				continue
+			}
 			outPath := filepath.Join(
 				cachePath,
 				zipFile.Name,
