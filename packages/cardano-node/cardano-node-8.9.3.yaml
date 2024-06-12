@@ -33,7 +33,7 @@ installSteps:
 outputs:
   - name: port
     description: Ouroboros Node-to-Node service
-    value: 'localhost:{{ index (index .Ports "cardano-node") "3001" }}'
+    value: '{{ index (index .Ports "cardano-node") "3001" }}'
   - name: socket_path
     description: Path to the Cardano Node UNIX socket
     value: '{{ .Paths.ContextDir }}/node-ipc/node.socket'
