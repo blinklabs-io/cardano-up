@@ -1,5 +1,5 @@
 name: cardano-node-api
-version: 0.1.1
+version: 0.1.2
 description: Multi-protocol API for interfacing with a local Cardano node
 dependencies:
   - cardano-config >= 20240515
@@ -7,7 +7,7 @@ dependencies:
 installSteps:
   - docker:
       containerName: cardano-node-api
-      image: ghcr.io/blinklabs-io/cardano-node-api:0.1.1
+      image: ghcr.io/blinklabs-io/cardano-node-api:0.1.2
       env:
         CARDANO_NETWORK: '{{ .Context.Network }}'
         CARDANO_NODE_SOCKET_PATH: /ipc/node.socket
