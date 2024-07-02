@@ -17,10 +17,10 @@ listen_address = "[::]:30013"
 magic = {{ .Context.NetworkMagic }}
 
 [sync]
-pull_batch_size = 200
+pull_batch_size = 100
  
 [submit]
-prune_height = 10000
+prune_height = 200
 # validate_phase_1 = false
 # validate_phase_2 = false
  
@@ -54,3 +54,5 @@ magic = {{ .Context.NetworkMagic }}
  
 [logging]
 max_level = "debug"
+include_pallas = false
+include_grpc = false
