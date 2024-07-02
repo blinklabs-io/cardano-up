@@ -6,7 +6,7 @@ dependencies:
 installSteps:
   - file:
       filename: daemon.toml
-      source: files/daemon-0.9.0.toml.gotmpl
+      source: files/daemon.toml.gotmpl
   - docker:
       containerName: dolos
       image: ghcr.io/txpipe/dolos:v0.9.0
