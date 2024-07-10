@@ -1,0 +1,40 @@
+name: dolos
+version: 0.10.1
+description: Dolos is a Cardano data node
+dependencies:
+  - cardano-config >= 20240515
+installSteps:
+  - file:
+      filename: daemon.toml
+      source: files/daemon.toml.gotmpl
+  - docker:
+      containerName: dolos
+      image: ghcr.io/txpipe/dolos:v0.10.1
+      command: 
+        - dolos
+        - daemon
+      binds:
+        - '{{ .Paths.DataDir }}:/etc/dolos'
+        - '{{ .Paths.DataDir }}/data:/data'
+        - '{{ .Paths.ContextDir }}/config/{{ .Context.Network }}:/config'
+        - '{{ .Paths.ContextDir }}/dolos-ipc:/ipc'
+      ports:
+        - "30013"
+        - "50051"
+      pullOnly: false
+outputs:
+  - name: grpc
+    description: Dolos gRPC service
+    value: 'http://localhost:{{ index (index .Ports "dolos") "50051" }}'
+  - name: relay
+    description: Dolos Ouroboros Node-to-Node service
+    value: 'localhost:{{ index (index .Ports "dolos") "30013" }}'
+  - name: socket-path
+    description: Path to the Dolos Ouroboros Node-to-Client UNIX socket
+    value: '{{ .Paths.ContextDir }}/dolos-ipc/dolos.socket'
+tags:
+  - docker
+  - linux
+  - darwin
+  - amd64
+  - arm64
