@@ -1,10 +1,11 @@
 # https://dolos.txpipe.io/configuration
 [upstream]
-peer_address = "{{ .Context.Network }}-node.world.dev.cardano.org:30000"
 network_magic = {{ .Context.NetworkMagic }}
 {{- if eq .Context.Network "mainnet" }}
+peer_address = "backbone.{{ .Context.Network }}.cardanofoundation.org:3001"
 is_testnet = false
 {{ else }}
+peer_address = "{{ .Context.Network }}-node.world.dev.cardano.org:30000"
 is_testnet = true
 {{- end }}
  
