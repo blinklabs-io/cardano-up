@@ -5,7 +5,7 @@ network_magic = {{ .Context.NetworkMagic }}
 peer_address = "backbone.{{ .Context.Network }}.cardanofoundation.org:3001"
 is_testnet = false
 {{ else }}
-peer_address = "{{ .Context.Network }}-node.world.dev.cardano.org:30000"
+peer_address = "{{ .Context.Network }}-node.play.dev.cardano.org:3001"
 is_testnet = true
 {{- end }}
  
