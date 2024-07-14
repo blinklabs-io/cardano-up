@@ -79,7 +79,7 @@ func NewDefaultConfig() (Config, error) {
 			runtime.GOOS,
 			runtime.GOARCH,
 		},
-		RegistryUrl: "https://github.com/blinklabs-io/cardano-up/archive/refs/heads/main.zip",
+		RegistryUrl: "https://github.com/blinklabs-io/cardano-up-packages/archive/refs/heads/main.zip",
 	}
 	return ret, nil
 }
