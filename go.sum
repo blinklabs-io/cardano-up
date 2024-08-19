@@ -10,8 +10,8 @@ github.com/Masterminds/sprig/v3 v3.2.3 h1:eL2fZNezLomi0uOLqjQoN6BfsDD+fyLtgbJMAj
 github.com/Masterminds/sprig/v3 v3.2.3/go.mod h1:rXcFaZ2zZbLRJv/xSysmlgIM1u11eBaRMhvYXJNkGuM=
 github.com/Microsoft/go-winio v0.4.14 h1:+hMXMk01us9KgxGb7ftKQt2Xpf5hH/yky+TDA+qxleU=
 github.com/Microsoft/go-winio v0.4.14/go.mod h1:qXqCSQ3Xa7+6tgxaGTIe4Kpcdsi+P8jBhyzoq1bpyYA=
-github.com/blinklabs-io/gouroboros v0.91.1 h1:LUfBRMr7Zq8t4She6mQkpEngX1VCOvN6EsxuvW5hKAk=
-github.com/blinklabs-io/gouroboros v0.91.1/go.mod h1:HM4aERbLAF2ACev2ZoY17eVeL+nWXb7urqFlkvQ3uyk=
+github.com/blinklabs-io/gouroboros v0.92.0 h1:IPD4cIGHjDfrYXkN/NAHe3tHAVsjO7bkl0CXCpNETZI=
+github.com/blinklabs-io/gouroboros v0.92.0/go.mod h1:HM4aERbLAF2ACev2ZoY17eVeL+nWXb7urqFlkvQ3uyk=
 github.com/blinklabs-io/ouroboros-mock v0.3.2 h1:tsym/TxeZB1N7GaxAvLU7hrMicszBR98vbj3XuRgD6U=
 github.com/blinklabs-io/ouroboros-mock v0.3.2/go.mod h1:4Lmv174yNH63x83YKKpcQJY10f3WkZFGDy1GvMh3ChY=
 github.com/cenkalti/backoff/v4 v4.2.1 h1:y4OZtCnogmCPw98Zjyt5a6+QwPLGkiQsYW5oUqylYbM=
