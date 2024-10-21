@@ -645,8 +645,8 @@ func (p *PackageManager) updateContext(name string, newContext Context) error {
 	} else {
 		// Check network name if setting it for new/empty context
 		if newContext.Network != "" {
-			tmpNetwork := ouroboros.NetworkByName(newContext.Network)
-			if tmpNetwork == ouroboros.NetworkInvalid {
+			tmpNetwork, ok := ouroboros.NetworkByName(newContext.Network)
+			if !ok {
 				return NewUnknownNetworkError(newContext.Network)
 			}
 			newContext.NetworkMagic = tmpNetwork.NetworkMagic
