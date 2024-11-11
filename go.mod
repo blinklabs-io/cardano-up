@@ -6,7 +6,7 @@ toolchain go1.22.8
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
-	github.com/blinklabs-io/gouroboros v0.103.1
+	github.com/blinklabs-io/gouroboros v0.103.5
 	github.com/docker/docker v27.3.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/hashicorp/go-version v1.7.0
