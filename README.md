@@ -21,15 +21,17 @@ cardano-up list-available
 
 ### Install a package and interact with it
 
-```
-cardano-up install cardano-node
-```
-
 Add `~/.local/bin` to your `$PATH` by adding the following to your shell RC/profile to make any
 commands/scripts installed readily available
 
 ```
 export PATH=~/.local/bin:$PATH
+```
+
+Install cardano-node
+
+```
+cardano-up install cardano-node
 ```
 
 You can also add any env vars exported by the installed packages to your env by adding the following to your shell RC/profile:
