@@ -24,6 +24,7 @@ install: build
 
 uninstall:
 	rm -f $(HOME)/.local/bin/$(BINARIES)
+
 mod-tidy:
 	# Needed to fetch new dependencies and add them to go.mod
 	go mod tidy
@@ -31,8 +32,9 @@ mod-tidy:
 clean:
 	rm -f $(BINARIES)
 
-format:
+format: mod-tidy
 	go fmt ./...
+	gofmt -s -w $(GO_FILES)
 
 golines:
 	golines -w --ignore-generated --chain-split-dots --max-len=80 --reformat-tags .
