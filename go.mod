@@ -4,7 +4,7 @@ go 1.22.9
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
-	github.com/blinklabs-io/gouroboros v0.106.2
+	github.com/blinklabs-io/gouroboros v0.107.1
 	github.com/docker/docker v27.4.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/hashicorp/go-version v1.7.0
