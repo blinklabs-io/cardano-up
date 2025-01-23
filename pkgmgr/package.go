@@ -135,6 +135,7 @@ func (p Package) install(
 				"Options":   opts,
 			},
 			"Paths": map[string]string{
+				"BinDir":     cfg.BinDir,
 				"CacheDir":   pkgCacheDir,
 				"ContextDir": pkgContextDir,
 				"DataDir":    pkgDataDir,
