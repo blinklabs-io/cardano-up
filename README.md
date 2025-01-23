@@ -257,6 +257,7 @@ Package manifest files are evaluated as a Go template before being parsed as YAM
 | `.Package.Version` | Package version |
 | `.Package.Options` | Provided package options |
 | `.Paths` | |
+| `.Paths.BinDir` | Binary dir for package |
 | `.Paths.CacheDir` | Cache dir for package |
 | `.Paths.ContextDir` | Context dir for package |
 | `.Paths.DataDir` | Data dir for package |
