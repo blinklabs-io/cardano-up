@@ -20,6 +20,8 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -866,6 +868,7 @@ type PackageInstallStepFile struct {
 	Filename string      `yaml:"filename"`
 	Source   string      `yaml:"source"`
 	Content  string      `yaml:"content"`
+	Url      string      `yaml:"url"`
 	Mode     fs.FileMode `yaml:"mode,omitempty"`
 }
 
@@ -896,23 +899,56 @@ func (p *PackageInstallStepFile) install(
 	if p.Mode > 0 {
 		fileMode = p.Mode
 	}
-	fileContent := p.Content
-	if p.Source != "" {
+	var fileContent []byte
+	if p.Content != "" {
+		tmpContent, err := cfg.Template.Render(p.Content, nil)
+		if err != nil {
+			return err
+		}
+		fileContent = []byte(tmpContent)
+	} else if p.Source != "" {
 		fullSourcePath := filepath.Join(
 			filepath.Dir(packagePath),
 			p.Source,
 		)
-		tmpContent, err := os.ReadFile(fullSourcePath)
+		tmpContentBytes, err := os.ReadFile(fullSourcePath)
 		if err != nil {
 			return err
 		}
-		fileContent = string(tmpContent)
+		tmpContent, err := cfg.Template.Render(string(tmpContentBytes), nil)
+		if err != nil {
+			return err
+		}
+		fileContent = []byte(tmpContent)
+	} else if p.Url != "" {
+		// Validate URL
+		u, err := url.Parse(p.Url)
+		if err != nil {
+			return err
+		}
+		if u.Scheme == "" || u.Host == "" {
+			return fmt.Errorf("invalid URL given...")
+		}
+
+		// Fetch data
+		resp, err := http.Get(p.Url)
+		if err != nil {
+			return err
+		}
+		if resp == nil {
+			return fmt.Errorf("nil response for URL: %s", p.Url)
+		}
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		resp.Body.Close()
+
+		fileContent = respBody
+	} else {
+		return fmt.Errorf("packages must provide content, source, or url for file install types")
 	}
-	fileContent, err = cfg.Template.Render(fileContent, nil)
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(filePath, []byte(fileContent), fileMode); err != nil {
+	if err := os.WriteFile(filePath, fileContent, fileMode); err != nil {
 		return err
 	}
 	cfg.Logger.Debug(fmt.Sprintf("wrote file %s", filePath))
