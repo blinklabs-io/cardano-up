@@ -4,7 +4,7 @@ go 1.22.11
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
-	github.com/blinklabs-io/gouroboros v0.108.1
+	github.com/blinklabs-io/gouroboros v0.108.2
 	github.com/docker/docker v27.5.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/hashicorp/go-version v1.7.0
@@ -18,7 +18,7 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.3.0 // indirect
 	github.com/Microsoft/go-winio v0.4.14 // indirect
-	github.com/btcsuite/btcd/btcutil v1.1.3 // indirect
+	github.com/btcsuite/btcd/btcutil v1.1.6 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/distribution/reference v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
@@ -43,7 +43,7 @@ require (
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/utxorpc/go-codegen v0.15.0 // indirect
+	github.com/utxorpc/go-codegen v0.16.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.48.0 // indirect
 	go.opentelemetry.io/otel v1.23.1 // indirect
@@ -57,6 +57,6 @@ require (
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240401170217-c3f982113cda // indirect
 	google.golang.org/grpc v1.63.2 // indirect
-	google.golang.org/protobuf v1.36.1 // indirect
+	google.golang.org/protobuf v1.36.3 // indirect
 	gotest.tools/v3 v3.5.1 // indirect
 )
