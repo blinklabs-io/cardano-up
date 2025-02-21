@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/hashicorp/go-version"
@@ -141,6 +142,10 @@ func (p Package) install(
 				"CacheDir":   pkgCacheDir,
 				"ContextDir": pkgContextDir,
 				"DataDir":    pkgDataDir,
+			},
+			"System": map[string]string{
+				"OS":   runtime.GOOS,
+				"ARCH": runtime.GOARCH,
 			},
 		},
 	)
