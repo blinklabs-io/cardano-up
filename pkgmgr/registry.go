@@ -1,4 +1,4 @@
-// Copyright 2024 Blink Labs Software
+// Copyright 2025 Blink Labs Software
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -172,12 +172,17 @@ func registryPackagesUrl(cfg Config, validate bool) ([]Package, error) {
 			}
 			// Ensure there are no parent dir references in path
 			if strings.Contains(zipFile.Name, "..") {
-				continue
+				return nil, fmt.Errorf("parent path reference in zip name")
 			}
+			// #nosec G305
 			outPath := filepath.Join(
 				cachePath,
 				zipFile.Name,
 			)
+			// Ensure our path is sane to prevent the gosec issue above
+			if !strings.HasPrefix(outPath, filepath.Clean(cachePath)) {
+				return nil, fmt.Errorf("zip extraction path mismatch")
+			}
 			// Create parent dir(s)
 			if err := os.MkdirAll(filepath.Dir(outPath), fs.ModePerm); err != nil {
 				return nil, err
