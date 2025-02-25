@@ -1,6 +1,6 @@
 module github.com/blinklabs-io/cardano-up
 
-go 1.22.11
+go 1.23.6
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
