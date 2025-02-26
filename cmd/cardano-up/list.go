@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/blinklabs-io/cardano-up/pkgmgr"
 	"github.com/spf13/cobra"
@@ -27,12 +28,14 @@ var listFlags = struct {
 }{}
 
 func listAvailableCommand() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "list-available",
 		Short: "List available packages",
 		Run: func(cmd *cobra.Command, args []string) {
 			pm := createPackageManager()
 			packages := pm.AvailablePackages()
+			verbose, _ := cmd.Flags().GetBool("verbose")
+
 			slog.Info("Available packages:\n")
 			slog.Info(
 				fmt.Sprintf(
@@ -42,28 +45,35 @@ func listAvailableCommand() *cobra.Command {
 					"Description",
 				),
 			)
-			for _, tmpPackage := range packages {
-				slog.Info(
-					fmt.Sprintf(
-						"%-20s %-12s %s",
-						tmpPackage.Name,
-						tmpPackage.Version,
-						tmpPackage.Description,
-					),
-				)
-				if len(tmpPackage.Dependencies) > 0 {
-					tmpOutput := "    Requires: "
-					for idx, dep := range tmpPackage.Dependencies {
-						tmpOutput += dep
-						if idx < len(tmpPackage.Dependencies)-1 {
-							tmpOutput += ` | `
+			if verbose {
+				// show all versions of packages
+				for _, tmpPackage := range packages {
+					printPackageInfo(tmpPackage)
+				}
+			} else {
+				// Shows only latest version of each package
+				latestPackages := make(map[string]int)
+				order := make([]string, 0)
+				for index, pkg := range packages {
+					packageName := pkg.Name
+					packageVersion := pkg.Version
+					existingIndex, exists := latestPackages[packageName]
+					if !exists || compareVersions(packageVersion, packages[existingIndex].Version) {
+						if !exists {
+							order = append(order, packageName)
 						}
+						latestPackages[packageName] = index
 					}
-					slog.Info(tmpOutput)
+				}
+				for _, name := range order {
+					printPackageInfo(packages[latestPackages[name]])
 				}
 			}
 		},
 	}
+	// Added a verbose flag
+	cmd.Flags().BoolP("verbose", "v", false, "Show all versions of packages")
+	return cmd
 }
 
 func listCommand() *cobra.Command {
@@ -110,4 +120,41 @@ func listCommand() *cobra.Command {
 	listCmd.Flags().
 		BoolVarP(&listFlags.all, "all", "A", false, "show packages from all contexts (defaults to only active context)")
 	return listCmd
+}
+
+// Prints packge details
+func printPackageInfo(pkg pkgmgr.Package) {
+	slog.Info(
+		fmt.Sprintf(
+			"%-20s %-12s %s",
+			pkg.Name,
+			pkg.Version,
+			pkg.Description,
+		),
+	)
+	if len(pkg.Dependencies) > 0 {
+		tmpOutput := "    Requires: "
+		for idx, dep := range pkg.Dependencies {
+			tmpOutput += dep
+			if idx < len(pkg.Dependencies)-1 {
+				tmpOutput += ` | `
+			}
+		}
+		slog.Info(tmpOutput)
+	}
+}
+
+// Compare semantic version of packages
+func compareVersions(v1 string, v2 string) bool {
+	v1Parts := strings.Split(v1, ".")
+	v2Parts := strings.Split(v2, ".")
+
+	for i := 0; i < len(v1Parts) && i < len(v2Parts); i++ {
+		if v1Parts[i] > v2Parts[i] {
+			return true
+		} else if v1Parts[i] < v2Parts[i] {
+			return false
+		}
+	}
+	return len(v1Parts) > len(v2Parts)
 }
