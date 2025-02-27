@@ -8,6 +8,9 @@ on:
 env:
   GHCR_IMAGE_NAME: ghcr.io/blinklabs-io/cardano-up
 
+permissions:
+  content: read
+
 jobs:
   docker:
     runs-on: ubuntu-latest
