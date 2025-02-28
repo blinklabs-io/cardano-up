@@ -82,7 +82,7 @@ func NewResolver(
 }
 
 func (r *Resolver) Install(pkgs ...string) ([]ResolverInstallSet, error) {
-	var ret []ResolverInstallSet
+	ret := []ResolverInstallSet{}
 	for _, pkg := range pkgs {
 		pkgName, pkgVersionSpec, pkgOpts := r.splitPackage(pkg)
 		if pkg, err := r.findInstalled(pkgName, ""); err != nil {
@@ -117,7 +117,7 @@ func (r *Resolver) Install(pkgs ...string) ([]ResolverInstallSet, error) {
 }
 
 func (r *Resolver) Upgrade(pkgs ...string) ([]ResolverUpgradeSet, error) {
-	var ret []ResolverUpgradeSet
+	ret := []ResolverUpgradeSet{}
 	for _, pkg := range pkgs {
 		pkgName, pkgVersionSpec, pkgOpts := r.splitPackage(pkg)
 		installedPkg, err := r.findInstalled(pkgName, "")
@@ -202,7 +202,7 @@ func (r *Resolver) Uninstall(pkgs ...InstalledPackage) error {
 
 func (r *Resolver) getNeededDeps(pkg Package) ([]ResolverInstallSet, error) {
 	// NOTE: this function is very naive and only works for a single level of dependencies
-	var ret []ResolverInstallSet
+	ret := []ResolverInstallSet{}
 	for _, dep := range pkg.Dependencies {
 		depPkgName, depPkgVersionSpec, depPkgOpts := r.splitPackage(dep)
 		// Check if we already have an installed package that satisfies the dependency
@@ -338,7 +338,7 @@ func (r *Resolver) findAvailable(
 			extraConstraints...,
 		)
 	}
-	var ret []Package
+	ret := []Package{}
 	for _, availablePkg := range r.availablePkgs {
 		if availablePkg.Name != pkgName {
 			continue
