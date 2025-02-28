@@ -103,6 +103,7 @@ Available Commands:
 Flags:
   -D, --debug   enable debug logging
   -h, --help    help for cardano-up
+  -v, --verbose Show all available versions of packages
 
 Use "cardano-up [command] --help" for more information about a command.
 ```
@@ -157,7 +158,8 @@ Lists installed packages in the active context, or all contexts with `-A`
 
 ### `list-available`
 
-List all packages available for install
+By default `list-available` lists only the latest version of each package available for install.
+Use the `--verbose` or `(-v)` flag to display all available versions of each package.
 
 ### `logs`
 
