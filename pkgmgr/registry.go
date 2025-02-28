@@ -134,7 +134,7 @@ func registryPackagesUrl(cfg Config, validate bool) ([]Package, error) {
 		stat.ModTime().Before(time.Now().Add(-24*time.Hour)) {
 		// Fetch registry ZIP
 		cfg.Logger.Info(
-			fmt.Sprintf("Fetching package registry %s", cfg.RegistryUrl),
+			"Fetching package registry " + cfg.RegistryUrl,
 		)
 		resp, err := http.Get(cfg.RegistryUrl)
 		if err != nil {
@@ -172,7 +172,7 @@ func registryPackagesUrl(cfg Config, validate bool) ([]Package, error) {
 			}
 			// Ensure there are no parent dir references in path
 			if strings.Contains(zipFile.Name, "..") {
-				return nil, fmt.Errorf("parent path reference in zip name")
+				return nil, errors.New("parent path reference in zip name")
 			}
 			// #nosec G305
 			outPath := filepath.Join(
@@ -181,7 +181,7 @@ func registryPackagesUrl(cfg Config, validate bool) ([]Package, error) {
 			)
 			// Ensure our path is sane to prevent the gosec issue above
 			if !strings.HasPrefix(outPath, filepath.Clean(cachePath)) {
-				return nil, fmt.Errorf("zip extraction path mismatch")
+				return nil, errors.New("zip extraction path mismatch")
 			}
 			// Create parent dir(s)
 			if err := os.MkdirAll(filepath.Dir(outPath), fs.ModePerm); err != nil {

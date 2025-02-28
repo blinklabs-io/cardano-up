@@ -189,10 +189,7 @@ func (p Package) install(
 				)
 			} else if !ok {
 				cfg.Logger.Debug(
-					fmt.Sprintf(
-						"skipping install step due to condition: %s",
-						installStep.Condition,
-					),
+					"skipping install step due to condition: " + installStep.Condition,
 				)
 				continue
 			}
@@ -302,10 +299,7 @@ func (p Package) uninstall(
 				return NewInstallStepConditionError(installStep.Condition, err)
 			} else if !ok {
 				cfg.Logger.Debug(
-					fmt.Sprintf(
-						"skipping uninstall step due to condition: %s",
-						installStep.Condition,
-					),
+					"skipping uninstall step due to condition: " + installStep.Condition,
 				)
 				continue
 			}
@@ -393,10 +387,7 @@ func (p Package) activate(cfg Config, context string) error {
 				return NewInstallStepConditionError(installStep.Condition, err)
 			} else if !ok {
 				cfg.Logger.Debug(
-					fmt.Sprintf(
-						"skipping install step due to condition: %s",
-						installStep.Condition,
-					),
+					"skipping install step due to condition: " + installStep.Condition,
 				)
 				continue
 			}
@@ -425,10 +416,7 @@ func (p Package) deactivate(cfg Config, context string) error {
 				return NewInstallStepConditionError(installStep.Condition, err)
 			} else if !ok {
 				cfg.Logger.Debug(
-					fmt.Sprintf(
-						"skipping install step due to condition: %s",
-						installStep.Condition,
-					),
+					"skipping install step due to condition: " + installStep.Condition,
 				)
 				continue
 			}
@@ -451,7 +439,7 @@ func (p Package) deactivate(cfg Config, context string) error {
 func (p Package) validate(cfg Config) error {
 	// Check empty name
 	if p.Name == "" {
-		return fmt.Errorf("package name cannot be empty")
+		return errors.New("package name cannot be empty")
 	}
 	// Check name matches allowed characters
 	reName := regexp.MustCompile(`^[-a-zA-Z0-9]+$`)
@@ -460,7 +448,7 @@ func (p Package) validate(cfg Config) error {
 	}
 	// Check empty version
 	if p.Version == "" {
-		return fmt.Errorf("package version cannot be empty")
+		return errors.New("package version cannot be empty")
 	}
 	// Check version is well formed
 	if _, err := version.NewVersion(p.Version); err != nil {
@@ -535,7 +523,7 @@ func (p Package) startService(cfg Config, context string) error {
 			}
 			// Start the Docker container if it's not running
 			slog.Info(
-				fmt.Sprintf("Starting Docker container %s", containerName),
+				"Starting Docker container " + containerName,
 			)
 			if err := dockerService.Start(); err != nil {
 				startErrors = append(
@@ -588,7 +576,7 @@ func (p Package) stopService(cfg Config, context string) error {
 				continue
 			}
 			// Stop the Docker container
-			slog.Info(fmt.Sprintf("Stopping container %s", containerName))
+			slog.Info("Stopping container " + containerName)
 			if err := dockerService.Stop(); err != nil {
 				stopErrors = append(
 					stopErrors,
@@ -685,7 +673,7 @@ type PackageInstallStepDocker struct {
 
 func (p *PackageInstallStepDocker) validate(cfg Config) error {
 	if p.Image == "" {
-		return fmt.Errorf("docker image must be provided")
+		return errors.New("docker image must be provided")
 	}
 	// TODO: add more checks
 	return nil
@@ -808,10 +796,7 @@ func (p *PackageInstallStepDocker) uninstall(
 		if err != nil {
 			if err == ErrContainerNotExists {
 				cfg.Logger.Debug(
-					fmt.Sprintf(
-						"container missing on uninstall: %s",
-						containerName,
-					),
+					"container missing on uninstall: " + containerName,
 				)
 			} else {
 				return err
@@ -932,7 +917,7 @@ func (p *PackageInstallStepFile) install(
 			return err
 		}
 		if u.Scheme == "" || u.Host == "" {
-			return fmt.Errorf("invalid URL given...")
+			return errors.New("invalid URL given...")
 		}
 
 		// Fetch data
@@ -951,12 +936,12 @@ func (p *PackageInstallStepFile) install(
 
 		fileContent = respBody
 	} else {
-		return fmt.Errorf("packages must provide content, source, or url for file install types")
+		return errors.New("packages must provide content, source, or url for file install types")
 	}
 	if err := os.WriteFile(filePath, fileContent, fileMode); err != nil {
 		return err
 	}
-	cfg.Logger.Debug(fmt.Sprintf("wrote file %s", filePath))
+	cfg.Logger.Debug("wrote file " + filePath)
 	return nil
 }
 
@@ -966,10 +951,10 @@ func (p *PackageInstallStepFile) uninstall(cfg Config, pkgName string) error {
 		pkgName,
 		p.Filename,
 	)
-	cfg.Logger.Debug(fmt.Sprintf("deleting file %s", filePath))
+	cfg.Logger.Debug("deleting file " + filePath)
 	if err := os.Remove(filePath); err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
-			cfg.Logger.Warn(fmt.Sprintf("failed to remove file %s", filePath))
+			cfg.Logger.Warn("failed to remove file " + filePath)
 		}
 	}
 	return nil
@@ -1043,7 +1028,7 @@ func (p *PackageInstallStepFile) deactivate(cfg Config, pkgName string) error {
 				return err
 			}
 		}
-		cfg.Logger.Debug(fmt.Sprintf("removed symlink %s", binPath))
+		cfg.Logger.Debug("removed symlink " + binPath)
 	}
 	return nil
 }

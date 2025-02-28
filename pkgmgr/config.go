@@ -43,8 +43,8 @@ func NewDefaultConfig() (Config, error) {
 			err,
 		)
 	}
-	userBinDir := fmt.Sprintf("%s/.local/bin", userHomeDir)
-	userDataDir := fmt.Sprintf("%s/.local/share", userHomeDir)
+	userBinDir := userHomeDir + "/.local/bin"
+	userDataDir := userHomeDir + "/.local/share"
 	userCacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return Config{}, fmt.Errorf(
