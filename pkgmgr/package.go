@@ -1,4 +1,4 @@
-// Copyright 2024 Blink Labs Software
+// Copyright 2025 Blink Labs Software
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package pkgmgr
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -921,7 +922,12 @@ func (p *PackageInstallStepFile) install(
 		}
 
 		// Fetch data
-		resp, err := http.Get(p.Url)
+		ctx := context.Background()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.Url, nil)
+		if err != nil {
+			return err
+		}
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return err
 		}

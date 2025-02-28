@@ -17,6 +17,7 @@ package pkgmgr
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -136,7 +137,12 @@ func registryPackagesUrl(cfg Config, validate bool) ([]Package, error) {
 		cfg.Logger.Info(
 			"Fetching package registry " + cfg.RegistryUrl,
 		)
-		resp, err := http.Get(cfg.RegistryUrl)
+		ctx := context.Background()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.RegistryUrl, nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return nil, err
 		}
