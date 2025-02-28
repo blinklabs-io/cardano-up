@@ -466,10 +466,7 @@ func (p *PackageManager) Info(pkgs ...string) error {
 			activeContextName,
 		)
 		if infoPkg.PostInstallNotes != "" {
-			infoOutput += fmt.Sprintf(
-				"\n\nPost-install notes:\n\n%s",
-				infoPkg.PostInstallNotes,
-			)
+			infoOutput += "\n\nPost-install notes:\n\n" + infoPkg.PostInstallNotes
 		}
 		// Gather package services
 		services, err := infoPkg.Package.services(p.config, infoPkg.Context)
@@ -517,16 +514,10 @@ func (p *PackageManager) Info(pkgs ...string) error {
 			}
 		}
 		if statusOutput != "" {
-			infoOutput += fmt.Sprintf(
-				"\n\nServices:\n\n%s",
-				strings.TrimSuffix(statusOutput, "\n"),
-			)
+			infoOutput += "\n\nServices:\n\n" + strings.TrimSuffix(statusOutput, "\n")
 		}
 		if portOutput != "" {
-			infoOutput += fmt.Sprintf(
-				"\n\nMapped ports:\n\n%s",
-				strings.TrimSuffix(portOutput, "\n"),
-			)
+			infoOutput += "\n\nMapped ports:\n\n" + strings.TrimSuffix(portOutput, "\n")
 		}
 		if idx < len(infoPkgs)-1 {
 			infoOutput += "\n\n---\n\n"
@@ -705,10 +696,7 @@ func (p *PackageManager) ValidatePackages() error {
 			continue
 		}
 		p.config.Logger.Debug(
-			fmt.Sprintf(
-				"checking package %s",
-				pkg.filePath,
-			),
+			"checking package " + pkg.filePath,
 		)
 		if err := pkg.validate(p.config); err != nil {
 			foundError = true

@@ -64,10 +64,7 @@ func validateCommand() *cobra.Command {
 				os.Exit(1)
 			}
 			slog.Info(
-				fmt.Sprintf(
-					"Validating packages in path %s",
-					absPackagesDir,
-				),
+				"Validating packages in path " + absPackagesDir,
 			)
 			if err := pm.ValidatePackages(); err != nil {
 				slog.Error("problems were found")

@@ -115,7 +115,7 @@ func (d *DockerService) Start() error {
 		if err != nil {
 			return err
 		}
-		d.logger.Debug(fmt.Sprintf("starting container %s", d.ContainerName))
+		d.logger.Debug("starting container " + d.ContainerName)
 		if err := client.ContainerStart(
 			context.Background(),
 			d.ContainerId,
@@ -137,7 +137,7 @@ func (d *DockerService) Stop() error {
 		if err != nil {
 			return err
 		}
-		d.logger.Debug(fmt.Sprintf("stopping container %s", d.ContainerName))
+		d.logger.Debug("stopping container " + d.ContainerName)
 		stopTimeout := 60
 		if err := client.ContainerStop(
 			context.Background(),
@@ -186,7 +186,7 @@ func (d *DockerService) Create() error {
 	groupID := os.Getgid()
 	userAndGroup := fmt.Sprintf("%d:%d", userID, groupID)
 	// Create container
-	d.logger.Debug(fmt.Sprintf("creating container %s", d.ContainerName))
+	d.logger.Debug("creating container " + d.ContainerName)
 	resp, err := client.ContainerCreate(
 		context.Background(),
 		&container.Config{
@@ -225,13 +225,13 @@ func (d *DockerService) Remove() error {
 		return err
 	}
 	if running {
-		return fmt.Errorf("can't remove a running container")
+		return errors.New("can't remove a running container")
 	}
 	client, err := d.getClient()
 	if err != nil {
 		return err
 	}
-	d.logger.Debug(fmt.Sprintf("removing container %s", d.ContainerName))
+	d.logger.Debug("removing container " + d.ContainerName)
 	if err := client.ContainerRemove(
 		context.Background(),
 		d.ContainerId,
