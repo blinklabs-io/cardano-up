@@ -17,9 +17,9 @@ package main
 import (
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/blinklabs-io/cardano-up/pkgmgr"
+	"github.com/hashicorp/go-version"
 	"github.com/spf13/cobra"
 )
 
@@ -146,15 +146,11 @@ func printPackageInfo(pkg pkgmgr.Package) {
 
 // Compare semantic version of packages
 func compareVersions(v1 string, v2 string) bool {
-	v1Parts := strings.Split(v1, ".")
-	v2Parts := strings.Split(v2, ".")
+	ver1, err1 := version.NewVersion(v1)
+	ver2, err2 := version.NewVersion(v2)
 
-	for i := 0; i < len(v1Parts) && i < len(v2Parts); i++ {
-		if v1Parts[i] > v2Parts[i] {
-			return true
-		} else if v1Parts[i] < v2Parts[i] {
-			return false
-		}
+	if err1 != nil || err2 != nil {
+		return v1 > v2
 	}
-	return len(v1Parts) > len(v2Parts)
+	return ver1.GreaterThan(ver2)
 }
