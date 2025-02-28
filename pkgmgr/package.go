@@ -715,7 +715,7 @@ func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
 		}
 		tmpEnv[k] = tmplVal
 	}
-	var tmpCommand []string
+	tmpCommand := []string{}
 	for _, cmd := range p.Command {
 		tmpCmd, err := cfg.Template.Render(cmd, extraVars)
 		if err != nil {
@@ -723,7 +723,7 @@ func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
 		}
 		tmpCommand = append(tmpCommand, tmpCmd)
 	}
-	var tmpArgs []string
+	tmpArgs := []string{}
 	for _, arg := range p.Args {
 		tmpArg, err := cfg.Template.Render(arg, extraVars)
 		if err != nil {
@@ -731,7 +731,7 @@ func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
 		}
 		tmpArgs = append(tmpArgs, tmpArg)
 	}
-	var tmpBinds []string
+	tmpBinds := []string{}
 	for _, bind := range p.Binds {
 		tmpBind, err := cfg.Template.Render(bind, extraVars)
 		if err != nil {
@@ -753,7 +753,7 @@ func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
 			)
 		}
 	}
-	var tmpPorts []string
+	tmpPorts := []string{}
 	for _, port := range p.Ports {
 		tmpPort, err := cfg.Template.Render(port, extraVars)
 		if err != nil {

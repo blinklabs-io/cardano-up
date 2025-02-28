@@ -1,4 +1,4 @@
-// Copyright 2024 Blink Labs Software
+// Copyright 2025 Blink Labs Software
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -172,7 +172,7 @@ func (p *PackageManager) Install(pkgs ...string) error {
 	if err != nil {
 		return err
 	}
-	var installedPkgs []string
+	installedPkgs := []string{}
 	var notesOutput string
 	for _, installPkg := range installPkgs {
 		p.config.Logger.Info(
@@ -256,7 +256,7 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 	if err != nil {
 		return err
 	}
-	var installedPkgs []string
+	installedPkgs := []string{}
 	var notesOutput string
 	for _, upgradePkg := range upgradePkgs {
 		p.config.Logger.Info(
@@ -537,7 +537,7 @@ func (p *PackageManager) uninstallPackage(
 		return err
 	}
 	// Remove package from installed packages
-	var tmpInstalledPackages []InstalledPackage
+	tmpInstalledPackages := []InstalledPackage{}
 	for _, tmpInstalledPkg := range p.state.InstalledPackages {
 		if tmpInstalledPkg.Context == uninstallPkg.Context &&
 			tmpInstalledPkg.Package.Name == uninstallPkg.Package.Name &&

@@ -1,4 +1,4 @@
-// Copyright 2024 Blink Labs Software
+// Copyright 2025 Blink Labs Software
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -161,7 +161,7 @@ func (d *DockerService) Create() error {
 		return err
 	}
 	// Convert env
-	var tmpEnv []string
+	tmpEnv := []string{}
 	for k, v := range d.Env {
 		tmpEnv = append(
 			tmpEnv,
@@ -359,7 +359,7 @@ func (d *DockerService) refresh() error {
 	}
 	d.Command = container.Config.Entrypoint[:]
 	d.Args = container.Config.Cmd[:]
-	var tmpBinds []string
+	tmpBinds := []string{}
 	for _, mount := range container.Mounts {
 		if mount.Type != "bind" {
 			continue
@@ -377,7 +377,7 @@ func (d *DockerService) refresh() error {
 		tmpBinds = append(tmpBinds, tmpBind)
 	}
 	d.Binds = tmpBinds[:]
-	var tmpPorts []string
+	tmpPorts := []string{}
 	for port, portBindings := range container.NetworkSettings.Ports {
 		// Skip exposed container ports without a mapping
 		if len(portBindings) == 0 {
