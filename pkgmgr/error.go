@@ -138,7 +138,7 @@ func NewNoPackageAvailableForUpgradeError(pkgSpec string) error {
 
 func NewInstallStepConditionError(condition string, err error) error {
 	return fmt.Errorf(
-		"failure evaluating install step condition %q: %s",
+		"failure evaluating install step condition %q: %w",
 		condition,
 		err,
 	)

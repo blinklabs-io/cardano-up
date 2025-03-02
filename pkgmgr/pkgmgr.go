@@ -56,7 +56,7 @@ func NewDefaultPackageManager() (*PackageManager, error) {
 
 func (p *PackageManager) init() error {
 	if err := p.state.Load(); err != nil {
-		return fmt.Errorf("failed to load state: %s", err)
+		return fmt.Errorf("failed to load state: %w", err)
 	}
 	// Setup templating
 	p.initTemplate()

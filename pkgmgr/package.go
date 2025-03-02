@@ -159,7 +159,7 @@ func (p Package) install(
 		}
 		if installStep.Docker != nil {
 			if err := installStep.Docker.preflight(cfg, pkgName); err != nil {
-				return "", nil, fmt.Errorf("pre-flight check failed: %s", err)
+				return "", nil, fmt.Errorf("pre-flight check failed: %w", err)
 			}
 		}
 	}
@@ -453,7 +453,7 @@ func (p Package) validate(cfg Config) error {
 	}
 	// Check version is well formed
 	if _, err := version.NewVersion(p.Version); err != nil {
-		return fmt.Errorf("package version is malformed: %s", err)
+		return fmt.Errorf("package version is malformed: %w", err)
 	}
 	// Check if package path matches package name/version
 	expectedFilePath := filepath.Join(
@@ -638,7 +638,7 @@ func (p Package) services(
 func (p Package) runHookScript(cfg Config, hookScript string) error {
 	renderedScript, err := cfg.Template.Render(hookScript, nil)
 	if err != nil {
-		return fmt.Errorf("failed to render hook script template: %s", err)
+		return fmt.Errorf("failed to render hook script template: %w", err)
 	}
 	cmd := exec.Command("/bin/sh", "-c", renderedScript)
 	cmd.Stdout = os.Stdout
@@ -646,11 +646,11 @@ func (p Package) runHookScript(cfg Config, hookScript string) error {
 	// We won't be reading or writing, so throw away the PTY file
 	err = cmd.Start()
 	if err != nil {
-		return fmt.Errorf("failed to run hook script: %s", err)
+		return fmt.Errorf("failed to run hook script: %w", err)
 	}
 	err = cmd.Wait()
 	if err != nil {
-		return fmt.Errorf("run hook script exited with error: %s", err)
+		return fmt.Errorf("run hook script exited with error: %w", err)
 	}
 	return nil
 }

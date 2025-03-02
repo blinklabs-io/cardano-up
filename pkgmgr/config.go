@@ -39,7 +39,7 @@ func NewDefaultConfig() (Config, error) {
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
 		return Config{}, fmt.Errorf(
-			"could not determine user home directory: %s",
+			"could not determine user home directory: %w",
 			err,
 		)
 	}
@@ -48,14 +48,14 @@ func NewDefaultConfig() (Config, error) {
 	userCacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return Config{}, fmt.Errorf(
-			"could not determine user cache directory: %s",
+			"could not determine user cache directory: %w",
 			err,
 		)
 	}
 	userConfigDir, err := os.UserConfigDir()
 	if err != nil {
 		return Config{}, fmt.Errorf(
-			"could not determine user config directory: %s",
+			"could not determine user config directory: %w",
 			err,
 		)
 	}
