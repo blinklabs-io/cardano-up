@@ -267,7 +267,7 @@ func (d *DockerService) Logs(
 	}
 	defer logsOut.Close()
 	if _, err := stdcopy.StdCopy(stdoutWriter, stderrWriter, logsOut); err != nil {
-		if err != io.EOF {
+		if !errors.Is(err, io.EOF) {
 			return err
 		}
 	}

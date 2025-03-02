@@ -686,7 +686,7 @@ func (p *PackageInstallStepDocker) preflight(cfg Config, pkgName string) error {
 	}
 	containerName := fmt.Sprintf("%s-%s", pkgName, p.ContainerName)
 	if _, err := NewDockerServiceFromContainerName(containerName, cfg.Logger); err != nil {
-		if err == ErrContainerNotExists {
+		if errors.Is(err, ErrContainerNotExists) {
 			// Container does not exist (we want this)
 			return nil
 		} else {
@@ -795,7 +795,7 @@ func (p *PackageInstallStepDocker) uninstall(
 		containerName := fmt.Sprintf("%s-%s", pkgName, p.ContainerName)
 		svc, err := NewDockerServiceFromContainerName(containerName, cfg.Logger)
 		if err != nil {
-			if err == ErrContainerNotExists {
+			if errors.Is(err, ErrContainerNotExists) {
 				cfg.Logger.Debug(
 					"container missing on uninstall: " + containerName,
 				)
