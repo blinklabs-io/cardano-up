@@ -86,7 +86,7 @@ func (p *PackageManager) loadPackageRegistry(validate bool) error {
 	var retErr error
 	registryPkgs, err := registryPackages(p.config, validate)
 	if err != nil {
-		if err == ErrValidationFailed {
+		if errors.Is(err, ErrValidationFailed) {
 			// We want to pass along the validation error, but only after we record the packages
 			retErr = err
 		} else {
@@ -682,7 +682,7 @@ func (p *PackageManager) ValidatePackages() error {
 	foundError := false
 	if len(p.availablePackages) == 0 {
 		if err := p.loadPackageRegistry(true); err != nil {
-			if err == ErrValidationFailed {
+			if errors.Is(err, ErrValidationFailed) {
 				// Record error for later failure
 				// The error(s) will have already been output to the console
 				foundError = true
