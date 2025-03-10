@@ -13,8 +13,8 @@ github.com/Masterminds/sprig/v3 v3.3.0/go.mod h1:Zy1iXRYNqNLUolqCpL4uhk6SHUMAOSC
 github.com/Microsoft/go-winio v0.4.14 h1:+hMXMk01us9KgxGb7ftKQt2Xpf5hH/yky+TDA+qxleU=
 github.com/Microsoft/go-winio v0.4.14/go.mod h1:qXqCSQ3Xa7+6tgxaGTIe4Kpcdsi+P8jBhyzoq1bpyYA=
 github.com/aead/siphash v1.0.1/go.mod h1:Nywa3cDsYNNK3gaciGTWPwHt0wlpNV15vwmswBAUSII=
-github.com/blinklabs-io/gouroboros v0.111.0 h1:A2u+rU6vn/Tg7hyBvJ2SZ4mEAJAnMaijvl6QBgBs3xg=
-github.com/blinklabs-io/gouroboros v0.111.0/go.mod h1:KQKtHCrCTgH9jtcJk1cJDx75hs2HaugJowhRAvP2hPU=
+github.com/blinklabs-io/gouroboros v0.113.0 h1:NxlsoU494cYJItBzPgFaw2wNwg+/7jZLYuYv8ubIylo=
+github.com/blinklabs-io/gouroboros v0.113.0/go.mod h1:KQKtHCrCTgH9jtcJk1cJDx75hs2HaugJowhRAvP2hPU=
 github.com/blinklabs-io/ouroboros-mock v0.3.6 h1:m/iK4l1EJbiz9kU0u5uzWNEwlskazWuwbJHysr2hhP4=
 github.com/blinklabs-io/ouroboros-mock v0.3.6/go.mod h1:S++j/dBxNYG3AlcRaeZvok4X2ih7GrK+VWV1s0SLN3M=
 github.com/btcsuite/btcd v0.20.1-beta/go.mod h1:wVuoA8VJLEcwgqHBwHmzLRazpKxTv13Px/pDuV7OomQ=
