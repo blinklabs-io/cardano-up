@@ -27,7 +27,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
@@ -327,19 +326,19 @@ func (d *DockerService) pullImage() error {
 	return nil
 }
 
-func (d *DockerService) inspect() (types.ContainerJSON, error) {
+func (d *DockerService) inspect() (container.InspectResponse, error) {
 	client, err := d.getClient()
 	if err != nil {
-		return types.ContainerJSON{}, err
+		return container.InspectResponse{}, err
 	}
-	container, err := client.ContainerInspect(
+	containerResponse, err := client.ContainerInspect(
 		context.Background(),
 		d.ContainerId,
 	)
 	if err != nil {
-		return types.ContainerJSON{}, err
+		return container.InspectResponse{}, err
 	}
-	return container, nil
+	return containerResponse, nil
 }
 
 func (d *DockerService) refresh() error {
