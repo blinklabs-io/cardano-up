@@ -69,7 +69,7 @@ func contextListCommand() *cobra.Command {
 				tmpContextNames = append(tmpContextNames, contextName)
 			}
 			sort.Strings(tmpContextNames)
-			//for contextName, context := range contexts {
+			// for contextName, context := range contexts {
 			for _, contextName := range tmpContextNames {
 				context := contexts[contextName]
 				activeMarker := " "

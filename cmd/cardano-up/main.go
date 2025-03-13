@@ -21,7 +21,6 @@ import (
 
 	"github.com/blinklabs-io/cardano-up/internal/consolelog"
 	"github.com/blinklabs-io/cardano-up/pkgmgr"
-
 	"github.com/spf13/cobra"
 )
 

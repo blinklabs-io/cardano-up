@@ -128,6 +128,8 @@ func TestOSAndARCH(t *testing.T) {
 	}
 
 	if actualOS == expectOS && actualARCH == expectARCH {
-		t.Logf("Test is successful and OS, ARCH values are correctly injected to config template")
+		t.Logf(
+			"Test is successful and OS, ARCH values are correctly injected to config template",
+		)
 	}
 }

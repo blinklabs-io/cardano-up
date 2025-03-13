@@ -16,7 +16,13 @@ func TestCompareVersions(t *testing.T) {
 	for _, tc := range cases {
 		result := compareVersions(tc.v1, tc.v2)
 		if result == tc.expected {
-			t.Logf("Test Passed: compareVersions(%s, %s) = %v (Expected: %v)\n", tc.v1, tc.v2, result, tc.expected)
+			t.Logf(
+				"Test Passed: compareVersions(%s, %s) = %v (Expected: %v)\n",
+				tc.v1,
+				tc.v2,
+				result,
+				tc.expected,
+			)
 
 		} else {
 			t.Errorf("Test Failed: compareVersions(%s, %s) = %v; Expected %v", tc.v1, tc.v2, result, tc.expected)
