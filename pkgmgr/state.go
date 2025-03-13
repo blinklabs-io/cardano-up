@@ -94,7 +94,7 @@ func (s *State) saveFile(filename string, src any) error {
 	// Create parent directory if it doesn't exist
 	if _, err := os.Stat(s.config.ConfigDir); err != nil {
 		if os.IsNotExist(err) {
-			if err := os.MkdirAll(s.config.ConfigDir, 0700); err != nil {
+			if err := os.MkdirAll(s.config.ConfigDir, 0o700); err != nil {
 				return err
 			}
 		}
@@ -107,7 +107,7 @@ func (s *State) saveFile(filename string, src any) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(tmpPath, yamlContent, 0600); err != nil {
+	if err := os.WriteFile(tmpPath, yamlContent, 0o600); err != nil {
 		return err
 	}
 	return nil

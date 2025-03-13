@@ -627,7 +627,7 @@ func (p Package) services(
 						err,
 					),
 				)
-				continue
+				return ret, ErrOperationFailed
 			}
 			ret = append(ret, dockerService)
 		}
@@ -674,6 +674,7 @@ type PackageInstallStepDocker struct {
 
 func (p *PackageInstallStepDocker) validate(cfg Config) error {
 	if p.Image == "" {
+		cfg.Logger.Debug("docker image missing")
 		return errors.New("docker image must be provided")
 	}
 	// TODO: add more checks
@@ -1034,7 +1035,7 @@ func (p *PackageInstallStepFile) deactivate(cfg Config, pkgName string) error {
 				return err
 			}
 		}
-		cfg.Logger.Debug("removed symlink " + binPath)
+		cfg.Logger.Debug("removed symlink " + binPath + "for " + pkgName)
 	}
 	return nil
 }

@@ -122,7 +122,6 @@ func (p *PackageManager) Up() error {
 		if err != nil {
 			return err
 		}
-
 	}
 	return nil
 }
@@ -514,10 +513,16 @@ func (p *PackageManager) Info(pkgs ...string) error {
 			}
 		}
 		if statusOutput != "" {
-			infoOutput += "\n\nServices:\n\n" + strings.TrimSuffix(statusOutput, "\n")
+			infoOutput += "\n\nServices:\n\n" + strings.TrimSuffix(
+				statusOutput,
+				"\n",
+			)
 		}
 		if portOutput != "" {
-			infoOutput += "\n\nMapped ports:\n\n" + strings.TrimSuffix(portOutput, "\n")
+			infoOutput += "\n\nMapped ports:\n\n" + strings.TrimSuffix(
+				portOutput,
+				"\n",
+			)
 		}
 		if idx < len(infoPkgs)-1 {
 			infoOutput += "\n\n---\n\n"

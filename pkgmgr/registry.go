@@ -138,7 +138,12 @@ func registryPackagesUrl(cfg Config, validate bool) ([]Package, error) {
 			"Fetching package registry " + cfg.RegistryUrl,
 		)
 		ctx := context.Background()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.RegistryUrl, nil)
+		req, err := http.NewRequestWithContext(
+			ctx,
+			http.MethodGet,
+			cfg.RegistryUrl,
+			nil,
+		)
 		if err != nil {
 			return nil, err
 		}
