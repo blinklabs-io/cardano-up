@@ -449,7 +449,7 @@ func NewDockerClient() (*client.Client, error) {
 
 func CheckDockerConnectivity() error {
 	if _, err := NewDockerClient(); err != nil {
-		return errors.New(dockerInstallError)
+		return errors.New(dockerInstallError) //nolint:staticcheck
 	}
 	return nil
 }

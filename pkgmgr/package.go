@@ -919,7 +919,7 @@ func (p *PackageInstallStepFile) install(
 			return err
 		}
 		if u.Scheme == "" || u.Host == "" {
-			return errors.New("invalid URL given...")
+			return errors.New("invalid URL given")
 		}
 
 		// Fetch data
