@@ -43,6 +43,8 @@ type Package struct {
 	Tags                []string             `yaml:"tags,omitempty"`
 	PreInstallScript    string               `yaml:"preInstallScript,omitempty"`
 	PostInstallScript   string               `yaml:"postInstallScript,omitempty"`
+	PreStartScript      string               `yaml:"preStartScript,omitempty"`
+	PreStopScript       string               `yaml:"preStopScript,omitempty"`
 	PreUninstallScript  string               `yaml:"preUninstallScript,omitempty"`
 	PostUninstallScript string               `yaml:"postUninstallScript,omitempty"`
 	PostInstallNotes    string               `yaml:"postInstallNotes,omitempty"`
@@ -496,6 +498,12 @@ func (p Package) validate(cfg Config) error {
 func (p Package) startService(cfg Config, context string) error {
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 
+	// Run pre-start script
+	if p.PreStartScript != "" {
+		if err := p.runHookScript(cfg, p.PreStartScript); err != nil {
+			return fmt.Errorf("pre-start hook failed: %w", err)
+		}
+	}
 	var startErrors []string
 	for _, step := range p.InstallSteps {
 		if step.Docker != nil {
@@ -549,6 +557,13 @@ func (p Package) startService(cfg Config, context string) error {
 
 func (p Package) stopService(cfg Config, context string) error {
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
+
+	// Run pre-stop script
+	if p.PreStopScript != "" {
+		if err := p.runHookScript(cfg, p.PreStopScript); err != nil {
+			return fmt.Errorf("pre-stop hook failed: %w", err)
+		}
+	}
 
 	var stopErrors []string
 	for _, step := range p.InstallSteps {
