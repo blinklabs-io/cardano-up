@@ -15,6 +15,8 @@
 package pkgmgr
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
@@ -131,5 +133,72 @@ func TestOSAndARCH(t *testing.T) {
 		t.Logf(
 			"Test is successful and OS, ARCH values are correctly injected to config template",
 		)
+	}
+}
+
+func TestServiceHooks_PreStartAndPreStop(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create preStart script
+	preStartLog := filepath.Join(tmpDir, "prestart.log")
+	preStartScript := filepath.Join(tmpDir, "prestart.sh")
+	preStartContent := "#!/bin/sh\necho 'prestart executed' > " + preStartLog
+	if err := os.WriteFile(preStartScript, []byte(preStartContent), 0755); err != nil {
+		t.Fatalf("failed to write preStart script: %v", err)
+	}
+
+	// Create preStop script
+	preStopLog := filepath.Join(tmpDir, "prestop.log")
+	preStopScript := filepath.Join(tmpDir, "prestop.sh")
+	preStopContent := "#!/bin/sh\necho 'prestop executed' > " + preStopLog
+	if err := os.WriteFile(preStopScript, []byte(preStopContent), 0755); err != nil {
+		t.Fatalf("failed to write preStop script: %v", err)
+	}
+
+	// Initialize a config object
+	cfg := Config{
+		CacheDir: tmpDir,
+		DataDir:  tmpDir,
+		BinDir:   tmpDir,
+		Template: &Template{
+			tmpl:     template.New("test"),
+			baseVars: make(map[string]any),
+		},
+	}
+	// Define a test package
+	pkg := Package{
+		Name:           "mypkg",
+		Version:        "1.0.0",
+		PreStartScript: preStartScript,
+		PreStopScript:  preStopScript,
+		InstallSteps:   []PackageInstallStep{},
+	}
+
+	// Execute startService and expect preStartScript to run
+	if err := pkg.startService(cfg, "testctx"); err != nil {
+		t.Fatalf("startService failed: %v", err)
+	}
+
+	// Validate preStart script output
+	preStartOutput, err := os.ReadFile(preStartLog)
+	if err != nil {
+		t.Fatalf("preStart log file not found: %v", err)
+	}
+	if string(preStartOutput) != "prestart executed\n" {
+		t.Errorf("unexpected preStart output: got %q, want %q", string(preStartOutput), "prestart executed\n")
+	}
+
+	// Execute stopService and expect preStopScript to run
+	if err := pkg.stopService(cfg, "testctx"); err != nil {
+		t.Fatalf("stopService failed: %v", err)
+	}
+
+	// Validate preStop script output
+	preStopOutput, err := os.ReadFile(preStopLog)
+	if err != nil {
+		t.Fatalf("preStop log file not found: %v", err)
+	}
+	if string(preStopOutput) != "prestop executed\n" {
+		t.Errorf("unexpected preStop output: got %q, want %q", string(preStopOutput), "prestop executed\n")
 	}
 }
