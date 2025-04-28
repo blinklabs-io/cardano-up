@@ -185,7 +185,11 @@ func TestServiceHooks_PreStartAndPreStop(t *testing.T) {
 		t.Fatalf("preStart log file not found: %v", err)
 	}
 	if string(preStartOutput) != "prestart executed\n" {
-		t.Errorf("unexpected preStart output: got %q, want %q", string(preStartOutput), "prestart executed\n")
+		t.Errorf(
+			"unexpected preStart output: got %q, want %q",
+			string(preStartOutput),
+			"prestart executed\n",
+		)
 	}
 
 	// Execute stopService and expect preStopScript to run
@@ -199,6 +203,10 @@ func TestServiceHooks_PreStartAndPreStop(t *testing.T) {
 		t.Fatalf("preStop log file not found: %v", err)
 	}
 	if string(preStopOutput) != "prestop executed\n" {
-		t.Errorf("unexpected preStop output: got %q, want %q", string(preStopOutput), "prestop executed\n")
+		t.Errorf(
+			"unexpected preStop output: got %q, want %q",
+			string(preStopOutput),
+			"prestop executed\n",
+		)
 	}
 }
