@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -183,9 +184,7 @@ func (p *PackageManager) Install(pkgs ...string) error {
 		)
 		// Build package options
 		tmpPkgOpts := installPkg.Install.defaultOpts()
-		for k, v := range installPkg.Options {
-			tmpPkgOpts[k] = v
-		}
+		maps.Copy(tmpPkgOpts, installPkg.Options)
 		// Install package
 		notes, outputs, err := installPkg.Install.install(
 			p.config,
@@ -660,9 +659,7 @@ func (p *PackageManager) updateContext(name string, newContext Context) error {
 func (p *PackageManager) ContextEnv() map[string]string {
 	ret := make(map[string]string)
 	for _, pkg := range p.InstalledPackages() {
-		for k, v := range pkg.Outputs {
-			ret[k] = v
-		}
+		maps.Copy(ret, pkg.Outputs)
 	}
 	return ret
 }
