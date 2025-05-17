@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/hashicorp/go-version"
@@ -98,13 +99,7 @@ func (p Package) defaultOpts() map[string]bool {
 
 func (p Package) hasTags(tags []string) bool {
 	for _, tag := range tags {
-		foundTag := false
-		for _, pkgTag := range p.Tags {
-			if tag == pkgTag {
-				foundTag = true
-				break
-			}
-		}
+		foundTag := slices.Contains(p.Tags, tag)
 		if !foundTag {
 			return false
 		}
