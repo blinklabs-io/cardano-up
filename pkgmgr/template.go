@@ -17,6 +17,7 @@ package pkgmgr
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
@@ -40,12 +41,8 @@ func (t *Template) Render(
 ) (string, error) {
 	// Build our vars
 	tmpVars := map[string]any{}
-	for k, v := range t.baseVars {
-		tmpVars[k] = v
-	}
-	for k, v := range extraVars {
-		tmpVars[k] = v
-	}
+	maps.Copy(tmpVars, t.baseVars)
+	maps.Copy(tmpVars, extraVars)
 	// Parse template body
 	tmpl, err := t.tmpl.Parse(tmplBody)
 	if err != nil {
@@ -62,12 +59,8 @@ func (t *Template) Render(
 // WithVars creates a copy of the Template with the extra variables added to the original base variables
 func (t *Template) WithVars(extraVars map[string]any) *Template {
 	tmpVars := map[string]any{}
-	for k, v := range t.baseVars {
-		tmpVars[k] = v
-	}
-	for k, v := range extraVars {
-		tmpVars[k] = v
-	}
+	maps.Copy(tmpVars, t.baseVars)
+	maps.Copy(tmpVars, extraVars)
 	tmpl := NewTemplate(tmpVars)
 	return tmpl
 }
