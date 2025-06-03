@@ -7,7 +7,7 @@ toolchain go1.24.1
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/blinklabs-io/gouroboros v0.121.0
-	github.com/docker/docker v28.1.1+incompatible
+	github.com/docker/docker v28.2.2+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/hashicorp/go-version v1.7.0
 	github.com/spf13/cobra v1.9.1
@@ -21,6 +21,8 @@ require (
 	github.com/Masterminds/semver/v3 v3.3.0 // indirect
 	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/btcsuite/btcd/btcutil v1.1.6 // indirect
+	github.com/containerd/errdefs v1.0.0 // indirect
+	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/distribution/reference v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
@@ -58,8 +60,7 @@ require (
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240401170217-c3f982113cda // indirect
-	google.golang.org/grpc v1.63.2 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142 // indirect
 	google.golang.org/protobuf v1.36.3 // indirect
 	gotest.tools/v3 v3.5.1 // indirect
 )
