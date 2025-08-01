@@ -252,8 +252,8 @@ func (r *Resolver) splitPackage(pkg string) (string, string, map[string]bool) {
 	if optsOpenIdx > 0 && optsCloseIdx > optsOpenIdx {
 		pkgName = pkg[:optsOpenIdx]
 		tmpOpts := pkg[optsOpenIdx+1 : optsCloseIdx]
-		tmpFlags := strings.Split(tmpOpts, `,`)
-		for _, tmpFlag := range tmpFlags {
+		tmpFlags := strings.SplitSeq(tmpOpts, `,`)
+		for tmpFlag := range tmpFlags {
 			flagVal := true
 			if strings.HasPrefix(tmpFlag, `-`) {
 				flagVal = false
