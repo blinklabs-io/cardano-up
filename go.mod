@@ -7,7 +7,7 @@ toolchain go1.24.4
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/blinklabs-io/gouroboros v0.134.2
-	github.com/docker/docker v28.3.3+incompatible
+	github.com/docker/docker v28.4.0+incompatible
 	github.com/docker/go-connections v0.6.0
 	github.com/hashicorp/go-version v1.7.0
 	github.com/spf13/cobra v1.10.1
@@ -37,7 +37,6 @@ require (
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
