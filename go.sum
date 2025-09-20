@@ -15,12 +15,12 @@ github.com/Microsoft/go-winio v0.4.21/go.mod h1:JPGBdM1cNvN/6ISo+n8V5iA4v8pBzdOp
 github.com/aead/siphash v1.0.1/go.mod h1:Nywa3cDsYNNK3gaciGTWPwHt0wlpNV15vwmswBAUSII=
 github.com/bits-and-blooms/bitset v1.20.0 h1:2F+rfL86jE2d/bmw7OhqUg2Sj/1rURkBn3MdfoPyRVU=
 github.com/bits-and-blooms/bitset v1.20.0/go.mod h1:7hO7Gc7Pp1vODcmWvKMRA9BNmbv6a/7QIWpPxHddWR8=
-github.com/blinklabs-io/gouroboros v0.134.2 h1:ADkkZTYOvocbjO6IL6c/4I+ZTX6/LDLBuPTLiDQ/2KE=
-github.com/blinklabs-io/gouroboros v0.134.2/go.mod h1:N4smrM9nmuSkYV92D7IL4z00/iAkbXysT1Ld7saVWeI=
+github.com/blinklabs-io/gouroboros v0.135.1 h1:2Z+GkULXKMFb/D1x7EE/LkCesAt/MQxrf3JNffBWvF4=
+github.com/blinklabs-io/gouroboros v0.135.1/go.mod h1:eCXFpt2fOhp2Id/0AqMaI/qr0bodbS0SIAOpNZVu9Iw=
 github.com/blinklabs-io/ouroboros-mock v0.3.8 h1:+DAt2rx0ouZUxee5DBMgZq3I1+ZdxFSHG9g3tYl/FKU=
 github.com/blinklabs-io/ouroboros-mock v0.3.8/go.mod h1:UwQIf4KqZwO13P9d90fbi3UL/X7JaJfeEbqk+bEeFQA=
-github.com/blinklabs-io/plutigo v0.0.11 h1:6a4EURP+Gq5jhP5N/C4lTxPFAdR6wF89pDiKvOV2OLg=
-github.com/blinklabs-io/plutigo v0.0.11/go.mod h1:L639Q8i2cSRuBhjgCHttPR0nnYwwsYVT4Btz7KpQjSw=
+github.com/blinklabs-io/plutigo v0.0.12 h1:DxnYKvKYn9OlgiTJi5Ofd97znSJWUtVZjZFqxW9HW/A=
+github.com/blinklabs-io/plutigo v0.0.12/go.mod h1:L639Q8i2cSRuBhjgCHttPR0nnYwwsYVT4Btz7KpQjSw=
 github.com/btcsuite/btcd v0.20.1-beta/go.mod h1:wVuoA8VJLEcwgqHBwHmzLRazpKxTv13Px/pDuV7OomQ=
 github.com/btcsuite/btcd v0.22.0-beta.0.20220111032746-97732e52810c/go.mod h1:tjmYdS6MLJ5/s0Fj4DbLgSbDHbEqLJrtnHecBFkdz5M=
 github.com/btcsuite/btcd v0.23.5-0.20231215221805-96c9fd8078fd/go.mod h1:nm3Bko6zh6bWP60UxwoT5LzdGJsQJaPo6HjduXq9p6A=
@@ -182,8 +182,8 @@ github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/
 github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
 github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
-github.com/stretchr/testify v1.11.0 h1:ib4sjIrwZKxE5u/Japgo/7SJV3PvgjGiRNAvTVGqQl8=
-github.com/stretchr/testify v1.11.0/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
+github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
+github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7/go.mod h1:q4W45IWZaF22tdD+VEXcAWRA037jwmWEB5VWYORlTpc=
 github.com/utxorpc/go-codegen v0.17.0 h1:cJ7Df9r8Az39lveIcmzcRciIDc3UJFdMSmXg8IAtBPM=
 github.com/utxorpc/go-codegen v0.17.0/go.mod h1:LBVGFns4YAHMhy+Pc8tF5ExkU+N8Wm3srst4omKZy4g=
