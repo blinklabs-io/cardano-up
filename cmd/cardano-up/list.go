@@ -1,4 +1,4 @@
-// Copyright 2024 Blink Labs Software
+// Copyright 2025 Blink Labs Software
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/blinklabs-io/cardano-up/pkgmgr"
 	"github.com/hashicorp/go-version"
@@ -133,14 +134,15 @@ func printPackageInfo(pkg pkgmgr.Package) {
 		),
 	)
 	if len(pkg.Dependencies) > 0 {
-		tmpOutput := "    Requires: "
+		var sb strings.Builder
+		sb.WriteString("    Requires: ")
 		for idx, dep := range pkg.Dependencies {
-			tmpOutput += dep
+			sb.WriteString(dep)
 			if idx < len(pkg.Dependencies)-1 {
-				tmpOutput += ` | `
+				sb.WriteString(` | `)
 			}
 		}
-		slog.Info(tmpOutput)
+		slog.Info(sb.String())
 	}
 }
 
