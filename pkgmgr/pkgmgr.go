@@ -173,7 +173,7 @@ func (p *PackageManager) Install(pkgs ...string) error {
 		return err
 	}
 	installedPkgs := []string{}
-	var notesOutput string
+	var sb strings.Builder
 	for _, installPkg := range installPkgs {
 		p.config.Logger.Info(
 			fmt.Sprintf(
@@ -211,12 +211,13 @@ func (p *PackageManager) Install(pkgs ...string) error {
 		}
 		installedPkgs = append(installedPkgs, installPkg.Install.Name)
 		if notes != "" {
-			notesOutput += fmt.Sprintf(
-				"\nPost-install notes for %s (= %s):\n\n%s\n",
-				installPkg.Install.Name,
-				installPkg.Install.Version,
-				notes,
-			)
+			sb.WriteString("\nPost-install notes for ")
+			sb.WriteString(installPkg.Install.Name)
+			sb.WriteString(" (= ")
+			sb.WriteString(installPkg.Install.Version)
+			sb.WriteString("):\n\n")
+			sb.WriteString(notes)
+			sb.WriteString("\n")
 		}
 		// Activate package
 		if err := installPkg.Install.activate(p.config, activeContextName); err != nil {
@@ -226,8 +227,9 @@ func (p *PackageManager) Install(pkgs ...string) error {
 		}
 	}
 	// Display post-install notes
-	if notesOutput != "" {
-		p.config.Logger.Info(notesOutput)
+	outStr := sb.String()
+	if outStr != "" {
+		p.config.Logger.Info(outStr)
 	}
 	p.config.Logger.Info(
 		fmt.Sprintf(
@@ -255,7 +257,7 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 		return err
 	}
 	installedPkgs := []string{}
-	var notesOutput string
+	var sb strings.Builder
 	for _, upgradePkg := range upgradePkgs {
 		p.config.Logger.Info(
 			fmt.Sprintf(
@@ -303,12 +305,13 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 		}
 		installedPkgs = append(installedPkgs, upgradePkg.Upgrade.Name)
 		if notes != "" {
-			notesOutput += fmt.Sprintf(
-				"\nPost-install notes for %s (= %s):\n\n%s\n",
-				upgradePkg.Upgrade.Name,
-				upgradePkg.Upgrade.Version,
-				notes,
-			)
+			sb.WriteString("\nPost-install notes for ")
+			sb.WriteString(upgradePkg.Upgrade.Name)
+			sb.WriteString(" (= ")
+			sb.WriteString(upgradePkg.Upgrade.Version)
+			sb.WriteString("):\n\n")
+			sb.WriteString(notes)
+			sb.WriteString("\n")
 		}
 		if err := p.state.Save(); err != nil {
 			return err
@@ -321,8 +324,8 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 		}
 	}
 	// Display post-install notes
-	if notesOutput != "" {
-		p.config.Logger.Info(notesOutput)
+	if sb.String() != "" {
+		p.config.Logger.Info(sb.String())
 	}
 	p.config.Logger.Info(
 		fmt.Sprintf(
@@ -455,16 +458,18 @@ func (p *PackageManager) Info(pkgs ...string) error {
 			return NewPackageNotInstalledError(pkg, activeContextName)
 		}
 	}
-	var infoOutput string
+	var sb strings.Builder
 	for idx, infoPkg := range infoPkgs {
-		infoOutput += fmt.Sprintf(
-			"Name: %s\nVersion: %s\nContext: %s",
-			infoPkg.Package.Name,
-			infoPkg.Package.Version,
-			activeContextName,
-		)
+		sb.WriteString("Name: ")
+		sb.WriteString(infoPkg.Package.Name)
+		sb.WriteString("\nVersion: ")
+		sb.WriteString(infoPkg.Package.Version)
+		sb.WriteString("\nContext: ")
+		sb.WriteString(activeContextName)
 		if infoPkg.PostInstallNotes != "" {
-			infoOutput += "\n\nPost-install notes:\n\n" + infoPkg.PostInstallNotes
+			sb.WriteString(
+				"\n\nPost-install notes:\n\n" + infoPkg.PostInstallNotes,
+			)
 		}
 		// Gather package services
 		services, err := infoPkg.Package.services(p.config, infoPkg.Context)
@@ -472,23 +477,23 @@ func (p *PackageManager) Info(pkgs ...string) error {
 			return err
 		}
 		// Build service status and port output
-		var statusOutput string
-		var portOutput string
+		var statusSb strings.Builder
+		var portSb strings.Builder
 		for _, svc := range services {
 			running, err := svc.Running()
 			if err != nil {
 				return err
 			}
 			if running {
-				statusOutput += fmt.Sprintf(
+				statusSb.WriteString(fmt.Sprintf(
 					"%-60s RUNNING\n",
 					svc.ContainerName,
-				)
+				))
 			} else {
-				statusOutput += fmt.Sprintf(
+				statusSb.WriteString(fmt.Sprintf(
 					"%-60s NOT RUNNING\n",
 					svc.ContainerName,
-				)
+				))
 			}
 			for _, port := range svc.Ports {
 				var containerPort, hostPort string
@@ -504,30 +509,30 @@ func (p *PackageManager) Info(pkgs ...string) error {
 					containerPort = portParts[2]
 					hostPort = portParts[1]
 				}
-				portOutput += fmt.Sprintf(
+				portSb.WriteString(fmt.Sprintf(
 					"%-5s (host) => %-5s (container)\n",
 					hostPort,
 					containerPort,
-				)
+				))
 			}
 		}
-		if statusOutput != "" {
-			infoOutput += "\n\nServices:\n\n" + strings.TrimSuffix(
-				statusOutput,
+		if statusSb.String() != "" {
+			sb.WriteString("\n\nServices:\n\n" + strings.TrimSuffix(
+				statusSb.String(),
 				"\n",
-			)
+			))
 		}
-		if portOutput != "" {
-			infoOutput += "\n\nMapped ports:\n\n" + strings.TrimSuffix(
-				portOutput,
+		if portSb.String() != "" {
+			sb.WriteString("\n\nMapped ports:\n\n" + strings.TrimSuffix(
+				portSb.String(),
 				"\n",
-			)
+			))
 		}
 		if idx < len(infoPkgs)-1 {
-			infoOutput += "\n\n---\n\n"
+			sb.WriteString("\n\n---\n\n")
 		}
 	}
-	p.config.Logger.Info(infoOutput)
+	p.config.Logger.Info(sb.String())
 	return nil
 }
 
