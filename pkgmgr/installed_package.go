@@ -19,12 +19,12 @@ import (
 )
 
 type InstalledPackage struct {
-	Package          Package
 	InstalledTime    time.Time
-	Context          string
-	PostInstallNotes string
 	Options          map[string]bool
 	Outputs          map[string]string
+	Package          Package
+	Context          string
+	PostInstallNotes string
 }
 
 func NewInstalledPackage(

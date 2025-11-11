@@ -23,16 +23,16 @@ import (
 )
 
 type Config struct {
+	Logger              *slog.Logger
+	Template            *Template
 	BinDir              string
 	CacheDir            string
 	ConfigDir           string
 	ContextDir          string
 	DataDir             string
-	Logger              *slog.Logger
-	Template            *Template
-	RequiredPackageTags []string
 	RegistryUrl         string
 	RegistryDir         string
+	RequiredPackageTags []string
 }
 
 func NewDefaultConfig() (Config, error) {

@@ -36,22 +36,22 @@ import (
 )
 
 type Package struct {
+	PostInstallNotes    string `yaml:"postInstallNotes,omitempty"`
+	PreUninstallScript  string `yaml:"preUninstallScript,omitempty"`
+	Description         string `yaml:"description,omitempty"`
+	filePath            string
 	Name                string               `yaml:"name,omitempty"`
-	Version             string               `yaml:"version,omitempty"`
-	Description         string               `yaml:"description,omitempty"`
-	InstallSteps        []PackageInstallStep `yaml:"installSteps,omitempty"`
-	Dependencies        []string             `yaml:"dependencies,omitempty"`
-	Tags                []string             `yaml:"tags,omitempty"`
-	PreInstallScript    string               `yaml:"preInstallScript,omitempty"`
-	PostInstallScript   string               `yaml:"postInstallScript,omitempty"`
-	PreStartScript      string               `yaml:"preStartScript,omitempty"`
-	PreStopScript       string               `yaml:"preStopScript,omitempty"`
-	PreUninstallScript  string               `yaml:"preUninstallScript,omitempty"`
 	PostUninstallScript string               `yaml:"postUninstallScript,omitempty"`
-	PostInstallNotes    string               `yaml:"postInstallNotes,omitempty"`
+	Version             string               `yaml:"version,omitempty"`
+	PreStopScript       string               `yaml:"preStopScript,omitempty"`
+	PreStartScript      string               `yaml:"preStartScript,omitempty"`
+	PostInstallScript   string               `yaml:"postInstallScript,omitempty"`
+	PreInstallScript    string               `yaml:"preInstallScript,omitempty"`
+	Tags                []string             `yaml:"tags,omitempty"`
+	Dependencies        []string             `yaml:"dependencies,omitempty"`
 	Options             []PackageOption      `yaml:"options,omitempty"`
 	Outputs             []PackageOutput      `yaml:"outputs,omitempty"`
-	filePath            string
+	InstallSteps        []PackageInstallStep `yaml:"installSteps,omitempty"`
 }
 
 type PackageOption struct {
@@ -666,9 +666,9 @@ func (p Package) runHookScript(cfg Config, hookScript string) error {
 }
 
 type PackageInstallStep struct {
-	Condition string                    `yaml:"condition,omitempty"`
 	Docker    *PackageInstallStepDocker `yaml:"docker,omitempty"`
 	File      *PackageInstallStepFile   `yaml:"file,omitempty"`
+	Condition string                    `yaml:"condition,omitempty"`
 }
 
 type PackageInstallStepDocker struct {
@@ -870,12 +870,12 @@ func (p *PackageInstallStepDocker) deactivate(
 }
 
 type PackageInstallStepFile struct {
-	Binary   bool        `yaml:"binary"`
 	Filename string      `yaml:"filename"`
 	Source   string      `yaml:"source"`
 	Content  string      `yaml:"content"`
 	Url      string      `yaml:"url"`
 	Mode     fs.FileMode `yaml:"mode,omitempty"`
+	Binary   bool        `yaml:"binary"`
 }
 
 func (p *PackageInstallStepFile) validate(cfg Config) error {

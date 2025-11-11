@@ -21,10 +21,10 @@ import (
 
 func TestSplitPackage(t *testing.T) {
 	testDefs := []struct {
+		Options     map[string]bool
 		Package     string
 		Name        string
 		VersionSpec string
-		Options     map[string]bool
 	}{
 		{
 			Package:     "test-packageB[foo,-bar] >= 1.2.3",

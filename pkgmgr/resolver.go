@@ -23,23 +23,23 @@ import (
 )
 
 type Resolver struct {
-	context              string
 	logger               *slog.Logger
+	installedConstraints map[string]version.Constraints
+	context              string
 	installedPkgs        []InstalledPackage
 	availablePkgs        []Package
-	installedConstraints map[string]version.Constraints
 }
 
 type ResolverInstallSet struct {
-	Install  Package
 	Options  map[string]bool
+	Install  Package
 	Selected bool
 }
 
 type ResolverUpgradeSet struct {
 	Installed InstalledPackage
-	Upgrade   Package
 	Options   map[string]bool
+	Upgrade   Package
 }
 
 func NewResolver(

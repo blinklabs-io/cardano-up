@@ -23,8 +23,8 @@ import (
 )
 
 var logsFlags = struct {
-	follow bool
 	tail   string
+	follow bool
 }{}
 
 func logsCommand() *cobra.Command {
