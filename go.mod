@@ -6,7 +6,7 @@ toolchain go1.24.4
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
-	github.com/blinklabs-io/gouroboros v0.137.1
+	github.com/blinklabs-io/gouroboros v0.139.0
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-connections v0.6.0
 	github.com/hashicorp/go-version v1.7.0
@@ -53,7 +53,7 @@ require (
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
-	github.com/utxorpc/go-codegen v0.17.0 // indirect
+	github.com/utxorpc/go-codegen v0.18.1 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.48.0 // indirect
@@ -66,6 +66,6 @@ require (
 	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240814211410-ddb44dafa142 // indirect
-	google.golang.org/protobuf v1.36.6 // indirect
+	google.golang.org/protobuf v1.36.10 // indirect
 	gotest.tools/v3 v3.5.1 // indirect
 )
