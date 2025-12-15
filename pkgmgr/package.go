@@ -1135,7 +1135,7 @@ func allocateEphemeralPort(proto string) (string, error) {
 			return "", err
 		}
 		if conn == nil {
-			return "", fmt.Errorf("failed to allocate UDP port")
+			return "", errors.New("failed to allocate UDP port")
 		}
 		defer conn.Close()
 		addr := conn.LocalAddr().(*net.UDPAddr) //nolint:forcetypeassert
