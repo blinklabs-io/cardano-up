@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -29,8 +30,10 @@ import (
 	"regexp"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 
+	"github.com/docker/go-connections/nat"
 	"github.com/hashicorp/go-version"
 	"gopkg.in/yaml.v3"
 )
@@ -112,7 +115,8 @@ func (p Package) install(
 	context string,
 	opts map[string]bool,
 	runHooks bool,
-) (string, map[string]string, error) {
+	registeredPorts PackagePortRegistry,
+) (string, map[string]string, PackagePortRegistry, error) {
 	// Update template vars
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	pkgCacheDir := filepath.Join(
@@ -152,28 +156,28 @@ func (p Package) install(
 		// Make sure only one install method is specified per install step
 		if installStep.Docker != nil &&
 			installStep.File != nil {
-			return "", nil, ErrMultipleInstallMethods
+			return "", nil, nil, ErrMultipleInstallMethods
 		}
 		if installStep.Docker != nil {
 			if err := installStep.Docker.preflight(cfg, pkgName); err != nil {
-				return "", nil, fmt.Errorf("pre-flight check failed: %w", err)
+				return "", nil, nil, fmt.Errorf("pre-flight check failed: %w", err)
 			}
 		}
 	}
 	// Pre-create dirs
 	if err := os.MkdirAll(pkgCacheDir, fs.ModePerm); err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	if err := os.MkdirAll(pkgContextDir, fs.ModePerm); err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	if err := os.MkdirAll(pkgDataDir, fs.ModePerm); err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	// Run pre-install script
 	if runHooks && p.PreInstallScript != "" {
 		if err := p.runHookScript(cfg, p.PreInstallScript); err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 	}
 	// Perform install
@@ -181,7 +185,7 @@ func (p Package) install(
 		// Evaluate condition if defined
 		if installStep.Condition != "" {
 			if ok, err := cfg.Template.EvaluateCondition(installStep.Condition, nil); err != nil {
-				return "", nil, NewInstallStepConditionError(
+				return "", nil, nil, NewInstallStepConditionError(
 					installStep.Condition,
 					err,
 				)
@@ -193,26 +197,30 @@ func (p Package) install(
 			}
 		}
 		if installStep.Docker != nil {
-			if err := installStep.Docker.install(cfg, pkgName); err != nil {
-				return "", nil, err
+			var stepPorts ServicePortMap
+			if registeredPorts != nil {
+				stepPorts = registeredPorts[installStep.Docker.ContainerName]
+			}
+			if err := installStep.Docker.install(cfg, pkgName, stepPorts); err != nil {
+				return "", nil, nil, err
 			}
 		} else if installStep.File != nil {
 			if err := installStep.File.install(cfg, pkgName, p.filePath); err != nil {
-				return "", nil, err
+				return "", nil, nil, err
 			}
 		} else {
-			return "", nil, ErrNoInstallMethods
+			return "", nil, nil, ErrNoInstallMethods
 		}
 	}
 	// Capture port details for output templates
-	tmpPorts := map[string]map[string]string{}
+	retPorts := make(PackagePortRegistry)
 	tmpServices, err := p.services(cfg, context)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	for _, svc := range tmpServices {
 		shortContainerName := strings.TrimPrefix(svc.ContainerName, pkgName+`-`)
-		tmpPortsContainer := make(map[string]string)
+		tmpPortsContainer := make(ServicePortMap)
 		for _, port := range svc.Ports {
 			var containerPort, hostPort string
 			portParts := strings.Split(port, ":")
@@ -229,11 +237,11 @@ func (p Package) install(
 			}
 			tmpPortsContainer[containerPort] = hostPort
 		}
-		tmpPorts[shortContainerName] = tmpPortsContainer
+		retPorts[shortContainerName] = tmpPortsContainer
 	}
 	cfg.Template = cfg.Template.WithVars(
 		map[string]any{
-			"Ports": tmpPorts,
+			"Ports": retPorts,
 		},
 	)
 	// Generate outputs
@@ -253,14 +261,14 @@ func (p Package) install(
 		// Render value template
 		val, err := cfg.Template.Render(output.Value, nil)
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		retOutputs[key] = val
 	}
 	// Run post-install script
 	if runHooks && p.PostInstallScript != "" {
 		if err := p.runHookScript(cfg, p.PostInstallScript); err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 	}
 	// Render notes and return
@@ -268,11 +276,11 @@ func (p Package) install(
 	if p.PostInstallNotes != "" {
 		tmpNotes, err := cfg.Template.Render(p.PostInstallNotes, nil)
 		if err != nil {
-			return "", nil, err
+			return "", nil, nil, err
 		}
 		retNotes = tmpNotes
 	}
-	return retNotes, retOutputs, nil
+	return retNotes, retOutputs, retPorts, nil
 }
 
 func (p Package) uninstall(
@@ -707,7 +715,11 @@ func (p *PackageInstallStepDocker) preflight(cfg Config, pkgName string) error {
 	return ErrContainerAlreadyExists
 }
 
-func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
+func (p *PackageInstallStepDocker) install(
+	cfg Config,
+	pkgName string,
+	registeredPorts ServicePortMap,
+) error {
 	containerName := fmt.Sprintf("%s-%s", pkgName, p.ContainerName)
 	extraVars := map[string]any{
 		"Container": map[string]any{
@@ -769,8 +781,13 @@ func (p *PackageInstallStepDocker) install(cfg Config, pkgName string) error {
 	}
 	//nolint:prealloc
 	var tmpPorts []string
+	portAllocations := make(ServicePortMap)
 	for _, port := range p.Ports {
 		tmpPort, err := cfg.Template.Render(port, extraVars)
+		if err != nil {
+			return err
+		}
+		tmpPort, err = ensureHostPortMapping(tmpPort, registeredPorts, portAllocations)
 		if err != nil {
 			return err
 		}
@@ -1052,4 +1069,95 @@ func (p *PackageInstallStepFile) deactivate(cfg Config, pkgName string) error {
 		cfg.Logger.Debug("removed symlink " + binPath + "for " + pkgName)
 	}
 	return nil
+}
+
+func ensureHostPortMapping(
+	rawPort string,
+	registered ServicePortMap,
+	allocated ServicePortMap,
+) (string, error) {
+	portMappings, err := nat.ParsePortSpec(rawPort)
+	if err != nil {
+		return "", err
+	}
+	if len(portMappings) != 1 {
+		return rawPort, nil
+	}
+	portMapping := portMappings[0]
+	containerPort := portMapping.Port.Port()
+	if containerPort == "" {
+		return rawPort, nil
+	}
+	proto := portMapping.Port.Proto()
+	hostPort := portMapping.Binding.HostPort
+	if hostPort == "" && len(registered) > 0 {
+		if registeredPort, ok := registered[containerPort]; ok && registeredPort != "" {
+			hostPort = registeredPort
+		}
+	}
+	if hostPort == "" {
+		tmpPort, err := allocateEphemeralPort(proto)
+		if err != nil {
+			return "", err
+		}
+		hostPort = tmpPort
+	}
+	if allocated != nil {
+		if allocated[containerPort] == "" {
+			allocated[containerPort] = hostPort
+		}
+	}
+	newPort := formatPortSpec(
+		portMapping.Binding.HostIP,
+		hostPort,
+		containerPort,
+		proto,
+	)
+	return newPort, nil
+}
+
+func allocateEphemeralPort(proto string) (string, error) {
+	switch strings.ToLower(proto) {
+	case "", "tcp":
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return "", err
+		}
+		defer listener.Close()
+		addr := listener.Addr().(*net.TCPAddr) //nolint:forcetypeassert
+		return strconv.Itoa(addr.Port), nil
+	case "udp":
+		conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+		if err != nil {
+			return "", err
+		}
+		defer conn.Close()
+		addr := conn.LocalAddr().(*net.UDPAddr) //nolint:forcetypeassert
+		return strconv.Itoa(addr.Port), nil
+	default:
+		return "", fmt.Errorf("unsupported protocol %q for port allocation", proto)
+	}
+}
+
+func formatPortSpec(
+	ip string,
+	hostPort string,
+	containerPort string,
+	proto string,
+) string {
+	var sb strings.Builder
+	if ip != "" {
+		sb.WriteString(ip)
+		sb.WriteString(":")
+	}
+	if hostPort != "" || ip != "" {
+		sb.WriteString(hostPort)
+		sb.WriteString(":")
+	}
+	sb.WriteString(containerPort)
+	if proto != "" {
+		sb.WriteString("/")
+		sb.WriteString(proto)
+	}
+	return sb.String()
 }
