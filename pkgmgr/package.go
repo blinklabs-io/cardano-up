@@ -1124,7 +1124,7 @@ func allocateEphemeralPort(proto string) (string, error) {
 			return "", err
 		}
 		if listener == nil {
-			return "", fmt.Errorf("failed to allocate TCP port")
+			return "", errors.New("failed to allocate TCP port")
 		}
 		defer listener.Close()
 		addr := listener.Addr().(*net.TCPAddr) //nolint:forcetypeassert
