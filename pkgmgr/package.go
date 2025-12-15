@@ -1123,6 +1123,9 @@ func allocateEphemeralPort(proto string) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		if listener == nil {
+			return "", fmt.Errorf("failed to allocate TCP port")
+		}
 		defer listener.Close()
 		addr := listener.Addr().(*net.TCPAddr) //nolint:forcetypeassert
 		return strconv.Itoa(addr.Port), nil
@@ -1130,6 +1133,9 @@ func allocateEphemeralPort(proto string) (string, error) {
 		conn, err := net.ListenPacket("udp", "127.0.0.1:0")
 		if err != nil {
 			return "", err
+		}
+		if conn == nil {
+			return "", fmt.Errorf("failed to allocate UDP port")
 		}
 		defer conn.Close()
 		addr := conn.LocalAddr().(*net.UDPAddr) //nolint:forcetypeassert
