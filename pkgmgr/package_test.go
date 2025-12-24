@@ -105,7 +105,7 @@ func TestOSAndARCH(t *testing.T) {
 	pkg.Version = "1.0.0"
 	opts := make(map[string]bool)
 
-	_, _, err := pkg.install(cfg, "test", opts, false)
+	_, _, _, err := pkg.install(cfg, "test", opts, false, nil)
 	if err != nil {
 		t.Errorf("Installation failed: %v", err)
 	}

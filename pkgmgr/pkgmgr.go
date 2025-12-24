@@ -186,11 +186,13 @@ func (p *PackageManager) Install(pkgs ...string) error {
 		tmpPkgOpts := installPkg.Install.defaultOpts()
 		maps.Copy(tmpPkgOpts, installPkg.Options)
 		// Install package
-		notes, outputs, err := installPkg.Install.install(
+		registeredPorts := p.registeredPorts(activeContextName, installPkg.Install.Name)
+		notes, outputs, usedPorts, err := installPkg.Install.install(
 			p.config,
 			activeContextName,
 			tmpPkgOpts,
 			true,
+			registeredPorts,
 		)
 		if err != nil {
 			return err
@@ -206,6 +208,7 @@ func (p *PackageManager) Install(pkgs ...string) error {
 			p.state.InstalledPackages,
 			installedPkg,
 		)
+		p.setRegisteredPorts(activeContextName, installPkg.Install.Name, usedPorts)
 		if err := p.state.Save(); err != nil {
 			return err
 		}
@@ -269,6 +272,7 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 		)
 		// Capture options from existing package
 		pkgOpts := upgradePkg.Installed.Options
+		registeredPorts := p.registeredPorts(activeContextName, upgradePkg.Installed.Package.Name)
 		// Deactivate old package
 		if err := upgradePkg.Installed.Package.deactivate(p.config, activeContextName); err != nil {
 			p.config.Logger.Warn(
@@ -280,11 +284,12 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 			return err
 		}
 		// Install new version
-		notes, outputs, err := upgradePkg.Upgrade.install(
+		notes, outputs, usedPorts, err := upgradePkg.Upgrade.install(
 			p.config,
 			activeContextName,
 			pkgOpts,
 			false,
+			registeredPorts,
 		)
 		if err != nil {
 			return err
@@ -300,6 +305,7 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 			p.state.InstalledPackages,
 			installedPkg,
 		)
+		p.setRegisteredPorts(activeContextName, upgradePkg.Upgrade.Name, usedPorts)
 		if err := p.state.Save(); err != nil {
 			return err
 		}
@@ -720,4 +726,57 @@ func (p *PackageManager) ValidatePackages() error {
 		return ErrOperationFailed
 	}
 	return nil
+}
+
+func (p *PackageManager) registeredPorts(
+	contextName string,
+	pkgName string,
+) PackagePortRegistry {
+	context, ok := p.state.Contexts[contextName]
+	if !ok {
+		return nil
+	}
+	if len(context.PortRegistry) == 0 {
+		return nil
+	}
+	if ports, ok := context.PortRegistry[pkgName]; ok {
+		return clonePackagePortRegistry(ports)
+	}
+	return nil
+}
+
+func (p *PackageManager) setRegisteredPorts(
+	contextName string,
+	pkgName string,
+	ports PackagePortRegistry,
+) {
+	context := p.state.Contexts[contextName]
+	if context.PortRegistry == nil {
+		context.PortRegistry = make(ContextPortRegistry)
+	}
+	if len(ports) == 0 {
+		delete(context.PortRegistry, pkgName)
+	} else {
+		context.PortRegistry[pkgName] = clonePackagePortRegistry(ports)
+	}
+	p.state.Contexts[contextName] = context
+}
+
+// clonePackagePortRegistry returns a copy of the provided package port registry.
+func clonePackagePortRegistry(src PackagePortRegistry) PackagePortRegistry {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(PackagePortRegistry, len(src))
+	for svc, ports := range src {
+		dstMap := make(ServicePortMap, len(src))
+		if len(ports) == 0 {
+			dst[svc] = nil
+		}
+		for k, v := range ports {
+			dstMap[k] = v
+		}
+		dst[svc] = dstMap
+	}
+	return dst
 }
