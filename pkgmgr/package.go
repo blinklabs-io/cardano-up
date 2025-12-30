@@ -1081,7 +1081,7 @@ func ensureHostPortMapping(
 		return "", err
 	}
 	if len(portMappings) != 1 {
-		return rawPort, nil
+		return "", fmt.Errorf("port spec %q expanded to %d mappings; ranges are not supported", rawPort, len(portMappings))
 	}
 	portMapping := portMappings[0]
 	containerPort := portMapping.Port.Port()

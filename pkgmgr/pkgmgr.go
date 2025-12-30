@@ -769,10 +769,10 @@ func clonePackagePortRegistry(src PackagePortRegistry) PackagePortRegistry {
 	}
 	dst := make(PackagePortRegistry, len(src))
 	for svc, ports := range src {
-		dstMap := make(ServicePortMap, len(ports))
 		if len(ports) == 0 {
-			dst[svc] = nil
+			continue
 		}
+		dstMap := make(ServicePortMap, len(ports))
 		for k, v := range ports {
 			dstMap[k] = v
 		}
