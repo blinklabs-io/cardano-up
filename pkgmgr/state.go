@@ -193,7 +193,7 @@ func (s *State) migrateLegacyPortRegistry() error {
 		PortRegistry map[string]map[string]map[string]string `yaml:"portRegistry"`
 	})
 	if err := yaml.Unmarshal(content, &legacyContexts); err != nil {
-		return nil
+		return err
 	}
 	migrated := false
 	for contextName, legacyContext := range legacyContexts {
