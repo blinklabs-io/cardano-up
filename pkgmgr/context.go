@@ -19,22 +19,11 @@ const (
 )
 
 var defaultContext = Context{
-	Description:  "Default context",
-	PortRegistry: make(ContextPortRegistry),
+	Description: "Default context",
 }
 
 type Context struct {
-	Description  string              `yaml:"description"`
-	Network      string              `yaml:"network"`
-	NetworkMagic uint32              `yaml:"networkMagic"`
-	PortRegistry ContextPortRegistry `yaml:"portRegistry,omitempty"`
+	Description  string `yaml:"description"`
+	Network      string `yaml:"network"`
+	NetworkMagic uint32 `yaml:"networkMagic"`
 }
-
-// ContextPortRegistry tracks host port allocations.
-type ContextPortRegistry map[string]PackagePortRegistry
-
-// PackagePortRegistry maps a service name to its container->host port pairs.
-type PackagePortRegistry map[string]ServicePortMap
-
-// ServicePortMap maps container port numbers (as strings) to host ports.
-type ServicePortMap map[string]string

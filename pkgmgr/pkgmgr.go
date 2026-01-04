@@ -594,6 +594,7 @@ func (p *PackageManager) DeleteContext(name string) error {
 		return ErrContextNotExist
 	}
 	delete(p.state.Contexts, name)
+	delete(p.state.PortRegistry, name)
 	if err := p.state.Save(); err != nil {
 		return err
 	}
@@ -732,14 +733,14 @@ func (p *PackageManager) registeredPorts(
 	contextName string,
 	pkgName string,
 ) PackagePortRegistry {
-	context, ok := p.state.Contexts[contextName]
-	if !ok {
+	if len(p.state.PortRegistry) == 0 {
 		return nil
 	}
-	if len(context.PortRegistry) == 0 {
+	contextRegistry, ok := p.state.PortRegistry[contextName]
+	if !ok || len(contextRegistry) == 0 {
 		return nil
 	}
-	if ports, ok := context.PortRegistry[pkgName]; ok {
+	if ports, ok := contextRegistry[pkgName]; ok {
 		return clonePackagePortRegistry(ports)
 	}
 	return nil
@@ -750,33 +751,21 @@ func (p *PackageManager) setRegisteredPorts(
 	pkgName string,
 	ports PackagePortRegistry,
 ) {
-	context := p.state.Contexts[contextName]
-	if context.PortRegistry == nil {
-		context.PortRegistry = make(ContextPortRegistry)
-	}
 	if len(ports) == 0 {
-		delete(context.PortRegistry, pkgName)
-	} else {
-		context.PortRegistry[pkgName] = clonePackagePortRegistry(ports)
-	}
-	p.state.Contexts[contextName] = context
-}
-
-// clonePackagePortRegistry returns a copy of the provided package port registry.
-func clonePackagePortRegistry(src PackagePortRegistry) PackagePortRegistry {
-	if len(src) == 0 {
-		return nil
-	}
-	dst := make(PackagePortRegistry, len(src))
-	for svc, ports := range src {
-		if len(ports) == 0 {
-			continue
+		if ctxRegistry, ok := p.state.PortRegistry[contextName]; ok {
+			delete(ctxRegistry, pkgName)
+			if len(ctxRegistry) == 0 {
+				delete(p.state.PortRegistry, contextName)
+			} else {
+				p.state.PortRegistry[contextName] = ctxRegistry
+			}
 		}
-		dstMap := make(ServicePortMap, len(ports))
-		for k, v := range ports {
-			dstMap[k] = v
-		}
-		dst[svc] = dstMap
+		return
 	}
-	return dst
+	ctxRegistry := p.state.PortRegistry[contextName]
+	if ctxRegistry == nil {
+		ctxRegistry = make(ContextPortRegistry)
+	}
+	ctxRegistry[pkgName] = clonePackagePortRegistry(ports)
+	p.state.PortRegistry[contextName] = ctxRegistry
 }
