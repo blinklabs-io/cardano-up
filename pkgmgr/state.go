@@ -25,6 +25,7 @@ const (
 	contextsFilename          = "contexts.yaml"
 	activeContextFilename     = "active_context.yaml"
 	installedPackagesFilename = "installed_packages.yaml"
+	portRegistryFilename      = "port_registry.yaml"
 )
 
 type State struct {
@@ -32,12 +33,14 @@ type State struct {
 	ActiveContext     string
 	Contexts          map[string]Context
 	InstalledPackages []InstalledPackage
+	PortRegistry      PortRegistry
 }
 
 func NewState(cfg Config) *State {
 	return &State{
-		config:   cfg,
-		Contexts: make(map[string]Context),
+		config:       cfg,
+		Contexts:     make(map[string]Context),
+		PortRegistry: make(PortRegistry),
 	}
 }
 
@@ -51,6 +54,9 @@ func (s *State) Load() error {
 	if err := s.loadInstalledPackages(); err != nil {
 		return err
 	}
+	if err := s.loadPortRegistry(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -62,6 +68,9 @@ func (s *State) Save() error {
 		return err
 	}
 	if err := s.saveInstalledPackages(); err != nil {
+		return err
+	}
+	if err := s.savePortRegistry(); err != nil {
 		return err
 	}
 	return nil
@@ -147,4 +156,18 @@ func (s *State) loadInstalledPackages() error {
 
 func (s *State) saveInstalledPackages() error {
 	return s.saveFile(installedPackagesFilename, &(s.InstalledPackages))
+}
+
+func (s *State) loadPortRegistry() error {
+	if err := s.loadFile(portRegistryFilename, &(s.PortRegistry)); err != nil {
+		return err
+	}
+	if s.PortRegistry == nil {
+		s.PortRegistry = make(PortRegistry)
+	}
+	return nil
+}
+
+func (s *State) savePortRegistry() error {
+	return s.saveFile(portRegistryFilename, &(s.PortRegistry))
 }
