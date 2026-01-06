@@ -13,7 +13,7 @@ type PackagePortRegistry map[string]ServicePortMap
 type ServicePortMap map[string]string
 
 func cloneServicePortMap(src ServicePortMap) ServicePortMap {
-	if len(src) == 0 {
+	if src == nil {
 		return nil
 	}
 	dst := make(ServicePortMap, len(src))

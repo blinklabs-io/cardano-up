@@ -165,58 +165,9 @@ func (s *State) loadPortRegistry() error {
 	if s.PortRegistry == nil {
 		s.PortRegistry = make(PortRegistry)
 	}
-	if len(s.PortRegistry) == 0 {
-		if err := s.migrateLegacyPortRegistry(); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
 func (s *State) savePortRegistry() error {
 	return s.saveFile(portRegistryFilename, &(s.PortRegistry))
-}
-
-func (s *State) migrateLegacyPortRegistry() error {
-	contextsPath := filepath.Join(
-		s.config.ConfigDir,
-		contextsFilename,
-	)
-	content, err := os.ReadFile(contextsPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	legacyContexts := make(map[string]struct {
-		PortRegistry map[string]map[string]map[string]string `yaml:"portRegistry"`
-	})
-	if err := yaml.Unmarshal(content, &legacyContexts); err != nil {
-		return err
-	}
-	migrated := false
-	for contextName, legacyContext := range legacyContexts {
-		if len(legacyContext.PortRegistry) == 0 {
-			continue
-		}
-		if s.PortRegistry == nil {
-			s.PortRegistry = make(PortRegistry)
-		}
-		contextRegistry := make(ContextPortRegistry, len(legacyContext.PortRegistry))
-		for pkgName, pkgRegistry := range legacyContext.PortRegistry {
-			contextRegistry[pkgName] = make(PackagePortRegistry, len(pkgRegistry))
-			for svcName, svcPorts := range pkgRegistry {
-				contextRegistry[pkgName][svcName] = cloneServicePortMap(ServicePortMap(svcPorts))
-			}
-		}
-		s.PortRegistry[contextName] = contextRegistry
-		migrated = true
-	}
-	if migrated {
-		if err := s.savePortRegistry(); err != nil {
-			return err
-		}
-	}
-	return nil
 }
