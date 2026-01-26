@@ -64,7 +64,7 @@ func contextListCommand() *cobra.Command {
 					"Description",
 				),
 			)
-			var tmpContextNames []string
+			tmpContextNames := make([]string, 0, len(contexts))
 			for contextName := range contexts {
 				tmpContextNames = append(tmpContextNames, contextName)
 			}
@@ -227,7 +227,7 @@ func contextEnvCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			pm := createPackageManager()
 			contextEnv := pm.ContextEnv()
-			var tmpKeys []string
+			tmpKeys := make([]string, 0, len(contextEnv))
 			for k := range contextEnv {
 				tmpKeys = append(tmpKeys, k)
 			}
