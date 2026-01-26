@@ -23,3 +23,9 @@ func downCommand() *cobra.Command {
 	}
 	return cmd
 }
+
+func stopCommand() *cobra.Command {
+	cmd := downCommand()
+	cmd.Use = "stop"
+	return cmd
+}

@@ -31,3 +31,10 @@ func upCommand() *cobra.Command {
 	}
 	return cmd
 }
+
+// startCommand is an alias of upCommand
+func startCommand() *cobra.Command {
+	cmd := upCommand()
+	cmd.Use = "start"
+	return cmd
+}
