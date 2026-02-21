@@ -43,7 +43,7 @@ func logsCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			pm := createPackageManager()
 			if err := pm.Logs(args[0], logsFlags.follow, logsFlags.tail, os.Stdout, os.Stderr); err != nil {
-				slog.Error(err.Error())
+				slog.Error("failed to get logs", "error", err)
 				os.Exit(1)
 			}
 		},

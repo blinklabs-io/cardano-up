@@ -959,7 +959,7 @@ func (p *PackageInstallStepFile) install(
 		if err != nil {
 			return err
 		}
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := http.DefaultClient.Do(req) //nolint:gosec // URL is validated above
 		if err != nil {
 			return err
 		}
