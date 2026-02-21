@@ -491,15 +491,17 @@ func (p *PackageManager) Info(pkgs ...string) error {
 				return err
 			}
 			if running {
-				statusSb.WriteString(fmt.Sprintf(
+				fmt.Fprintf(
+					&statusSb,
 					"%-60s RUNNING\n",
 					svc.ContainerName,
-				))
+				)
 			} else {
-				statusSb.WriteString(fmt.Sprintf(
+				fmt.Fprintf(
+					&statusSb,
 					"%-60s NOT RUNNING\n",
 					svc.ContainerName,
-				))
+				)
 			}
 			for _, port := range svc.Ports {
 				var containerPort, hostPort string
@@ -515,11 +517,12 @@ func (p *PackageManager) Info(pkgs ...string) error {
 					containerPort = portParts[2]
 					hostPort = portParts[1]
 				}
-				portSb.WriteString(fmt.Sprintf(
+				fmt.Fprintf(
+					&portSb,
 					"%-5s (host) => %-5s (container)\n",
 					hostPort,
 					containerPort,
-				))
+				)
 			}
 		}
 		if statusSb.String() != "" {
