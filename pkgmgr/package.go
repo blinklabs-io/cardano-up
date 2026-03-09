@@ -981,7 +981,7 @@ func (p *PackageInstallStepFile) install(
 	} else {
 		return errors.New("packages must provide content, source, or url for file install types")
 	}
-	if err := os.WriteFile(filePath, fileContent, fileMode); err != nil {
+	if err := os.WriteFile(filePath, fileContent, fileMode); err != nil { //nolint:gosec // path traversal mitigated by prefix check above
 		return err
 	}
 	cfg.Logger.Debug("wrote file " + filePath)
