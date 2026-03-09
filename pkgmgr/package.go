@@ -914,6 +914,11 @@ func (p *PackageInstallStepFile) install(
 		pkgName,
 		tmpFilePath,
 	)
+	filePath = filepath.Clean(filePath)
+	expectedPrefix := filepath.Clean(filepath.Join(cfg.DataDir, pkgName)) + string(os.PathSeparator)
+	if !strings.HasPrefix(filePath, expectedPrefix) {
+		return fmt.Errorf("invalid file path %q: path traversal detected", filePath)
+	}
 	parentDir := filepath.Dir(filePath)
 	if err := os.MkdirAll(parentDir, fs.ModePerm); err != nil {
 		return err
