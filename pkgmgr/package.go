@@ -914,6 +914,11 @@ func (p *PackageInstallStepFile) install(
 		pkgName,
 		tmpFilePath,
 	)
+	filePath = filepath.Clean(filePath)
+	expectedPrefix := filepath.Clean(filepath.Join(cfg.DataDir, pkgName)) + string(os.PathSeparator)
+	if !strings.HasPrefix(filePath, expectedPrefix) {
+		return fmt.Errorf("invalid file path %q: path traversal detected", filePath)
+	}
 	parentDir := filepath.Dir(filePath)
 	if err := os.MkdirAll(parentDir, fs.ModePerm); err != nil {
 		return err
@@ -976,7 +981,7 @@ func (p *PackageInstallStepFile) install(
 	} else {
 		return errors.New("packages must provide content, source, or url for file install types")
 	}
-	if err := os.WriteFile(filePath, fileContent, fileMode); err != nil {
+	if err := os.WriteFile(filePath, fileContent, fileMode); err != nil { //nolint:gosec // path traversal mitigated by prefix check above
 		return err
 	}
 	cfg.Logger.Debug("wrote file " + filePath)
