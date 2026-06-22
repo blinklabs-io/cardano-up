@@ -83,14 +83,14 @@ func listCommand() *cobra.Command {
 		Short: "List installed packages",
 		Run: func(cmd *cobra.Command, args []string) {
 			pm := createPackageManager()
-			activeContextName, _ := pm.ActiveContext()
+			contextName, _ := pm.EffectiveContext()
 			var packages []pkgmgr.InstalledPackage
 			if listFlags.all {
 				packages = pm.InstalledPackagesAllContexts()
 				slog.Info("Installed packages (all contexts):\n")
 			} else {
 				packages = pm.InstalledPackages()
-				slog.Info(fmt.Sprintf("Installed packages (from context %q):\n", activeContextName))
+				slog.Info(fmt.Sprintf("Installed packages (from context %q):\n", contextName))
 			}
 			if len(packages) > 0 {
 				slog.Info(
