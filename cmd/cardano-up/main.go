@@ -28,11 +28,12 @@ const (
 	programName = "cardano-up"
 )
 
-func main() {
-	globalFlags := struct {
-		debug bool
-	}{}
+var globalFlags = struct {
+	debug   bool
+	context string
+}{}
 
+func main() {
 	rootCmd := &cobra.Command{
 		Use: programName,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
@@ -53,6 +54,8 @@ func main() {
 	// Global flags
 	rootCmd.PersistentFlags().
 		BoolVarP(&globalFlags.debug, "debug", "D", false, "enable debug logging")
+	rootCmd.PersistentFlags().
+		StringVarP(&globalFlags.context, "context", "c", "", "target the named context for this command instead of the active one")
 
 	// Add subcommands
 	rootCmd.AddCommand(
@@ -96,6 +99,20 @@ func createPackageManager() *pkgmgr.PackageManager {
 	if err != nil {
 		slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
 		os.Exit(1)
+	}
+	// Apply per-invocation context override (--context) without mutating the
+	// persisted active context
+	if globalFlags.context != "" {
+		if err := pm.SetActiveContextOverride(globalFlags.context); err != nil {
+			slog.Error(
+				fmt.Sprintf(
+					"invalid --context %q: %s",
+					globalFlags.context,
+					err,
+				),
+			)
+			os.Exit(1)
+		}
 	}
 	return pm
 }

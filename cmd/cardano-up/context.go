@@ -31,6 +31,15 @@ var contextFlags = struct {
 	force       bool
 }{}
 
+func rejectContextOverride(cmd *cobra.Command, args []string) error {
+	if globalFlags.context != "" {
+		return errors.New(
+			"--context cannot be used with context management commands",
+		)
+	}
+	return nil
+}
+
 func contextCommand() *cobra.Command {
 	contextCommand := &cobra.Command{
 		Use:   "context",
@@ -92,8 +101,9 @@ func contextListCommand() *cobra.Command {
 
 func contextSelectCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:   "select <context name>",
-		Short: "Select the active context",
+		Use:     "select <context name>",
+		Short:   "Select the active context",
+		PreRunE: rejectContextOverride,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return errors.New("no context name provided")
@@ -121,8 +131,9 @@ func contextSelectCommand() *cobra.Command {
 
 func contextCreateCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "create <context name>",
-		Short: "Create a new context",
+		Use:     "create <context name>",
+		Short:   "Create a new context",
+		PreRunE: rejectContextOverride,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return errors.New("no context name provided")
@@ -154,8 +165,9 @@ func contextCreateCommand() *cobra.Command {
 
 func contextDeleteCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "delete <context name>",
-		Short: "Delete a context",
+		Use:     "delete <context name>",
+		Short:   "Delete a context",
+		PreRunE: rejectContextOverride,
 		Args: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return errors.New("no context name provided")

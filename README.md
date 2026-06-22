@@ -74,6 +74,18 @@ of the node.
 
 Commands such as `install`, `uninstall`, and `list` work in the active context. You can use the `context` command to change the active context or manage available contexts.
 
+### Targeting a context per command
+
+By default, commands operate on the active context. You can target a different context for a single invocation with the global `--context` (`-c`) flag, without changing the active context shared across your shells:
+
+```
+cardano-up --context my-project up
+cardano-up --context my-project logs cardano-node
+eval $(cardano-up --context my-project context env)
+```
+
+This is useful when several projects each drive their own stack on the same machine. The `--context` flag is honored by the lifecycle and query commands (`up`/`start`, `down`/`stop`, `install`, `uninstall`, `upgrade`, `logs`, `info`, `list`, and `context env`). It cannot be combined with the context management commands (`context select`, `context create`, `context delete`), which manage the persisted active context itself.
+
 ## Command reference
 
 The `cardano-up` command consists of multiple subcommands. You can list all subcommands by running `cardano-up` with no arguments or with the `--help` option.
@@ -101,9 +113,10 @@ Available Commands:
   version        Displays the version
 
 Flags:
-  -D, --debug   enable debug logging
-  -h, --help    help for cardano-up
-  -v, --verbose Show all available versions of packages
+  -c, --context string   target the named context for this command instead of the active one
+  -D, --debug            enable debug logging
+  -h, --help             help for cardano-up
+  -v, --verbose          Show all available versions of packages
 
 Use "cardano-up [command] --help" for more information about a command.
 ```

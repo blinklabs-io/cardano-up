@@ -54,25 +54,26 @@ func installCommand() *cobra.Command {
 
 func installCommandRun(cmd *cobra.Command, args []string) {
 	pm := createPackageManager()
-	activeContextName, activeContext := pm.ActiveContext()
+	contextName, context := pm.EffectiveContext()
 	// Update context network if specified
 	if installFlags.network != "" {
-		activeContext.Network = installFlags.network
-		if err := pm.UpdateContext(activeContextName, activeContext); err != nil {
+		context.Network = installFlags.network
+		if err := pm.UpdateContext(contextName, context); err != nil {
 			slog.Error(err.Error())
 			os.Exit(1)
 		}
 		slog.Debug(
 			fmt.Sprintf(
-				"set active context network to %q",
+				"set network to %q for context %q",
 				installFlags.network,
+				contextName,
 			),
 		)
 	}
 	// Check that context network is set
-	if activeContext.Network == "" {
-		activeContext.Network = defaultNetwork
-		if err := pm.UpdateContext(activeContextName, activeContext); err != nil {
+	if context.Network == "" {
+		context.Network = defaultNetwork
+		if err := pm.UpdateContext(contextName, context); err != nil {
 			slog.Error(err.Error())
 			os.Exit(1)
 		}
@@ -80,7 +81,7 @@ func installCommandRun(cmd *cobra.Command, args []string) {
 			fmt.Sprintf(
 				"defaulting to network %q for context %q",
 				defaultNetwork,
-				activeContextName,
+				contextName,
 			),
 		)
 	}

@@ -30,6 +30,7 @@ type PackageManager struct {
 	config            Config
 	state             *State
 	availablePackages []Package
+	contextOverride   string
 }
 
 func NewPackageManager(cfg Config) (*PackageManager, error) {
@@ -65,12 +66,12 @@ func (p *PackageManager) init() error {
 }
 
 func (p *PackageManager) initTemplate() {
-	activeContextName, activeContext := p.ActiveContext()
+	contextName, context := p.effectiveContext()
 	tmplVars := map[string]any{
 		"Context": map[string]any{
-			"Name":         activeContextName,
-			"Network":      activeContext.Network,
-			"NetworkMagic": activeContext.NetworkMagic,
+			"Name":         contextName,
+			"Network":      context.Network,
+			"NetworkMagic": context.NetworkMagic,
 		},
 		"Env": p.ContextEnv(),
 	}
@@ -140,9 +141,10 @@ func (p *PackageManager) Down() error {
 }
 
 func (p *PackageManager) InstalledPackages() []InstalledPackage {
+	contextName, _ := p.effectiveContext()
 	var ret []InstalledPackage
 	for _, pkg := range p.state.InstalledPackages {
-		if pkg.Context == p.state.ActiveContext {
+		if pkg.Context == contextName {
 			ret = append(ret, pkg)
 		}
 	}
@@ -155,14 +157,14 @@ func (p *PackageManager) InstalledPackagesAllContexts() []InstalledPackage {
 
 func (p *PackageManager) Install(pkgs ...string) error {
 	// Check context for network
-	activeContextName, activeContext := p.ActiveContext()
-	if activeContext.Network == "" {
+	contextName, context := p.effectiveContext()
+	if context.Network == "" {
 		return ErrContextInstallNoNetwork
 	}
 	resolver, err := NewResolver(
 		p.InstalledPackages(),
 		p.AvailablePackages(),
-		activeContextName,
+		contextName,
 		p.config.Logger,
 	)
 	if err != nil {
@@ -186,10 +188,10 @@ func (p *PackageManager) Install(pkgs ...string) error {
 		tmpPkgOpts := installPkg.Install.defaultOpts()
 		maps.Copy(tmpPkgOpts, installPkg.Options)
 		// Install package
-		registeredPorts := p.registeredPorts(activeContextName, installPkg.Install.Name)
+		registeredPorts := p.registeredPorts(contextName, installPkg.Install.Name)
 		notes, outputs, usedPorts, err := installPkg.Install.install(
 			p.config,
-			activeContextName,
+			contextName,
 			tmpPkgOpts,
 			true,
 			registeredPorts,
@@ -199,7 +201,7 @@ func (p *PackageManager) Install(pkgs ...string) error {
 		}
 		installedPkg := NewInstalledPackage(
 			installPkg.Install,
-			activeContextName,
+			contextName,
 			notes,
 			outputs,
 			tmpPkgOpts,
@@ -208,7 +210,7 @@ func (p *PackageManager) Install(pkgs ...string) error {
 			p.state.InstalledPackages,
 			installedPkg,
 		)
-		p.setRegisteredPorts(activeContextName, installPkg.Install.Name, usedPorts)
+		p.setRegisteredPorts(contextName, installPkg.Install.Name, usedPorts)
 		if err := p.state.Save(); err != nil {
 			return err
 		}
@@ -223,7 +225,7 @@ func (p *PackageManager) Install(pkgs ...string) error {
 			sb.WriteString("\n")
 		}
 		// Activate package
-		if err := installPkg.Install.activate(p.config, activeContextName); err != nil {
+		if err := installPkg.Install.activate(p.config, contextName); err != nil {
 			p.config.Logger.Warn(
 				fmt.Sprintf("failed to activate package: %s", err),
 			)
@@ -237,7 +239,7 @@ func (p *PackageManager) Install(pkgs ...string) error {
 	p.config.Logger.Info(
 		fmt.Sprintf(
 			"Successfully installed package(s) in context %q: %s",
-			activeContextName,
+			contextName,
 			strings.Join(installedPkgs, ", "),
 		),
 	)
@@ -245,11 +247,11 @@ func (p *PackageManager) Install(pkgs ...string) error {
 }
 
 func (p *PackageManager) Upgrade(pkgs ...string) error {
-	activeContextName, _ := p.ActiveContext()
+	contextName, _ := p.effectiveContext()
 	resolver, err := NewResolver(
 		p.InstalledPackages(),
 		p.AvailablePackages(),
-		activeContextName,
+		contextName,
 		p.config.Logger,
 	)
 	if err != nil {
@@ -272,9 +274,9 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 		)
 		// Capture options from existing package
 		pkgOpts := upgradePkg.Installed.Options
-		registeredPorts := p.registeredPorts(activeContextName, upgradePkg.Installed.Package.Name)
+		registeredPorts := p.registeredPorts(contextName, upgradePkg.Installed.Package.Name)
 		// Deactivate old package
-		if err := upgradePkg.Installed.Package.deactivate(p.config, activeContextName); err != nil {
+		if err := upgradePkg.Installed.Package.deactivate(p.config, contextName); err != nil {
 			p.config.Logger.Warn(
 				fmt.Sprintf("failed to deactivate package: %s", err),
 			)
@@ -286,7 +288,7 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 		// Install new version
 		notes, outputs, usedPorts, err := upgradePkg.Upgrade.install(
 			p.config,
-			activeContextName,
+			contextName,
 			pkgOpts,
 			false,
 			registeredPorts,
@@ -296,7 +298,7 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 		}
 		installedPkg := NewInstalledPackage(
 			upgradePkg.Upgrade,
-			activeContextName,
+			contextName,
 			notes,
 			outputs,
 			pkgOpts,
@@ -305,7 +307,7 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 			p.state.InstalledPackages,
 			installedPkg,
 		)
-		p.setRegisteredPorts(activeContextName, upgradePkg.Upgrade.Name, usedPorts)
+		p.setRegisteredPorts(contextName, upgradePkg.Upgrade.Name, usedPorts)
 		if err := p.state.Save(); err != nil {
 			return err
 		}
@@ -323,7 +325,7 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 			return err
 		}
 		// Activate new package
-		if err := upgradePkg.Upgrade.activate(p.config, activeContextName); err != nil {
+		if err := upgradePkg.Upgrade.activate(p.config, contextName); err != nil {
 			p.config.Logger.Warn(
 				fmt.Sprintf("failed to activate package: %s", err),
 			)
@@ -336,7 +338,7 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 	p.config.Logger.Info(
 		fmt.Sprintf(
 			"Successfully upgraded/installed package(s) in context %q: %s",
-			activeContextName,
+			contextName,
 			strings.Join(installedPkgs, ", "),
 		),
 	)
@@ -349,7 +351,7 @@ func (p *PackageManager) Uninstall(
 	force bool,
 ) error {
 	// Find installed packages
-	activeContextName, _ := p.ActiveContext()
+	contextName, _ := p.effectiveContext()
 	installedPackages := p.InstalledPackages()
 	var uninstallPkgs []InstalledPackage
 	foundPackage := false
@@ -364,14 +366,14 @@ func (p *PackageManager) Uninstall(
 		}
 	}
 	if !foundPackage {
-		return NewPackageNotInstalledError(pkgName, activeContextName)
+		return NewPackageNotInstalledError(pkgName, contextName)
 	}
 	if !force {
 		// Resolve dependencies
 		resolver, err := NewResolver(
 			p.InstalledPackages(),
 			p.AvailablePackages(),
-			activeContextName,
+			contextName,
 			p.config.Logger,
 		)
 		if err != nil {
@@ -383,7 +385,7 @@ func (p *PackageManager) Uninstall(
 	}
 	for _, uninstallPkg := range uninstallPkgs {
 		// Deactivate package
-		if err := uninstallPkg.Package.deactivate(p.config, activeContextName); err != nil {
+		if err := uninstallPkg.Package.deactivate(p.config, contextName); err != nil {
 			p.config.Logger.Warn(
 				fmt.Sprintf("failed to deactivate package: %s", err),
 			)
@@ -399,7 +401,7 @@ func (p *PackageManager) Uninstall(
 				"Successfully uninstalled package %s (= %s) from context %q",
 				uninstallPkg.Package.Name,
 				uninstallPkg.Package.Version,
-				activeContextName,
+				contextName,
 			),
 		)
 	}
@@ -414,7 +416,7 @@ func (p *PackageManager) Logs(
 	stderrWriter io.Writer,
 ) error {
 	// Find installed packages
-	activeContextName, _ := p.ActiveContext()
+	contextName, _ := p.effectiveContext()
 	installedPackages := p.InstalledPackages()
 	var logsPkg InstalledPackage
 	foundPackage := false
@@ -426,9 +428,9 @@ func (p *PackageManager) Logs(
 		}
 	}
 	if !foundPackage {
-		return NewPackageNotInstalledError(pkgName, activeContextName)
+		return NewPackageNotInstalledError(pkgName, contextName)
 	}
-	services, err := logsPkg.Package.services(p.config, activeContextName)
+	services, err := logsPkg.Package.services(p.config, contextName)
 	if err != nil {
 		return err
 	}
@@ -445,7 +447,7 @@ func (p *PackageManager) Logs(
 
 func (p *PackageManager) Info(pkgs ...string) error {
 	// Find installed packages
-	activeContextName, _ := p.ActiveContext()
+	contextName, _ := p.effectiveContext()
 	installedPackages := p.InstalledPackages()
 	var infoPkgs []InstalledPackage
 	for _, pkg := range pkgs {
@@ -461,7 +463,7 @@ func (p *PackageManager) Info(pkgs ...string) error {
 			}
 		}
 		if !foundPackage {
-			return NewPackageNotInstalledError(pkg, activeContextName)
+			return NewPackageNotInstalledError(pkg, contextName)
 		}
 	}
 	var sb strings.Builder
@@ -471,7 +473,7 @@ func (p *PackageManager) Info(pkgs ...string) error {
 		sb.WriteString("\nVersion: ")
 		sb.WriteString(infoPkg.Package.Version)
 		sb.WriteString("\nContext: ")
-		sb.WriteString(activeContextName)
+		sb.WriteString(contextName)
 		if infoPkg.PostInstallNotes != "" {
 			sb.WriteString(
 				"\n\nPost-install notes:\n\n" + infoPkg.PostInstallNotes,
@@ -574,6 +576,30 @@ func (p *PackageManager) Contexts() map[string]Context {
 
 func (p *PackageManager) ActiveContext() (string, Context) {
 	return p.state.ActiveContext, p.state.Contexts[p.state.ActiveContext]
+}
+
+// Returns the context targeted by this PackageManager.
+func (p *PackageManager) effectiveContext() (string, Context) {
+	if p.contextOverride != "" {
+		return p.contextOverride, p.state.Contexts[p.contextOverride]
+	}
+	return p.state.ActiveContext, p.state.Contexts[p.state.ActiveContext]
+}
+
+func (p *PackageManager) EffectiveContext() (string, Context) {
+	return p.effectiveContext()
+}
+
+// SetActiveContextOverride targets the named context for the lifetime of this
+// PackageManager instance without mutating the persisted effective context.
+func (p *PackageManager) SetActiveContextOverride(name string) error {
+	if _, ok := p.state.Contexts[name]; !ok {
+		return ErrContextNotExist
+	}
+	p.contextOverride = name
+	// Rebuild templating values so they reflect the target context
+	p.initTemplate()
+	return nil
 }
 
 func (p *PackageManager) AddContext(name string, context Context) error {
