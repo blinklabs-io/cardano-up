@@ -64,8 +64,9 @@ func installCommandRun(cmd *cobra.Command, args []string) {
 		}
 		slog.Debug(
 			fmt.Sprintf(
-				"set active context network to %q",
+				"set network to %q for context %q",
 				installFlags.network,
+				contextName,
 			),
 		)
 	}
