@@ -659,9 +659,15 @@ func (p Package) runHookScript(cfg Config, hookScript string) error {
 		return fmt.Errorf("failed to render hook script template: %w", err)
 	}
 	cmd := exec.Command("/bin/sh", "-c", renderedScript)
+	// Wire the hook's stdio straight through to our own. Forwarding stdin is
+	// what lets an interactive child process inherit our controlling terminal:
+	// the cardano-node preInstall hook shells out to the mithril-client wrapper,
+	// which runs "docker run -ti ...". Without a real stdin the nested TTY
+	// allocation breaks, leaving the terminal in a bad state and orphaning the
+	// long-running snapshot download in the background. See issue #239.
+	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	// We won't be reading or writing, so throw away the PTY file
 	err = cmd.Start()
 	if err != nil {
 		return fmt.Errorf("failed to run hook script: %w", err)

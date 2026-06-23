@@ -15,6 +15,8 @@
 package pkgmgr
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -208,5 +210,99 @@ func TestServiceHooks_PreStartAndPreStop(t *testing.T) {
 			string(preStopOutput),
 			"prestop executed\n",
 		)
+	}
+}
+
+// runHookWithStdin runs the given hook script with the provided file as the
+// process stdin, capturing whatever the hook writes to stdout/stderr.
+//
+// runHookScript wires the child's stdio to the os.Std* package vars, so the
+// only way to exercise that behavior is to swap those globals for the duration
+// of the call. That makes these tests inherently non-parallel.
+func runHookWithStdin(
+	t *testing.T,
+	stdin *os.File,
+	script string,
+) (string, error) {
+	t.Helper()
+
+	rOut, wOut, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+
+	// Drain the read end concurrently so a hook that produces more output than
+	// the pipe buffer can hold does not deadlock against cmd.Wait().
+	outCh := make(chan string, 1)
+	go func() {
+		var buf bytes.Buffer
+		_, _ = io.Copy(&buf, rOut)
+		outCh <- buf.String()
+	}()
+
+	origIn, origOut, origErr := os.Stdin, os.Stdout, os.Stderr
+	os.Stdin, os.Stdout, os.Stderr = stdin, wOut, wOut
+	defer func() {
+		os.Stdin, os.Stdout, os.Stderr = origIn, origOut, origErr
+	}()
+
+	cfg := Config{Template: NewTemplate(nil)}
+	runErr := Package{}.runHookScript(cfg, script)
+
+	// Close our copy of the write end so the drain goroutine sees EOF.
+	_ = wOut.Close()
+	out := <-outCh
+	_ = rOut.Close()
+
+	return out, runErr
+}
+
+func TestRunHookScriptForwardsStdin(t *testing.T) {
+	// A regular file gives the hook a natural EOF, so `cat` reads it and exits.
+	inPath := filepath.Join(t.TempDir(), "stdin")
+	want := "hello from stdin\n"
+	if err := os.WriteFile(inPath, []byte(want), 0o600); err != nil {
+		t.Fatalf("failed to write stdin file: %v", err)
+	}
+	f, err := os.Open(inPath)
+	if err != nil {
+		t.Fatalf("failed to open stdin file: %v", err)
+	}
+	defer f.Close()
+
+	got, err := runHookWithStdin(t, f, "cat")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != want {
+		t.Fatalf("stdin was not forwarded to the hook: got %q, want %q", got, want)
+	}
+}
+
+func TestRunHookScriptSuccess(t *testing.T) {
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatalf("failed to open %s: %v", os.DevNull, err)
+	}
+	defer f.Close()
+
+	if _, err := runHookWithStdin(t, f, "exit 0"); err != nil {
+		t.Fatalf("expected success, got error: %v", err)
+	}
+}
+
+func TestRunHookScriptError(t *testing.T) {
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatalf("failed to open %s: %v", os.DevNull, err)
+	}
+	defer f.Close()
+
+	_, err = runHookWithStdin(t, f, "exit 7")
+	if err == nil {
+		t.Fatal("expected a non-zero exit to return an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "exited with error") {
+		t.Fatalf("unexpected error message: %v", err)
 	}
 }
