@@ -110,6 +110,13 @@ func (p Package) hasTags(tags []string) bool {
 	return true
 }
 
+func (p Package) availableForTags(tags []string) bool {
+	if slices.Contains(p.Tags, "docker") && !slices.Contains(tags, "docker") {
+		return false
+	}
+	return p.hasTags(tags)
+}
+
 func (p Package) install(
 	cfg Config,
 	context string,
