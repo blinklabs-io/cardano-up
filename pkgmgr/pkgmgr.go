@@ -109,7 +109,7 @@ func (p *PackageManager) AvailablePackages() []Package {
 		}
 	}
 	for _, pkg := range p.availablePackages {
-		if pkg.hasTags(p.config.RequiredPackageTags) {
+		if pkg.availableForTags(p.config.RequiredPackageTags) {
 			ret = append(ret, pkg)
 		}
 	}

@@ -22,6 +22,8 @@ import (
 	"runtime"
 )
 
+var checkDockerConnectivity = CheckDockerConnectivity
+
 type Config struct {
 	BinDir              string
 	CacheDir            string
@@ -59,6 +61,13 @@ func NewDefaultConfig() (Config, error) {
 			err,
 		)
 	}
+	requiredPackageTags := []string{
+		runtime.GOOS,
+		runtime.GOARCH,
+	}
+	if checkDockerConnectivity() == nil {
+		requiredPackageTags = append(requiredPackageTags, "docker")
+	}
 	ret := Config{
 		BinDir: userBinDir,
 		CacheDir: filepath.Join(
@@ -73,13 +82,9 @@ func NewDefaultConfig() (Config, error) {
 			userDataDir,
 			"cardano-up",
 		),
-		Logger: slog.Default(),
-		RequiredPackageTags: []string{
-			"docker",
-			runtime.GOOS,
-			runtime.GOARCH,
-		},
-		RegistryUrl: "https://github.com/blinklabs-io/cardano-up-packages/archive/refs/heads/main.zip",
+		Logger:              slog.Default(),
+		RequiredPackageTags: requiredPackageTags,
+		RegistryUrl:         "https://github.com/blinklabs-io/cardano-up-packages/archive/refs/heads/main.zip",
 	}
 	return ret, nil
 }

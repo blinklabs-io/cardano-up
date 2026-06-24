@@ -110,6 +110,26 @@ func (p Package) hasTags(tags []string) bool {
 	return true
 }
 
+func (p Package) availableForTags(tags []string) bool {
+	packageNeedsDocker := slices.Contains(p.Tags, "docker")
+	requiredHasDocker := slices.Contains(tags, "docker")
+
+	if packageNeedsDocker {
+		if !requiredHasDocker {
+			return false
+		}
+		return p.hasTags(tags)
+	}
+
+	filteredTags := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		if tag != "docker" {
+			filteredTags = append(filteredTags, tag)
+		}
+	}
+	return p.hasTags(filteredTags)
+}
+
 func (p Package) install(
 	cfg Config,
 	context string,
