@@ -109,3 +109,22 @@ func TestPackageAvailableForTagsWithDockerTag(t *testing.T) {
 		t.Fatal("expected docker-tagged package to be available with docker tag")
 	}
 }
+
+// Non-Docker packages should remain available when Docker is detected.
+func TestPackageAvailableForTagsWithDockerTagDoesNotHideNonDockerPackage(t *testing.T) {
+	pkg := Package{
+		Tags: []string{
+			"darwin",
+			"arm64",
+		},
+	}
+	tags := []string{
+		"docker",
+		"darwin",
+		"arm64",
+	}
+
+	if !pkg.availableForTags(tags) {
+		t.Fatal("expected non-docker package to be available with docker tag")
+	}
+}
