@@ -289,6 +289,9 @@ The package manifest format is a YAML file with the following fields:
 | `description` | | Package description |
 | `preInstallScript` | | Arbitrary command that will be run before the package is installed |
 | `postInstallScript` | | Arbitrary command that will be run after the package is installed |
+| `preStartScript` | | Arbitrary command that will be run before package services are started |
+| `postStartScript` | | Arbitrary command that will be run after package services are started |
+| `preStopScript` | | Arbitrary command that will be run before package services are stopped |
 | `preUninstallScript` | | Arbitrary command that will be run before the package is uninstalled |
 | `postUninstallScript` | | Arbitrary command that will be run after the package is uninstalled |
 | `installSteps` | | Steps to install package |

@@ -48,6 +48,7 @@ type Package struct {
 	PreInstallScript    string               `yaml:"preInstallScript,omitempty"`
 	PostInstallScript   string               `yaml:"postInstallScript,omitempty"`
 	PreStartScript      string               `yaml:"preStartScript,omitempty"`
+	PostStartScript     string               `yaml:"postStartScript,omitempty"`
 	PreStopScript       string               `yaml:"preStopScript,omitempty"`
 	PreUninstallScript  string               `yaml:"preUninstallScript,omitempty"`
 	PostUninstallScript string               `yaml:"postUninstallScript,omitempty"`
@@ -67,6 +68,16 @@ type PackageOutput struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description"`
 	Value       string `yaml:"value"`
+}
+
+type serviceLifecycle interface {
+	Running() (bool, error)
+	Start() error
+	Stop() error
+}
+
+var newServiceFromContainerName = func(containerName string, logger *slog.Logger) (serviceLifecycle, error) {
+	return NewDockerServiceFromContainerName(containerName, logger)
 }
 
 func NewPackageFromFile(path string) (Package, error) {
@@ -528,6 +539,7 @@ func (p Package) startService(cfg Config, context string) error {
 		}
 	}
 	var startErrors []string
+	startedServices := make([]serviceLifecycle, 0)
 	for _, step := range p.InstallSteps {
 		if step.Docker != nil {
 			if step.Docker.PullOnly {
@@ -538,7 +550,7 @@ func (p Package) startService(cfg Config, context string) error {
 				pkgName,
 				step.Docker.ContainerName,
 			)
-			dockerService, err := NewDockerServiceFromContainerName(
+			dockerService, err := newServiceFromContainerName(
 				containerName,
 				cfg.Logger,
 			)
@@ -551,6 +563,21 @@ func (p Package) startService(cfg Config, context string) error {
 						err,
 					),
 				)
+				continue
+			}
+			wasRunning, err := dockerService.Running()
+			if err != nil {
+				startErrors = append(
+					startErrors,
+					fmt.Sprintf(
+						"error checking Docker container status for %s: %v",
+						containerName,
+						err,
+					),
+				)
+				continue
+			}
+			if wasRunning {
 				continue
 			}
 			// Start the Docker container if it's not running
@@ -566,16 +593,43 @@ func (p Package) startService(cfg Config, context string) error {
 						err,
 					),
 				)
+				continue
 			}
+			startedServices = append(startedServices, dockerService)
 		}
 	}
 
 	if len(startErrors) > 0 {
+		p.rollbackStartedServices(startedServices)
 		slog.Error(strings.Join(startErrors, "\n"))
 		return ErrOperationFailed
 	}
 
+	// Run post-start script
+	if p.PostStartScript != "" {
+		if err := p.runHookScript(cfg, p.PostStartScript); err != nil {
+			p.rollbackStartedServices(startedServices)
+			return fmt.Errorf("post-start hook failed: %w", err)
+		}
+	}
+
 	return nil
+}
+
+func (p Package) rollbackStartedServices(startedServices []serviceLifecycle) {
+	if len(startedServices) == 0 {
+		return
+	}
+	for idx := len(startedServices) - 1; idx >= 0; idx-- {
+		if err := startedServices[idx].Stop(); err != nil {
+			slog.Warn(
+				fmt.Sprintf(
+					"failed to roll back started service after start failure: %v",
+					err,
+				),
+			)
+		}
+	}
 }
 
 func (p Package) stopService(cfg Config, context string) error {
