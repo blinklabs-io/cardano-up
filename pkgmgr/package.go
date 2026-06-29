@@ -577,6 +577,9 @@ func (p Package) startService(cfg Config, context string) error {
 				)
 				continue
 			}
+			if wasRunning {
+				continue
+			}
 			// Start the Docker container if it's not running
 			slog.Info(
 				"Starting Docker container " + containerName,
@@ -592,9 +595,7 @@ func (p Package) startService(cfg Config, context string) error {
 				)
 				continue
 			}
-			if !wasRunning {
-				startedServices = append(startedServices, dockerService)
-			}
+			startedServices = append(startedServices, dockerService)
 		}
 	}
 
