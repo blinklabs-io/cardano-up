@@ -17,6 +17,7 @@ package pkgmgr
 import (
 	"bytes"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -27,6 +28,28 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+type fakeServiceLifecycle struct {
+	running bool
+	started bool
+	stopped bool
+}
+
+func (f *fakeServiceLifecycle) Running() (bool, error) {
+	return f.running, nil
+}
+
+func (f *fakeServiceLifecycle) Start() error {
+	f.started = true
+	f.running = true
+	return nil
+}
+
+func (f *fakeServiceLifecycle) Stop() error {
+	f.stopped = true
+	f.running = false
+	return nil
+}
 
 var packageTestDefs = []struct {
 	yaml       string
@@ -217,6 +240,67 @@ func TestServiceHooks_PreStartPostStartAndPreStop(t *testing.T) {
 			string(hookOutput),
 			"prestart executed\npoststart executed\nprestop executed\n",
 		)
+	}
+}
+
+func TestStartService_RollsBackStartedServicesOnPostStartFailure(t *testing.T) {
+	origNewServiceFromContainerName := newServiceFromContainerName
+	t.Cleanup(func() {
+		newServiceFromContainerName = origNewServiceFromContainerName
+	})
+
+	startedSvc := &fakeServiceLifecycle{}
+	alreadyRunningSvc := &fakeServiceLifecycle{running: true}
+	services := map[string]*fakeServiceLifecycle{
+		"mypkg-1.0.0-testctx-started": startedSvc,
+		"mypkg-1.0.0-testctx-running": alreadyRunningSvc,
+	}
+	newServiceFromContainerName = func(containerName string, logger *slog.Logger) (serviceLifecycle, error) {
+		return services[containerName], nil
+	}
+
+	cfg := Config{
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Template: &Template{
+			tmpl:     template.New("test"),
+			baseVars: make(map[string]any),
+		},
+	}
+	pkg := Package{
+		Name:            "mypkg",
+		Version:         "1.0.0",
+		PostStartScript: "exit 1",
+		InstallSteps: []PackageInstallStep{
+			{
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "started",
+					Image:         "alpine:3.20",
+				},
+			},
+			{
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "running",
+					Image:         "alpine:3.20",
+				},
+			},
+		},
+	}
+
+	err := pkg.startService(cfg, "testctx")
+	if err == nil {
+		t.Fatal("expected post-start hook failure")
+	}
+	if !strings.Contains(err.Error(), "post-start hook failed") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !startedSvc.started {
+		t.Fatal("expected stopped service to be started")
+	}
+	if !startedSvc.stopped {
+		t.Fatal("expected newly-started service to be stopped during rollback")
+	}
+	if alreadyRunningSvc.stopped {
+		t.Fatal("expected already-running service to be left running")
 	}
 }
 
