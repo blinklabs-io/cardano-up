@@ -138,21 +138,27 @@ func TestOSAndARCH(t *testing.T) {
 	}
 }
 
-func TestServiceHooks_PreStartAndPreStop(t *testing.T) {
+func TestServiceHooks_PreStartPostStartAndPreStop(t *testing.T) {
 	tmpDir := t.TempDir()
+	hookLog := filepath.Join(tmpDir, "hooks.log")
 
 	// Create preStart script
-	preStartLog := filepath.Join(tmpDir, "prestart.log")
 	preStartScript := filepath.Join(tmpDir, "prestart.sh")
-	preStartContent := "#!/bin/sh\necho 'prestart executed' > " + preStartLog
+	preStartContent := "#!/bin/sh\necho 'prestart executed' >> " + hookLog
 	if err := os.WriteFile(preStartScript, []byte(preStartContent), 0755); err != nil {
 		t.Fatalf("failed to write preStart script: %v", err)
 	}
 
+	// Create postStart script
+	postStartScript := filepath.Join(tmpDir, "poststart.sh")
+	postStartContent := "#!/bin/sh\necho 'poststart executed' >> " + hookLog
+	if err := os.WriteFile(postStartScript, []byte(postStartContent), 0755); err != nil {
+		t.Fatalf("failed to write postStart script: %v", err)
+	}
+
 	// Create preStop script
-	preStopLog := filepath.Join(tmpDir, "prestop.log")
 	preStopScript := filepath.Join(tmpDir, "prestop.sh")
-	preStopContent := "#!/bin/sh\necho 'prestop executed' > " + preStopLog
+	preStopContent := "#!/bin/sh\necho 'prestop executed' >> " + hookLog
 	if err := os.WriteFile(preStopScript, []byte(preStopContent), 0755); err != nil {
 		t.Fatalf("failed to write preStop script: %v", err)
 	}
@@ -169,11 +175,12 @@ func TestServiceHooks_PreStartAndPreStop(t *testing.T) {
 	}
 	// Define a test package
 	pkg := Package{
-		Name:           "mypkg",
-		Version:        "1.0.0",
-		PreStartScript: preStartScript,
-		PreStopScript:  preStopScript,
-		InstallSteps:   []PackageInstallStep{},
+		Name:            "mypkg",
+		Version:         "1.0.0",
+		PreStartScript:  preStartScript,
+		PostStartScript: postStartScript,
+		PreStopScript:   preStopScript,
+		InstallSteps:    []PackageInstallStep{},
 	}
 
 	// Execute startService and expect preStartScript to run
@@ -181,16 +188,16 @@ func TestServiceHooks_PreStartAndPreStop(t *testing.T) {
 		t.Fatalf("startService failed: %v", err)
 	}
 
-	// Validate preStart script output
-	preStartOutput, err := os.ReadFile(preStartLog)
+	// Validate start hook output
+	startOutput, err := os.ReadFile(hookLog)
 	if err != nil {
-		t.Fatalf("preStart log file not found: %v", err)
+		t.Fatalf("hook log file not found: %v", err)
 	}
-	if string(preStartOutput) != "prestart executed\n" {
+	if string(startOutput) != "prestart executed\npoststart executed\n" {
 		t.Errorf(
-			"unexpected preStart output: got %q, want %q",
-			string(preStartOutput),
-			"prestart executed\n",
+			"unexpected start hook output: got %q, want %q",
+			string(startOutput),
+			"prestart executed\npoststart executed\n",
 		)
 	}
 
@@ -199,16 +206,16 @@ func TestServiceHooks_PreStartAndPreStop(t *testing.T) {
 		t.Fatalf("stopService failed: %v", err)
 	}
 
-	// Validate preStop script output
-	preStopOutput, err := os.ReadFile(preStopLog)
+	// Validate all hook output
+	hookOutput, err := os.ReadFile(hookLog)
 	if err != nil {
-		t.Fatalf("preStop log file not found: %v", err)
+		t.Fatalf("hook log file not found: %v", err)
 	}
-	if string(preStopOutput) != "prestop executed\n" {
+	if string(hookOutput) != "prestart executed\npoststart executed\nprestop executed\n" {
 		t.Errorf(
-			"unexpected preStop output: got %q, want %q",
-			string(preStopOutput),
-			"prestop executed\n",
+			"unexpected hook output: got %q, want %q",
+			string(hookOutput),
+			"prestart executed\npoststart executed\nprestop executed\n",
 		)
 	}
 }

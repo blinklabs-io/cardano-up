@@ -48,6 +48,7 @@ type Package struct {
 	PreInstallScript    string               `yaml:"preInstallScript,omitempty"`
 	PostInstallScript   string               `yaml:"postInstallScript,omitempty"`
 	PreStartScript      string               `yaml:"preStartScript,omitempty"`
+	PostStartScript     string               `yaml:"postStartScript,omitempty"`
 	PreStopScript       string               `yaml:"preStopScript,omitempty"`
 	PreUninstallScript  string               `yaml:"preUninstallScript,omitempty"`
 	PostUninstallScript string               `yaml:"postUninstallScript,omitempty"`
@@ -573,6 +574,13 @@ func (p Package) startService(cfg Config, context string) error {
 	if len(startErrors) > 0 {
 		slog.Error(strings.Join(startErrors, "\n"))
 		return ErrOperationFailed
+	}
+
+	// Run post-start script
+	if p.PostStartScript != "" {
+		if err := p.runHookScript(cfg, p.PostStartScript); err != nil {
+			return fmt.Errorf("post-start hook failed: %w", err)
+		}
 	}
 
 	return nil
