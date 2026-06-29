@@ -79,7 +79,7 @@ jobs:
             --data-binary @${_filename} \
             https://uploads.github.com/repos/${{ github.repository_owner }}/cardano-up/releases/${{ needs.create-draft-release.outputs.RELEASE_ID }}/assets?name=${_filename}
       - name: Attest binary
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0 https://github.com/actions/attest/releases/tag/v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1 https://github.com/actions/attest/releases/tag/v4.1.1
         with:
           subject-path: 'cardano-up'
 
@@ -136,13 +136,13 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
       - name: Attest Docker Hub image
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0 https://github.com/actions/attest/releases/tag/v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1 https://github.com/actions/attest/releases/tag/v4.1.1
         with:
           subject-name: index.docker.io/blinklabs/cardano-up
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
       - name: Attest GHCR image
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0 https://github.com/actions/attest/releases/tag/v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1 https://github.com/actions/attest/releases/tag/v4.1.1
         with:
           subject-name: ghcr.io/${{ github.repository }}
           subject-digest: ${{ steps.push.outputs.digest }}
