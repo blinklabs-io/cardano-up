@@ -539,7 +539,7 @@ func (p Package) startService(cfg Config, context string) error {
 		}
 	}
 	var startErrors []string
-	var startedServices []serviceLifecycle
+	startedServices := make([]serviceLifecycle, 0)
 	for _, step := range p.InstallSteps {
 		if step.Docker != nil {
 			if step.Docker.PullOnly {
@@ -616,6 +616,9 @@ func (p Package) startService(cfg Config, context string) error {
 }
 
 func (p Package) rollbackStartedServices(startedServices []serviceLifecycle) {
+	if len(startedServices) == 0 {
+		return
+	}
 	for idx := len(startedServices) - 1; idx >= 0; idx-- {
 		if err := startedServices[idx].Stop(); err != nil {
 			slog.Warn(
