@@ -50,7 +50,10 @@ func buildTestZip(t *testing.T, entries map[string]string) []byte {
 func buildTestTarGz(t *testing.T, entries map[string]string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
-	gzw := gzip.NewWriter(&buf)
+	gzw, err := gzip.NewWriterLevel(&buf, gzip.DefaultCompression)
+	if err != nil {
+		t.Fatalf("unexpected error creating gzip writer: %s", err)
+	}
 	gzw.Comment = "{{archive bytes must remain raw"
 	tw := tar.NewWriter(gzw)
 	for name, content := range entries {
