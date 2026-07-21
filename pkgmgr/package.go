@@ -1038,11 +1038,16 @@ func (p *PackageInstallStepFile) install(
 		if err != nil {
 			return err
 		}
-		tmpContent, err := cfg.Template.Render(string(tmpContentBytes), nil)
-		if err != nil {
-			return err
+		if p.Archive != "" {
+			// Archive data is binary and must not be interpreted as a template.
+			fileContent = tmpContentBytes
+		} else {
+			tmpContent, err := cfg.Template.Render(string(tmpContentBytes), nil)
+			if err != nil {
+				return err
+			}
+			fileContent = []byte(tmpContent)
 		}
-		fileContent = []byte(tmpContent)
 	} else if p.Url != "" {
 		tmpUrl, err := cfg.Template.Render(p.Url, nil)
 		if err != nil {

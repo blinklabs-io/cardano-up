@@ -19,6 +19,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"strings"
 	"testing"
 )
 
@@ -28,6 +29,9 @@ func buildTestZip(t *testing.T, entries map[string]string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
+	if err := zw.SetComment("{{archive bytes must remain raw"); err != nil {
+		t.Fatalf("unexpected error setting zip comment: %s", err)
+	}
 	for name, content := range entries {
 		fw, err := zw.Create(name)
 		if err != nil {
@@ -47,6 +51,7 @@ func buildTestTarGz(t *testing.T, entries map[string]string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	gzw := gzip.NewWriter(&buf)
+	gzw.Comment = "{{archive bytes must remain raw"
 	tw := tar.NewWriter(gzw)
 	for name, content := range entries {
 		hdr := &tar.Header{
@@ -153,6 +158,19 @@ func TestExtractTarGzFileNotFound(t *testing.T) {
 	}
 }
 
+// TestExtractTarGzFileCorruptChecksum checks that extraction fails when the
+// selected entry is readable but the gzip checksum is invalid.
+func TestExtractTarGzFileCorruptChecksum(t *testing.T) {
+	data := buildTestTarGz(t, map[string]string{
+		"bin/mybinary": testArchiveFileContent,
+	})
+	data[len(data)-8] ^= 0xff
+
+	if _, err := extractTarGzFile("bin/mybinary", data); err == nil {
+		t.Fatal("expected error for invalid gzip checksum, got nil")
+	}
+}
+
 // TestExtractArchiveFileDispatch checks that each supported archive name is
 // routed to the correct extractor, including aliases and different casing.
 func TestExtractArchiveFileDispatch(t *testing.T) {
@@ -210,5 +228,15 @@ func TestValidArchiveType(t *testing.T) {
 		if validArchiveType(archiveType) {
 			t.Errorf("expected %q to be an invalid archive type", archiveType)
 		}
+	}
+}
+
+// TestReadArchiveEntrySizeLimit checks that extraction stops with an error
+// when an entry contains more data than the configured maximum size.
+func TestReadArchiveEntrySizeLimit(t *testing.T) {
+	reader := strings.NewReader(strings.Repeat("x", 11))
+
+	if _, err := readArchiveEntry(reader, "mybinary", 10); err == nil {
+		t.Fatal("expected error for oversized archive entry, got nil")
 	}
 }

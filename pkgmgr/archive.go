@@ -28,9 +28,10 @@ import (
 
 // Supported values for the file install step's archive field
 const (
-	archiveTypeZip   = "zip"
-	archiveTypeTarGz = "tar.gz"
-	archiveTypeTgz   = "tgz"
+	archiveTypeZip      = "zip"
+	archiveTypeTarGz    = "tar.gz"
+	archiveTypeTgz      = "tgz"
+	maxArchiveEntrySize = int64(512 * 1024 * 1024) // 512 MiB
 )
 
 // validArchiveType returns whether archiveType is a supported archive type
@@ -75,12 +76,19 @@ func extractZipFile(archivePath string, data []byte) ([]byte, error) {
 		if filepath.Clean(zipFile.Name) != cleanPath {
 			continue
 		}
+		if zipFile.UncompressedSize64 > uint64(maxArchiveEntrySize) {
+			return nil, fmt.Errorf(
+				"file %q exceeds maximum allowed size of %d bytes",
+				archivePath,
+				maxArchiveEntrySize,
+			)
+		}
 		zf, err := zipFile.Open()
 		if err != nil {
 			return nil, err
 		}
 		defer zf.Close()
-		return io.ReadAll(zf)
+		return readArchiveEntry(zf, archivePath, maxArchiveEntrySize)
 	}
 	return nil, fmt.Errorf("file %q not found in zip archive", archivePath)
 }
@@ -107,7 +115,67 @@ func extractTarGzFile(archivePath string, data []byte) ([]byte, error) {
 		if filepath.Clean(header.Name) != cleanPath {
 			continue
 		}
-		return io.ReadAll(tarReader)
+		if header.Size > maxArchiveEntrySize {
+			return nil, fmt.Errorf(
+				"file %q exceeds maximum allowed size of %d bytes",
+				archivePath,
+				maxArchiveEntrySize,
+			)
+		}
+		content, err := readArchiveEntry(
+			tarReader,
+			archivePath,
+			maxArchiveEntrySize,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if err := drainTarGzArchive(tarReader, gzipReader); err != nil {
+			return nil, err
+		}
+		return content, nil
 	}
 	return nil, fmt.Errorf("file %q not found in tar.gz archive", archivePath)
+}
+
+// drainTarGzArchive consumes the rest of the tar and gzip streams so gzip can
+// verify its checksum before the selected file is installed.
+func drainTarGzArchive(tarReader *tar.Reader, gzipReader *gzip.Reader) error {
+	for {
+		_, err := tarReader.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read tar archive: %w", err)
+		}
+		if _, err := io.Copy(io.Discard, tarReader); err != nil {
+			return fmt.Errorf("failed to drain tar archive: %w", err)
+		}
+	}
+	if _, err := io.Copy(io.Discard, gzipReader); err != nil {
+		return fmt.Errorf("failed to verify gzip data: %w", err)
+	}
+	return nil
+}
+
+// readArchiveEntry limits extraction even if an archive reports an incorrect
+// uncompressed size in its metadata.
+func readArchiveEntry(
+	reader io.Reader,
+	archivePath string,
+	maxSize int64,
+) ([]byte, error) {
+	content, err := io.ReadAll(io.LimitReader(reader, maxSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(content)) > maxSize {
+		return nil, fmt.Errorf(
+			"file %q exceeds maximum allowed size of %d bytes",
+			archivePath,
+			maxSize,
+		)
+	}
+	return content, nil
 }

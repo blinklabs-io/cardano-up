@@ -186,6 +186,46 @@ func TestPackageInstallStepFileInstallArchiveTarGz(t *testing.T) {
 	}
 }
 
+// TestPackageInstallStepFileInstallArchiveTgz checks that the tgz alias works
+// end to end when extracting and installing one binary from an archive.
+func TestPackageInstallStepFileInstallArchiveTgz(t *testing.T) {
+	cfg := newArchiveTestConfig(t)
+	pkgSourceDir := t.TempDir()
+	tgzPath := filepath.Join(pkgSourceDir, "release.tgz")
+	tgzData := buildTestTarGz(t, map[string]string{
+		"mybinary": testArchiveFileContent,
+	})
+	if err := os.WriteFile(tgzPath, tgzData, 0o644); err != nil {
+		t.Fatalf("unexpected error writing test tgz: %s", err)
+	}
+
+	step := &PackageInstallStepFile{
+		Filename:    "mybinary",
+		Source:      "release.tgz",
+		Binary:      true,
+		Mode:        0o755,
+		Archive:     "tgz",
+		ArchivePath: "mybinary",
+	}
+	packagePath := filepath.Join(pkgSourceDir, "test-1.0.0.yaml")
+	if err := step.install(cfg, "test-1.0.0-testctx", packagePath); err != nil {
+		t.Fatalf("install failed: %s", err)
+	}
+
+	writtenPath := filepath.Join(cfg.DataDir, "test-1.0.0-testctx", "mybinary")
+	content, err := os.ReadFile(writtenPath)
+	if err != nil {
+		t.Fatalf("unexpected error reading installed file: %s", err)
+	}
+	if string(content) != testArchiveFileContent {
+		t.Fatalf(
+			"did not get expected content\n  got: %q\n  expected: %q",
+			content,
+			testArchiveFileContent,
+		)
+	}
+}
+
 // TestPackageInstallStepFileInstallArchiveMissingEntry checks that installation
 // fails when archivePath does not identify a file contained in the archive.
 func TestPackageInstallStepFileInstallArchiveMissingEntry(t *testing.T) {
