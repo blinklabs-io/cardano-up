@@ -19,6 +19,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -56,7 +57,13 @@ func buildTestTarGz(t *testing.T, entries map[string]string) []byte {
 	}
 	gzw.Comment = "{{archive bytes must remain raw"
 	tw := tar.NewWriter(gzw)
-	for name, content := range entries {
+	names := make([]string, 0, len(entries))
+	for name := range entries {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		content := entries[name]
 		hdr := &tar.Header{
 			Name: name,
 			Mode: 0o755,
@@ -171,6 +178,19 @@ func TestExtractTarGzFileCorruptChecksum(t *testing.T) {
 
 	if _, err := extractTarGzFile("bin/mybinary", data); err == nil {
 		t.Fatal("expected error for invalid gzip checksum, got nil")
+	}
+}
+
+// TestExtractTarGzFileCumulativeSizeLimit checks that later tar entries cannot
+// exceed the total decompressed-data limit after a small entry is selected.
+func TestExtractTarGzFileCumulativeSizeLimit(t *testing.T) {
+	data := buildTestTarGz(t, map[string]string{
+		"first":  "small",
+		"second": strings.Repeat("x", 2048),
+	})
+
+	if _, err := extractTarGzFileWithLimit("first", data, 2048); err == nil {
+		t.Fatal("expected error for oversized decompressed archive, got nil")
 	}
 }
 

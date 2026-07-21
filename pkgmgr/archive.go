@@ -94,13 +94,29 @@ func extractZipFile(archivePath string, data []byte) ([]byte, error) {
 }
 
 func extractTarGzFile(archivePath string, data []byte) ([]byte, error) {
+	return extractTarGzFileWithLimit(
+		archivePath,
+		data,
+		maxArchiveEntrySize,
+	)
+}
+
+func extractTarGzFileWithLimit(
+	archivePath string,
+	data []byte,
+	maxDecompressedSize int64,
+) ([]byte, error) {
 	gzipReader, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read gzip data: %w", err)
 	}
 	defer gzipReader.Close()
 	cleanPath := filepath.Clean(archivePath)
-	tarReader := tar.NewReader(gzipReader)
+	limitedGzipReader := &io.LimitedReader{
+		R: gzipReader,
+		N: maxDecompressedSize + 1,
+	}
+	tarReader := tar.NewReader(limitedGzipReader)
 	for {
 		header, err := tarReader.Next()
 		if errors.Is(err, io.EOF) {
@@ -130,7 +146,11 @@ func extractTarGzFile(archivePath string, data []byte) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := drainTarGzArchive(tarReader, gzipReader); err != nil {
+		if err := drainTarGzArchive(
+			tarReader,
+			limitedGzipReader,
+			maxDecompressedSize,
+		); err != nil {
 			return nil, err
 		}
 		return content, nil
@@ -140,21 +160,43 @@ func extractTarGzFile(archivePath string, data []byte) ([]byte, error) {
 
 // drainTarGzArchive consumes the rest of the tar and gzip streams so gzip can
 // verify its checksum before the selected file is installed.
-func drainTarGzArchive(tarReader *tar.Reader, gzipReader *gzip.Reader) error {
+func drainTarGzArchive(
+	tarReader *tar.Reader,
+	limitedGzipReader *io.LimitedReader,
+	maxDecompressedSize int64,
+) error {
 	for {
 		_, err := tarReader.Next()
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
+			if limitedGzipReader.N == 0 {
+				return fmt.Errorf(
+					"archive exceeds maximum decompressed size of %d bytes",
+					maxDecompressedSize,
+				)
+			}
 			return fmt.Errorf("failed to read tar archive: %w", err)
 		}
 		if _, err := io.Copy(io.Discard, tarReader); err != nil {
 			return fmt.Errorf("failed to drain tar archive: %w", err)
 		}
+		if limitedGzipReader.N == 0 {
+			return fmt.Errorf(
+				"archive exceeds maximum decompressed size of %d bytes",
+				maxDecompressedSize,
+			)
+		}
 	}
-	if _, err := io.Copy(io.Discard, gzipReader); err != nil {
+	if _, err := io.Copy(io.Discard, limitedGzipReader); err != nil {
 		return fmt.Errorf("failed to verify gzip data: %w", err)
+	}
+	if limitedGzipReader.N == 0 {
+		return fmt.Errorf(
+			"archive exceeds maximum decompressed size of %d bytes",
+			maxDecompressedSize,
+		)
 	}
 	return nil
 }
