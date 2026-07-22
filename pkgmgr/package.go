@@ -1034,14 +1034,26 @@ func (p *PackageInstallStepFile) install(
 			filepath.Dir(packagePath),
 			p.Source,
 		)
-		tmpContentBytes, err := os.ReadFile(fullSourcePath)
-		if err != nil {
-			return err
-		}
 		if p.Archive != "" {
 			// Archive data is binary and must not be interpreted as a template.
+			// Bound the read the same way as url-sourced downloads, so a
+			// malformed or oversized package asset can't be fully buffered
+			// into memory before the archive-entry limit even runs.
+			sourceFile, err := os.Open(fullSourcePath)
+			if err != nil {
+				return err
+			}
+			defer sourceFile.Close()
+			tmpContentBytes, err := readArchiveEntry(sourceFile, fullSourcePath, maxDownloadSize)
+			if err != nil {
+				return fmt.Errorf("failed to read %q: %w", fullSourcePath, err)
+			}
 			fileContent = tmpContentBytes
 		} else {
+			tmpContentBytes, err := os.ReadFile(fullSourcePath)
+			if err != nil {
+				return err
+			}
 			tmpContent, err := cfg.Template.Render(string(tmpContentBytes), nil)
 			if err != nil {
 				return err

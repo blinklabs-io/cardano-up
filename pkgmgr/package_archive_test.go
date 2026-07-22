@@ -396,9 +396,18 @@ func TestPackageInstallStepFileInstallArchivePathTemplated(t *testing.T) {
 	}
 }
 
-// TestPackageInstallStepFileInstallUrlTemplated checks that OS and architecture
-// template values are correctly substituted into a binary download URL.
+// TestPackageInstallStepFileInstallUrlTemplated checks that install renders
+// OS and architecture values into the url field before issuing the HTTP
+// request, so the server actually receives the platform-specific path.
 func TestPackageInstallStepFileInstallUrlTemplated(t *testing.T) {
+	const expectedContent = "binary content"
+	var requestedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedPath = r.URL.Path
+		w.Write([]byte(expectedContent)) //nolint:errcheck
+	}))
+	defer srv.Close()
+
 	cfg := newArchiveTestConfig(t)
 	cfg.Template = cfg.Template.WithVars(
 		map[string]any{
@@ -408,22 +417,73 @@ func TestPackageInstallStepFileInstallUrlTemplated(t *testing.T) {
 			},
 		},
 	)
-	// Render the URL template directly to confirm OS/ARCH substitution works
-	// as expected for the file install step's url field
-	rendered, err := cfg.Template.Render(
-		"https://example.com/mybinary-{{ .System.OS }}-{{ .System.ARCH }}",
-		nil,
-	)
-	if err != nil {
-		t.Fatalf("unexpected error rendering url template: %s", err)
+
+	step := &PackageInstallStepFile{
+		Filename: "mybinary",
+		Url:      srv.URL + "/mybinary-{{ .System.OS }}-{{ .System.ARCH }}",
 	}
-	expected := "https://example.com/mybinary-linux-amd64"
-	if rendered != expected {
+	if err := step.install(cfg, "test-1.0.0-testctx", ""); err != nil {
+		t.Fatalf("install failed: %s", err)
+	}
+
+	expectedPath := "/mybinary-linux-amd64"
+	if requestedPath != expectedPath {
 		t.Fatalf(
-			"did not get expected rendered url\n  got: %s\n  expected: %s",
-			rendered,
-			expected,
+			"did not get expected requested path\n  got: %s\n  expected: %s",
+			requestedPath,
+			expectedPath,
 		)
+	}
+
+	writtenPath := filepath.Join(cfg.DataDir, "test-1.0.0-testctx", "mybinary")
+	content, err := os.ReadFile(writtenPath)
+	if err != nil {
+		t.Fatalf("unexpected error reading installed file: %s", err)
+	}
+	if string(content) != expectedContent {
+		t.Fatalf(
+			"did not get expected content\n  got: %q\n  expected: %q",
+			content,
+			expectedContent,
+		)
+	}
+}
+
+// TestPackageInstallStepFileInstallSourceArchiveSizeLimit checks that install
+// aborts once a source-backed archive file exceeds maxDownloadSize, instead
+// of buffering the full oversized file into memory.
+func TestPackageInstallStepFileInstallSourceArchiveSizeLimit(t *testing.T) {
+	origMaxDownloadSize := maxDownloadSize
+	maxDownloadSize = 10
+	t.Cleanup(func() {
+		maxDownloadSize = origMaxDownloadSize
+	})
+
+	pkgSourceDir := t.TempDir()
+	zipPath := filepath.Join(pkgSourceDir, "release.zip")
+	zipData := buildTestZip(t, map[string]string{
+		"mybinary": strings.Repeat("x", 100),
+	})
+	if err := os.WriteFile(zipPath, zipData, 0o644); err != nil {
+		t.Fatalf("unexpected error writing test zip: %s", err)
+	}
+
+	cfg := newArchiveTestConfig(t)
+	step := &PackageInstallStepFile{
+		Filename:    "mybinary",
+		Source:      "release.zip",
+		Archive:     "zip",
+		ArchivePath: "mybinary",
+	}
+	packagePath := filepath.Join(pkgSourceDir, "test-1.0.0.yaml")
+	err := step.install(cfg, "test-1.0.0-testctx", packagePath)
+	if err == nil {
+		t.Fatal("expected error for oversized source archive, got nil")
+	}
+
+	writtenPath := filepath.Join(cfg.DataDir, "test-1.0.0-testctx", "mybinary")
+	if _, statErr := os.Stat(writtenPath); statErr == nil {
+		t.Fatal("expected no file to be written for oversized source archive")
 	}
 }
 
