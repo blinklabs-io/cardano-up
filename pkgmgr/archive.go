@@ -76,7 +76,10 @@ func extractZipFile(archivePath string, data []byte) ([]byte, error) {
 	}
 	cleanPath := filepath.Clean(archivePath)
 	for _, zipFile := range zipReader.File {
-		if zipFile.FileInfo().IsDir() {
+		// Skip directories, symlinks, and other non-regular entries. A
+		// symlink's "content" is just its target path string, which would
+		// otherwise be silently written out as the file/binary content.
+		if !zipFile.Mode().IsRegular() {
 			continue
 		}
 		if filepath.Clean(zipFile.Name) != cleanPath {

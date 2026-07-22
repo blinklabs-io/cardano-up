@@ -19,6 +19,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"io/fs"
 	"sort"
 	"strings"
 	"testing"
@@ -132,6 +133,32 @@ func TestExtractZipFileSkipsDirs(t *testing.T) {
 
 	if _, err := extractZipFile("bin", buf.Bytes()); err == nil {
 		t.Fatal("expected error when requested path is a directory, got nil")
+	}
+}
+
+// TestExtractZipFileSkipsSymlinks checks that a ZIP symlink entry is ignored
+// instead of its link-target string being returned as the file content.
+func TestExtractZipFileSkipsSymlinks(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	hdr := &zip.FileHeader{
+		Name:   "bin/mybinary",
+		Method: zip.Store,
+	}
+	hdr.SetMode(fs.ModeSymlink | 0o777)
+	fw, err := zw.CreateHeader(hdr)
+	if err != nil {
+		t.Fatalf("unexpected error creating zip symlink entry: %s", err)
+	}
+	if _, err := fw.Write([]byte("/some/other/target")); err != nil {
+		t.Fatalf("unexpected error writing zip symlink entry: %s", err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("unexpected error closing zip writer: %s", err)
+	}
+
+	if _, err := extractZipFile("bin/mybinary", buf.Bytes()); err == nil {
+		t.Fatal("expected error when requested path is a symlink, got nil")
 	}
 }
 

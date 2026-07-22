@@ -78,6 +78,14 @@ func TestPackageInstallStepFileValidate(t *testing.T) {
 			},
 			expectErr: false,
 		},
+		{
+			step: PackageInstallStepFile{
+				Content:     "foo",
+				Archive:     "zip",
+				ArchivePath: "bin/foo",
+			},
+			expectErr: true, // archive cannot be combined with content
+		},
 	}
 	cfg := newArchiveTestConfig(t)
 	for _, testDef := range testDefs {

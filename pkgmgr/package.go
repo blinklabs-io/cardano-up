@@ -983,6 +983,10 @@ func (p *PackageInstallStepFile) validate(cfg Config) error {
 		return errors.New("packages must provide content, source, or url for file install types")
 	}
 	if p.Archive != "" {
+		if p.Content != "" {
+			cfg.Logger.Debug("archive combined with content")
+			return errors.New("archive cannot be combined with content; use source or url")
+		}
 		if !validArchiveType(p.Archive) {
 			cfg.Logger.Debug("unsupported archive type: " + p.Archive)
 			return fmt.Errorf("unsupported archive type %q", p.Archive)
