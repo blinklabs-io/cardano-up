@@ -343,13 +343,29 @@ installSteps:
       source: my-source-file
 ```
 
+A file can also be downloaded from a URL and, optionally, extracted from a ZIP or tar.gz archive. This is
+useful for installing a binary directly from a project's release artifacts.
+
+```yaml
+installSteps:
+  - file:
+      filename: my-binary
+      binary: true
+      url: https://example.com/releases/my-project-{{ .System.OS }}-{{ .System.ARCH }}.tar.gz
+      archive: tar.gz
+      archivePath: my-project/bin/my-binary
+```
+
 | Field | Required | Description |
 | --- | :---: | --- |
 | `filename` | x | Name of destination file. This will be created within the package's data directory |
-| `source` | | Path to source file. This should be a relative path within the package manifest directory. This takes precedence over `content` if both are provided |
-| `content` | | Inline content for destination file |
+| `source` | | Path to source file. This should be a relative path within the package manifest directory. Used only if `content` is not provided |
+| `content` | | Inline content for destination file. Takes precedence over `source` and `url` if more than one is provided |
+| `url` | | URL to fetch destination file content from. Used only if `content` and `source` are not provided. Supports templating (e.g. `{{ .System.OS }}` and `{{ .System.ARCH }}`) |
 | `mode` | | Octal file mode for destination file |
 | `binary` | | Whether this file is an executable file for the package (expects bool, defaults to `false`) |
+| `archive` | | Archive format that `source` or `url` content should be extracted from. One of `zip`, `tar.gz`, or `tgz` |
+| `archivePath` | | Path of the file within the archive to extract as the destination file content. Required if `archive` is set. Supports templating |
 
 ##### `dependencies`
 

@@ -967,16 +967,35 @@ func (p *PackageInstallStepDocker) deactivate(
 }
 
 type PackageInstallStepFile struct {
-	Binary   bool        `yaml:"binary"`
-	Filename string      `yaml:"filename"`
-	Source   string      `yaml:"source"`
-	Content  string      `yaml:"content"`
-	Url      string      `yaml:"url"`
-	Mode     fs.FileMode `yaml:"mode,omitempty"`
+	Binary      bool        `yaml:"binary"`
+	Filename    string      `yaml:"filename"`
+	Source      string      `yaml:"source"`
+	Content     string      `yaml:"content"`
+	Url         string      `yaml:"url"`
+	Mode        fs.FileMode `yaml:"mode,omitempty"`
+	Archive     string      `yaml:"archive,omitempty"`
+	ArchivePath string      `yaml:"archivePath,omitempty"`
 }
 
 func (p *PackageInstallStepFile) validate(cfg Config) error {
-	// TODO: add checks
+	if p.Content == "" && p.Source == "" && p.Url == "" {
+		cfg.Logger.Debug("file install step missing content, source, and url")
+		return errors.New("packages must provide content, source, or url for file install types")
+	}
+	if p.Archive != "" {
+		if p.Content != "" {
+			cfg.Logger.Debug("archive combined with content")
+			return errors.New("archive cannot be combined with content; use source or url")
+		}
+		if !validArchiveType(p.Archive) {
+			cfg.Logger.Debug("unsupported archive type: " + p.Archive)
+			return fmt.Errorf("unsupported archive type %q", p.Archive)
+		}
+		if p.ArchivePath == "" {
+			cfg.Logger.Debug("archive set without archivePath")
+			return errors.New("archivePath must be provided when archive is set")
+		}
+	}
 	return nil
 }
 
@@ -1019,18 +1038,40 @@ func (p *PackageInstallStepFile) install(
 			filepath.Dir(packagePath),
 			p.Source,
 		)
-		tmpContentBytes, err := os.ReadFile(fullSourcePath)
-		if err != nil {
-			return err
+		if p.Archive != "" {
+			// Archive data is binary and must not be interpreted as a template.
+			// Bound the read the same way as url-sourced downloads, so a
+			// malformed or oversized package asset can't be fully buffered
+			// into memory before the archive-entry limit even runs.
+			sourceFile, err := os.Open(fullSourcePath)
+			if err != nil {
+				return err
+			}
+			defer sourceFile.Close()
+			tmpContentBytes, err := readArchiveEntry(sourceFile, fullSourcePath, maxDownloadSize)
+			if err != nil {
+				return fmt.Errorf("failed to read %q: %w", fullSourcePath, err)
+			}
+			fileContent = tmpContentBytes
+		} else {
+			tmpContentBytes, err := os.ReadFile(fullSourcePath)
+			if err != nil {
+				return err
+			}
+			tmpContent, err := cfg.Template.Render(string(tmpContentBytes), nil)
+			if err != nil {
+				return err
+			}
+			fileContent = []byte(tmpContent)
 		}
-		tmpContent, err := cfg.Template.Render(string(tmpContentBytes), nil)
-		if err != nil {
-			return err
-		}
-		fileContent = []byte(tmpContent)
 	} else if p.Url != "" {
+		tmpUrl, err := cfg.Template.Render(p.Url, nil)
+		if err != nil {
+			return err
+		}
+
 		// Validate URL
-		u, err := url.Parse(p.Url)
+		u, err := url.Parse(tmpUrl)
 		if err != nil {
 			return err
 		}
@@ -1040,7 +1081,7 @@ func (p *PackageInstallStepFile) install(
 
 		// Fetch data
 		ctx := context.Background()
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.Url, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, tmpUrl, nil)
 		if err != nil {
 			return err
 		}
@@ -1049,17 +1090,27 @@ func (p *PackageInstallStepFile) install(
 			return err
 		}
 		if resp == nil {
-			return fmt.Errorf("nil response for URL: %s", p.Url)
+			return fmt.Errorf("nil response for URL: %s", tmpUrl)
 		}
-		respBody, err := io.ReadAll(resp.Body)
+		defer resp.Body.Close()
+		respBody, err := readArchiveEntry(resp.Body, tmpUrl, maxDownloadSize)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to download %q: %w", tmpUrl, err)
 		}
-		resp.Body.Close()
 
 		fileContent = respBody
 	} else {
 		return errors.New("packages must provide content, source, or url for file install types")
+	}
+	if p.Archive != "" {
+		tmpArchivePath, err := cfg.Template.Render(p.ArchivePath, nil)
+		if err != nil {
+			return err
+		}
+		fileContent, err = extractArchiveFile(p.Archive, tmpArchivePath, fileContent)
+		if err != nil {
+			return fmt.Errorf("failed to extract %q from archive: %w", tmpArchivePath, err)
+		}
 	}
 	if err := os.WriteFile(filePath, fileContent, fileMode); err != nil { //nolint:gosec // path traversal mitigated by prefix check above
 		return err
