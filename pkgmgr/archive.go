@@ -34,6 +34,12 @@ const (
 	maxArchiveEntrySize = int64(512 * 1024 * 1024) // 512 MiB
 )
 
+// maxDownloadSize bounds how much of a url-sourced file install step is
+// buffered into memory, so an oversized or malicious response can't exhaust
+// process memory before archive extraction limits even apply. It's a var
+// rather than a const so tests can lower it without downloading 512MiB+.
+var maxDownloadSize = maxArchiveEntrySize
+
 // validArchiveType returns whether archiveType is a supported archive type
 // for the file install step
 func validArchiveType(archiveType string) bool {

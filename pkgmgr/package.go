@@ -1076,11 +1076,11 @@ func (p *PackageInstallStepFile) install(
 		if resp == nil {
 			return fmt.Errorf("nil response for URL: %s", tmpUrl)
 		}
-		respBody, err := io.ReadAll(resp.Body)
+		defer resp.Body.Close()
+		respBody, err := readArchiveEntry(resp.Body, tmpUrl, maxDownloadSize)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to download %q: %w", tmpUrl, err)
 		}
-		resp.Body.Close()
 
 		fileContent = respBody
 	} else {

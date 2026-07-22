@@ -21,6 +21,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"text/template"
 )
@@ -315,6 +316,37 @@ func TestPackageInstallStepFileInstallUrlArchive(t *testing.T) {
 			linkTarget,
 			writtenPath,
 		)
+	}
+}
+
+// TestPackageInstallStepFileInstallUrlDownloadSizeLimit checks that install
+// aborts once a url-sourced download exceeds maxDownloadSize, instead of
+// buffering the full oversized response into memory.
+func TestPackageInstallStepFileInstallUrlDownloadSizeLimit(t *testing.T) {
+	origMaxDownloadSize := maxDownloadSize
+	maxDownloadSize = 10
+	t.Cleanup(func() {
+		maxDownloadSize = origMaxDownloadSize
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(strings.Repeat("x", 100))) //nolint:errcheck
+	}))
+	defer srv.Close()
+
+	cfg := newArchiveTestConfig(t)
+	step := &PackageInstallStepFile{
+		Filename: "mybinary",
+		Url:      srv.URL + "/mybinary",
+	}
+	err := step.install(cfg, "test-1.0.0-testctx", "")
+	if err == nil {
+		t.Fatal("expected error for oversized download, got nil")
+	}
+
+	writtenPath := filepath.Join(cfg.DataDir, "test-1.0.0-testctx", "mybinary")
+	if _, statErr := os.Stat(writtenPath); statErr == nil {
+		t.Fatal("expected no file to be written for oversized download")
 	}
 }
 
