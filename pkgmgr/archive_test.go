@@ -189,8 +189,12 @@ func TestExtractTarGzFileCumulativeSizeLimit(t *testing.T) {
 		"second": strings.Repeat("x", 2048),
 	})
 
-	if _, err := extractTarGzFileWithLimit("first", data, 2048); err == nil {
+	_, err := extractTarGzFileWithLimit("first", data, 2048)
+	if err == nil {
 		t.Fatal("expected error for oversized decompressed archive, got nil")
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum decompressed size") {
+		t.Fatalf("unexpected error for oversized decompressed archive: %s", err)
 	}
 }
 

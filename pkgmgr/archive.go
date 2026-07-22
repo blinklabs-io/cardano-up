@@ -180,6 +180,12 @@ func drainTarGzArchive(
 			return fmt.Errorf("failed to read tar archive: %w", err)
 		}
 		if _, err := io.Copy(io.Discard, tarReader); err != nil {
+			if limitedGzipReader.N == 0 {
+				return fmt.Errorf(
+					"archive exceeds maximum decompressed size of %d bytes",
+					maxDecompressedSize,
+				)
+			}
 			return fmt.Errorf("failed to drain tar archive: %w", err)
 		}
 		if limitedGzipReader.N == 0 {
