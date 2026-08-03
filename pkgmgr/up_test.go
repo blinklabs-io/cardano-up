@@ -75,10 +75,10 @@ func TestRefreshInstalledPackageRuntimeUpdatesPortOutputs(t *testing.T) {
 	}
 }
 
-// TestUpRefreshesDependentEnvAndPersistsBeforeLaterFailure checks that package
-// hooks receive package template variables, dependent outputs see refreshed
-// values through .Env, and a later failure does not discard successful work.
-func TestUpRefreshesDependentEnvAndPersistsBeforeLaterFailure(t *testing.T) {
+// TestUpContinuesAfterFailureAndPersistsRefreshes checks that package hooks
+// receive package template variables, a package after a startup failure is
+// still refreshed, and dependent outputs see persisted values through .Env.
+func TestUpContinuesAfterFailureAndPersistsRefreshes(t *testing.T) {
 	cfg := Config{
 		ConfigDir: t.TempDir(),
 		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -115,6 +115,14 @@ func TestUpRefreshesDependentEnvAndPersistsBeforeLaterFailure(t *testing.T) {
 				},
 				{
 					Package: Package{
+						Name:           "failing",
+						Version:        "1.0.0",
+						PreStartScript: "exit 1",
+					},
+					Context: "default",
+				},
+				{
+					Package: Package{
 						Name:    "dependent",
 						Version: "1.0.0",
 						Outputs: []PackageOutput{
@@ -129,14 +137,6 @@ func TestUpRefreshesDependentEnvAndPersistsBeforeLaterFailure(t *testing.T) {
 						"DEPENDENT_VALUE": "stale",
 					},
 				},
-				{
-					Package: Package{
-						Name:           "failing",
-						Version:        "1.0.0",
-						PreStartScript: "exit 1",
-					},
-					Context: "default",
-				},
 			},
 			PortRegistry: make(PortRegistry),
 		},
@@ -148,7 +148,7 @@ func TestUpRefreshesDependentEnvAndPersistsBeforeLaterFailure(t *testing.T) {
 	if got, want := pm.state.InstalledPackages[0].Outputs["SUCCESSFUL_VALUE"], "refreshed"; got != want {
 		t.Fatalf("unexpected in-memory output: got %q, want %q", got, want)
 	}
-	if got, want := pm.state.InstalledPackages[1].Outputs["DEPENDENT_VALUE"], "refreshed"; got != want {
+	if got, want := pm.state.InstalledPackages[2].Outputs["DEPENDENT_VALUE"], "refreshed"; got != want {
 		t.Fatalf("unexpected dependent in-memory output: got %q, want %q", got, want)
 	}
 
@@ -159,7 +159,7 @@ func TestUpRefreshesDependentEnvAndPersistsBeforeLaterFailure(t *testing.T) {
 	if got, want := reloadedState.InstalledPackages[0].Outputs["SUCCESSFUL_VALUE"], "refreshed"; got != want {
 		t.Fatalf("unexpected persisted output: got %q, want %q", got, want)
 	}
-	if got, want := reloadedState.InstalledPackages[1].Outputs["DEPENDENT_VALUE"], "refreshed"; got != want {
+	if got, want := reloadedState.InstalledPackages[2].Outputs["DEPENDENT_VALUE"], "refreshed"; got != want {
 		t.Fatalf("unexpected dependent persisted output: got %q, want %q", got, want)
 	}
 }
