@@ -14,7 +14,11 @@
 
 package pkgmgr
 
-import "testing"
+import (
+	"io"
+	"log/slog"
+	"testing"
+)
 
 // TestRefreshInstalledPackageRuntimeUpdatesPortOutputs checks that outputs
 // captured from a Docker-managed dynamic port are refreshed after startup.
@@ -68,5 +72,94 @@ func TestRefreshInstalledPackageRuntimeUpdatesPortOutputs(t *testing.T) {
 	}
 	if got, want := pm.state.PortRegistry["default"]["dynamic"]["api"]["8080"], "55964"; got != want {
 		t.Fatalf("unexpected registered port: got %q, want %q", got, want)
+	}
+}
+
+// TestUpRefreshesDependentEnvAndPersistsBeforeLaterFailure checks that package
+// hooks receive package template variables, dependent outputs see refreshed
+// values through .Env, and a later failure does not discard successful work.
+func TestUpRefreshesDependentEnvAndPersistsBeforeLaterFailure(t *testing.T) {
+	cfg := Config{
+		ConfigDir: t.TempDir(),
+		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Template:  NewTemplate(nil),
+	}
+	pm := &PackageManager{
+		config: cfg,
+		state: &State{
+			config:        cfg,
+			ActiveContext: "default",
+			Contexts: map[string]Context{
+				"default": {},
+			},
+			InstalledPackages: []InstalledPackage{
+				{
+					Package: Package{
+						Name:           "successful",
+						Version:        "1.0.0",
+						PreStartScript: `{{ if .Package.Options.enabled }}true{{ else }}false{{ end }}`,
+						Outputs: []PackageOutput{
+							{
+								Name:  "value",
+								Value: "refreshed",
+							},
+						},
+					},
+					Context: "default",
+					Options: map[string]bool{
+						"enabled": true,
+					},
+					Outputs: map[string]string{
+						"SUCCESSFUL_VALUE": "stale",
+					},
+				},
+				{
+					Package: Package{
+						Name:    "dependent",
+						Version: "1.0.0",
+						Outputs: []PackageOutput{
+							{
+								Name:  "value",
+								Value: `{{ .Env.SUCCESSFUL_VALUE }}`,
+							},
+						},
+					},
+					Context: "default",
+					Outputs: map[string]string{
+						"DEPENDENT_VALUE": "stale",
+					},
+				},
+				{
+					Package: Package{
+						Name:           "failing",
+						Version:        "1.0.0",
+						PreStartScript: "exit 1",
+					},
+					Context: "default",
+				},
+			},
+			PortRegistry: make(PortRegistry),
+		},
+	}
+
+	if err := pm.Up(); err == nil {
+		t.Fatal("expected startup error from failing package")
+	}
+	if got, want := pm.state.InstalledPackages[0].Outputs["SUCCESSFUL_VALUE"], "refreshed"; got != want {
+		t.Fatalf("unexpected in-memory output: got %q, want %q", got, want)
+	}
+	if got, want := pm.state.InstalledPackages[1].Outputs["DEPENDENT_VALUE"], "refreshed"; got != want {
+		t.Fatalf("unexpected dependent in-memory output: got %q, want %q", got, want)
+	}
+
+	reloadedState := NewState(cfg)
+	if err := reloadedState.Load(); err != nil {
+		t.Fatalf("failed to reload persisted state: %s", err)
+	}
+	if got, want := reloadedState.InstalledPackages[0].Outputs["SUCCESSFUL_VALUE"], "refreshed"; got != want {
+		t.Fatalf("unexpected persisted output: got %q, want %q", got, want)
+	}
+	if got, want := reloadedState.InstalledPackages[1].Outputs["DEPENDENT_VALUE"], "refreshed"; got != want {
+		t.Fatalf("unexpected dependent persisted output: got %q, want %q", got, want)
 	}
 }

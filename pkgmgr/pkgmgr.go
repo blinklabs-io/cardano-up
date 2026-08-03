@@ -118,45 +118,48 @@ func (p *PackageManager) AvailablePackages() []Package {
 
 func (p *PackageManager) Up() error {
 	contextName, _ := p.effectiveContext()
-	stateChanged := false
+	var errs []error
 	for idx := range p.state.InstalledPackages {
 		installedPkg := &(p.state.InstalledPackages[idx])
 		if installedPkg.Context != contextName {
 			continue
-		}
-		if err := installedPkg.Package.startService(
-			p.config,
-			installedPkg.Context,
-		); err != nil {
-			return err
 		}
 		cfg := installedPkg.Package.withPackageTemplateVars(
 			p.config,
 			installedPkg.Context,
 			installedPkg.Options,
 		)
+		if err := installedPkg.Package.startService(
+			cfg,
+			installedPkg.Context,
+		); err != nil {
+			errs = append(errs, err)
+			continue
+		}
 		ports, err := installedPkg.Package.currentPorts(
 			cfg,
 			installedPkg.Context,
 		)
 		if err != nil {
-			return err
+			errs = append(errs, err)
+			continue
 		}
 		if err := p.refreshInstalledPackageRuntime(
 			installedPkg,
 			cfg,
 			ports,
 		); err != nil {
-			return err
+			errs = append(errs, err)
+			continue
 		}
-		stateChanged = true
-	}
-	if stateChanged {
+		// Make this package's refreshed outputs available through .Env to
+		// templates rendered for packages processed later in this run.
+		p.initTemplate()
 		if err := p.state.Save(); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func (p *PackageManager) refreshInstalledPackageRuntime(
