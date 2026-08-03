@@ -97,7 +97,7 @@ func TestUpRefreshesDependentEnvAndPersistsBeforeLaterFailure(t *testing.T) {
 					Package: Package{
 						Name:           "successful",
 						Version:        "1.0.0",
-						PreStartScript: `{{ if .Package.Options.enabled }}true{{ else }}false{{ end }}`,
+						PreStartScript: `{{ if .Package.Options.enabled }}true{{ else }}exit 1{{ end }}`,
 						Outputs: []PackageOutput{
 							{
 								Name:  "value",
