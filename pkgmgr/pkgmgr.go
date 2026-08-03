@@ -117,14 +117,66 @@ func (p *PackageManager) AvailablePackages() []Package {
 }
 
 func (p *PackageManager) Up() error {
-	// Find installed packages
-	installedPackages := p.InstalledPackages()
-	for _, tmpPackage := range installedPackages {
-		err := tmpPackage.Package.startService(p.config, tmpPackage.Context)
+	contextName, _ := p.effectiveContext()
+	var errs []error
+	for idx := range p.state.InstalledPackages {
+		installedPkg := &(p.state.InstalledPackages[idx])
+		if installedPkg.Context != contextName {
+			continue
+		}
+		cfg := installedPkg.Package.withPackageTemplateVars(
+			p.config,
+			installedPkg.Context,
+			installedPkg.Options,
+		)
+		if err := installedPkg.Package.startService(
+			cfg,
+			installedPkg.Context,
+		); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		ports, err := installedPkg.Package.currentPorts(
+			cfg,
+			installedPkg.Context,
+		)
 		if err != nil {
-			return err
+			errs = append(errs, err)
+			continue
+		}
+		if err := p.refreshInstalledPackageRuntime(
+			installedPkg,
+			cfg,
+			ports,
+		); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		// Make this package's refreshed outputs available through .Env to
+		// templates rendered for packages processed later in this run.
+		p.initTemplate()
+		if err := p.state.Save(); err != nil {
+			errs = append(errs, err)
 		}
 	}
+	return errors.Join(errs...)
+}
+
+func (p *PackageManager) refreshInstalledPackageRuntime(
+	installedPkg *InstalledPackage,
+	cfg Config,
+	ports PackagePortRegistry,
+) error {
+	outputs, err := installedPkg.Package.renderOutputs(cfg, ports)
+	if err != nil {
+		return err
+	}
+	installedPkg.Outputs = outputs
+	p.setRegisteredPorts(
+		installedPkg.Context,
+		installedPkg.Package.Name,
+		ports,
+	)
 	return nil
 }
 

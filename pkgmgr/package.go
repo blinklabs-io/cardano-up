@@ -148,7 +148,7 @@ func (p Package) install(
 	runHooks bool,
 	registeredPorts PackagePortRegistry,
 ) (string, map[string]string, PackagePortRegistry, error) {
-	// Update template vars
+	cfg = p.withPackageTemplateVars(cfg, context, opts)
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	pkgCacheDir := filepath.Join(
 		cfg.CacheDir,
@@ -161,26 +161,6 @@ func (p Package) install(
 	pkgDataDir := filepath.Join(
 		cfg.DataDir,
 		pkgName,
-	)
-	cfg.Template = cfg.Template.WithVars(
-		map[string]any{
-			"Package": map[string]any{
-				"Name":      pkgName,
-				"ShortName": p.Name,
-				"Version":   p.Version,
-				"Options":   opts,
-			},
-			"Paths": map[string]string{
-				"BinDir":     cfg.BinDir,
-				"CacheDir":   pkgCacheDir,
-				"ContextDir": pkgContextDir,
-				"DataDir":    pkgDataDir,
-			},
-			"System": map[string]string{
-				"OS":   runtime.GOOS,
-				"ARCH": runtime.GOARCH,
-			},
-		},
 	)
 	// Run pre-flight checks
 	for _, installStep := range p.InstallSteps {
@@ -244,11 +224,88 @@ func (p Package) install(
 		}
 	}
 	// Capture port details for output templates
-	retPorts := make(PackagePortRegistry)
-	tmpServices, err := p.services(cfg, context)
+	retPorts, err := p.currentPorts(cfg, context)
 	if err != nil {
 		return "", nil, nil, err
 	}
+	cfg.Template = cfg.Template.WithVars(
+		map[string]any{
+			"Ports": retPorts,
+		},
+	)
+	retOutputs, err := p.renderOutputs(cfg, retPorts)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	// Run post-install script
+	if runHooks && p.PostInstallScript != "" {
+		if err := p.runHookScript(cfg, p.PostInstallScript); err != nil {
+			return "", nil, nil, err
+		}
+	}
+	// Render notes and return
+	var retNotes string
+	if p.PostInstallNotes != "" {
+		tmpNotes, err := cfg.Template.Render(p.PostInstallNotes, nil)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		retNotes = tmpNotes
+	}
+	return retNotes, retOutputs, retPorts, nil
+}
+
+func (p Package) withPackageTemplateVars(
+	cfg Config,
+	context string,
+	opts map[string]bool,
+) Config {
+	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
+	pkgCacheDir := filepath.Join(
+		cfg.CacheDir,
+		pkgName,
+	)
+	pkgContextDir := filepath.Join(
+		cfg.DataDir,
+		context,
+	)
+	pkgDataDir := filepath.Join(
+		cfg.DataDir,
+		pkgName,
+	)
+	cfg.Template = cfg.Template.WithVars(
+		map[string]any{
+			"Package": map[string]any{
+				"Name":      pkgName,
+				"ShortName": p.Name,
+				"Version":   p.Version,
+				"Options":   opts,
+			},
+			"Paths": map[string]string{
+				"BinDir":     cfg.BinDir,
+				"CacheDir":   pkgCacheDir,
+				"ContextDir": pkgContextDir,
+				"DataDir":    pkgDataDir,
+			},
+			"System": map[string]string{
+				"OS":   runtime.GOOS,
+				"ARCH": runtime.GOARCH,
+			},
+		},
+	)
+	return cfg
+}
+
+func (p Package) currentPorts(
+	cfg Config,
+	context string,
+) (PackagePortRegistry, error) {
+	retPorts := make(PackagePortRegistry)
+	tmpServices, err := p.services(cfg, context)
+	if err != nil {
+		return nil, err
+	}
+	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	for _, svc := range tmpServices {
 		shortContainerName := strings.TrimPrefix(svc.ContainerName, pkgName+`-`)
 		tmpPortsContainer := make(ServicePortMap)
@@ -270,12 +327,18 @@ func (p Package) install(
 		}
 		retPorts[shortContainerName] = tmpPortsContainer
 	}
+	return retPorts, nil
+}
+
+func (p Package) renderOutputs(
+	cfg Config,
+	ports PackagePortRegistry,
+) (map[string]string, error) {
 	cfg.Template = cfg.Template.WithVars(
 		map[string]any{
-			"Ports": retPorts,
+			"Ports": ports,
 		},
 	)
-	// Generate outputs
 	retOutputs := make(map[string]string)
 	for _, output := range p.Outputs {
 		// Create key from package name and output name
@@ -292,26 +355,11 @@ func (p Package) install(
 		// Render value template
 		val, err := cfg.Template.Render(output.Value, nil)
 		if err != nil {
-			return "", nil, nil, err
+			return nil, err
 		}
 		retOutputs[key] = val
 	}
-	// Run post-install script
-	if runHooks && p.PostInstallScript != "" {
-		if err := p.runHookScript(cfg, p.PostInstallScript); err != nil {
-			return "", nil, nil, err
-		}
-	}
-	// Render notes and return
-	var retNotes string
-	if p.PostInstallNotes != "" {
-		tmpNotes, err := cfg.Template.Render(p.PostInstallNotes, nil)
-		if err != nil {
-			return "", nil, nil, err
-		}
-		retNotes = tmpNotes
-	}
-	return retNotes, retOutputs, retPorts, nil
+	return retOutputs, nil
 }
 
 func (p Package) uninstall(
