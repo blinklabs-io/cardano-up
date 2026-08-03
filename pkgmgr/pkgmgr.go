@@ -117,14 +117,63 @@ func (p *PackageManager) AvailablePackages() []Package {
 }
 
 func (p *PackageManager) Up() error {
-	// Find installed packages
-	installedPackages := p.InstalledPackages()
-	for _, tmpPackage := range installedPackages {
-		err := tmpPackage.Package.startService(p.config, tmpPackage.Context)
+	contextName, _ := p.effectiveContext()
+	stateChanged := false
+	for idx := range p.state.InstalledPackages {
+		installedPkg := &(p.state.InstalledPackages[idx])
+		if installedPkg.Context != contextName {
+			continue
+		}
+		if err := installedPkg.Package.startService(
+			p.config,
+			installedPkg.Context,
+		); err != nil {
+			return err
+		}
+		cfg := installedPkg.Package.withPackageTemplateVars(
+			p.config,
+			installedPkg.Context,
+			installedPkg.Options,
+		)
+		ports, err := installedPkg.Package.currentPorts(
+			cfg,
+			installedPkg.Context,
+		)
 		if err != nil {
 			return err
 		}
+		if err := p.refreshInstalledPackageRuntime(
+			installedPkg,
+			cfg,
+			ports,
+		); err != nil {
+			return err
+		}
+		stateChanged = true
 	}
+	if stateChanged {
+		if err := p.state.Save(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *PackageManager) refreshInstalledPackageRuntime(
+	installedPkg *InstalledPackage,
+	cfg Config,
+	ports PackagePortRegistry,
+) error {
+	outputs, err := installedPkg.Package.renderOutputs(cfg, ports)
+	if err != nil {
+		return err
+	}
+	installedPkg.Outputs = outputs
+	p.setRegisteredPorts(
+		installedPkg.Context,
+		installedPkg.Package.Name,
+		ports,
+	)
 	return nil
 }
 
