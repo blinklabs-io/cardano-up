@@ -177,6 +177,86 @@ func TestCheckForUpdateReplacesInvalidCache(t *testing.T) {
 	}
 }
 
+// TestCheckForUpdateReplacesMalformedCachedTag checks that a cache file with
+// well-formed JSON but an unparseable tag_name is treated the same as an
+// invalid cache: it's ignored and replaced with a fresh request, rather than
+// being reused as-is or surfacing a parse error to the caller.
+func TestCheckForUpdateReplacesMalformedCachedTag(t *testing.T) {
+	cacheDir := t.TempDir()
+	cachePath := filepath.Join(cacheDir, versionCacheFile)
+	if err := os.WriteFile(
+		cachePath,
+		[]byte(`{"tag_name":"not-a-version","html_url":"https://example.test/bad"}`),
+		0o600,
+	); err != nil {
+		t.Fatalf("failed to write malformed test cache: %s", err)
+	}
+
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			requestCount++
+			_, _ = w.Write([]byte(
+				`{"tag_name":"v1.3.0","html_url":"https://example.test/v1.3.0"}`,
+			))
+		},
+	))
+	defer server.Close()
+
+	update, err := checkForUpdate(
+		context.Background(),
+		"v1.2.0",
+		cacheDir,
+		server.URL,
+		server.Client(),
+		time.Now(),
+	)
+	if err != nil {
+		t.Fatalf("unexpected version check error: %s", err)
+	}
+	if update == nil || update.LatestVersion != "v1.3.0" {
+		t.Fatalf("unexpected update after malformed cached tag: %#v", update)
+	}
+	if requestCount != 1 {
+		t.Fatalf("malformed cached tag should be replaced, got %d requests", requestCount)
+	}
+}
+
+// TestCheckForUpdateRejectsMalformedFetchedTag checks that a release fetched
+// from the API with an unparseable tag_name is rejected outright, and that
+// it is never written to the cache — otherwise a bad response would get
+// reused for a full versionCacheTTL instead of being retried on the next
+// invocation.
+func TestCheckForUpdateRejectsMalformedFetchedTag(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(
+				`{"tag_name":"not-a-version","html_url":"https://example.test/bad"}`,
+			))
+		},
+	))
+	defer server.Close()
+
+	cacheDir := t.TempDir()
+	_, err := checkForUpdate(
+		context.Background(),
+		"v1.2.0",
+		cacheDir,
+		server.URL,
+		server.Client(),
+		time.Now(),
+	)
+	if err == nil {
+		t.Fatal("expected an error for a malformed fetched tag")
+	}
+
+	if _, statErr := os.Stat(filepath.Join(cacheDir, versionCacheFile)); statErr == nil {
+		t.Fatal("malformed release should not have been cached")
+	} else if !os.IsNotExist(statErr) {
+		t.Fatalf("unexpected error checking cache file: %s", statErr)
+	}
+}
+
 // TestCheckForUpdateReturnsNilForCurrentVersion checks that no update is
 // reported when the running version matches the latest published release.
 func TestCheckForUpdateReturnsNilForCurrentVersion(t *testing.T) {

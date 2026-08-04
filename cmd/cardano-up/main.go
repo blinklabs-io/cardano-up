@@ -37,6 +37,11 @@ var globalFlags = struct {
 }{}
 
 func main() {
+	var (
+		versionCheckDone    chan struct{}
+		versionUpdateNotice string
+	)
+
 	rootCmd := &cobra.Command{
 		Use: programName,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
@@ -51,7 +56,19 @@ func main() {
 				}),
 			)
 			slog.SetDefault(logger)
-			checkForNewVersion(cmd)
+
+			// Run the version check concurrently with the command itself,
+			// so a slow or unreachable GitHub endpoint adds latency only up
+			// to the shortfall versus the command's own runtime instead of
+			// stacking a full extra network round trip in front of every
+			// invocation. The result is collected below, after the command
+			// finishes, so the notice never interleaves with the command's
+			// own output.
+			versionCheckDone = make(chan struct{})
+			go func() {
+				defer close(versionCheckDone)
+				versionUpdateNotice = checkForNewVersion(cmd)
+			}()
 		},
 	}
 
@@ -80,7 +97,15 @@ func main() {
 		validateCommand(),
 	)
 
-	if err := rootCmd.Execute(); err != nil {
+	cmdErr := rootCmd.Execute()
+	// versionCheckDone is nil when PersistentPreRun never ran, e.g. --help.
+	if versionCheckDone != nil {
+		<-versionCheckDone
+	}
+	if versionUpdateNotice != "" {
+		slog.Warn(versionUpdateNotice)
+	}
+	if cmdErr != nil {
 		// NOTE: we purposely don't display the error, since cobra will have already displayed it
 		os.Exit(1)
 	}
@@ -122,43 +147,46 @@ func createPackageManager() *pkgmgr.PackageManager {
 }
 
 // checkForNewVersion looks up whether a newer release is available and, if
-// so, logs a warning naming the current and latest versions. It is called
-// from the root command's PersistentPreRun, so any error here is only
-// logged at debug level and never blocks the command from running.
-func checkForNewVersion(cmd *cobra.Command) {
+// so, returns a message naming the current and latest versions. It runs in
+// a goroutine started from the root command's PersistentPreRun (see main),
+// so any error here is only logged at debug level and never blocks the
+// command from running; the caller logs the returned message, if any, once
+// the command has finished.
+func checkForNewVersion(cmd *cobra.Command) string {
 	if version.Version == "" || !shouldCheckForNewVersion(cmd) {
-		return
+		return ""
 	}
 	userCacheDir, err := os.UserCacheDir()
 	if err != nil {
 		slog.Debug("failed to determine cache directory for version check: " + err.Error())
-		return
+		return ""
 	}
 	update, err := version.CheckForUpdate(
 		filepath.Join(userCacheDir, programName),
 	)
 	if err != nil {
 		slog.Debug("failed to check for a newer version: " + err.Error())
-		return
+		return ""
 	}
 	if update == nil {
-		return
+		return ""
 	}
-	slog.Warn(
-		fmt.Sprintf(
-			"A newer version of %s is available: %s (current: %s). Download it from %s",
-			programName,
-			update.LatestVersion,
-			update.CurrentVersion,
-			update.ReleaseURL,
-		),
+	return fmt.Sprintf(
+		"A newer version of %s is available: %s (current: %s). Download it from %s",
+		programName,
+		update.LatestVersion,
+		update.CurrentVersion,
+		update.ReleaseURL,
 	)
 }
 
 // shouldCheckForNewVersion reports whether the version check should run for
 // the given command. It is skipped for "context env" (whose output is
-// meant to be eval'd), "version" (redundant), "help", and any "completion"
-// subcommand (whose output is a shell script).
+// meant to be eval'd), "version" (redundant), "help", any "completion"
+// subcommand (whose output is a shell script), and cobra's hidden
+// "__complete"/"__completeNoDesc" commands (invoked by shells on every TAB
+// keypress during interactive completion, so they must never block on a
+// network call or print a warning).
 func shouldCheckForNewVersion(cmd *cobra.Command) bool {
 	commandPath := cmd.CommandPath()
 	if commandPath == programName+" context env" ||
@@ -166,5 +194,6 @@ func shouldCheckForNewVersion(cmd *cobra.Command) bool {
 		commandPath == programName+" help" {
 		return false
 	}
-	return !strings.HasPrefix(commandPath, programName+" completion")
+	return !strings.HasPrefix(commandPath, programName+" completion") &&
+		!strings.HasPrefix(commandPath, programName+" __complete")
 }

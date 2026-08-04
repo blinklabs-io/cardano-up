@@ -181,13 +181,18 @@ func fetchLatestRelease(
 }
 
 // validateRelease checks that a releaseInfo has the fields needed to build
-// an Update, whether it came from the cache or a fresh API response.
+// an Update, whether it came from the cache or a fresh API response. It
+// parses TagName as a version so a malformed tag is rejected here, before a
+// fetched release is cached or a cached release is reused.
 func validateRelease(release releaseInfo) error {
 	if release.TagName == "" {
 		return errors.New("missing tag name")
 	}
 	if release.HTMLURL == "" {
 		return errors.New("missing release URL")
+	}
+	if _, err := hashicorpversion.NewVersion(release.TagName); err != nil {
+		return fmt.Errorf("invalid tag name %q: %w", release.TagName, err)
 	}
 	return nil
 }

@@ -21,8 +21,8 @@ import (
 )
 
 // TestShouldCheckForNewVersion checks that the version check is skipped for
-// "context env", "version", and any "completion" subcommand, and is run for
-// all other commands.
+// "context env", "version", any "completion" subcommand, and cobra's hidden
+// "__complete" shell-completion command, and is run for all other commands.
 func TestShouldCheckForNewVersion(t *testing.T) {
 	rootCmd := &cobra.Command{Use: programName}
 	contextCmd := &cobra.Command{Use: "context"}
@@ -34,7 +34,14 @@ func TestShouldCheckForNewVersion(t *testing.T) {
 	completionCmd.AddCommand(completionBashCmd)
 	versionCmd := &cobra.Command{Use: "version"}
 	upCmd := &cobra.Command{Use: "up"}
-	rootCmd.AddCommand(contextCmd, completionCmd, versionCmd, upCmd)
+	// Mirrors how cobra itself registers the hidden completion-request
+	// command during Execute(): a single "__complete" command aliased as
+	// "__completeNoDesc", both invoked by shells on every TAB keypress.
+	shellCompCmd := &cobra.Command{
+		Use:     cobra.ShellCompRequestCmd,
+		Aliases: []string{cobra.ShellCompNoDescRequestCmd},
+	}
+	rootCmd.AddCommand(contextCmd, completionCmd, versionCmd, upCmd, shellCompCmd)
 
 	tests := []struct {
 		name string
@@ -54,6 +61,11 @@ func TestShouldCheckForNewVersion(t *testing.T) {
 		{
 			name: "version is skipped",
 			cmd:  versionCmd,
+			want: false,
+		},
+		{
+			name: "hidden shell completion request is skipped",
+			cmd:  shellCompCmd,
 			want: false,
 		},
 		{
