@@ -18,8 +18,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/blinklabs-io/cardano-up/internal/consolelog"
+	"github.com/blinklabs-io/cardano-up/internal/version"
 	"github.com/blinklabs-io/cardano-up/pkgmgr"
 	"github.com/spf13/cobra"
 )
@@ -48,6 +51,7 @@ func main() {
 				}),
 			)
 			slog.SetDefault(logger)
+			checkForNewVersion(cmd)
 		},
 	}
 
@@ -115,4 +119,52 @@ func createPackageManager() *pkgmgr.PackageManager {
 		}
 	}
 	return pm
+}
+
+// checkForNewVersion looks up whether a newer release is available and, if
+// so, logs a warning naming the current and latest versions. It is called
+// from the root command's PersistentPreRun, so any error here is only
+// logged at debug level and never blocks the command from running.
+func checkForNewVersion(cmd *cobra.Command) {
+	if version.Version == "" || !shouldCheckForNewVersion(cmd) {
+		return
+	}
+	userCacheDir, err := os.UserCacheDir()
+	if err != nil {
+		slog.Debug("failed to determine cache directory for version check: " + err.Error())
+		return
+	}
+	update, err := version.CheckForUpdate(
+		filepath.Join(userCacheDir, programName),
+	)
+	if err != nil {
+		slog.Debug("failed to check for a newer version: " + err.Error())
+		return
+	}
+	if update == nil {
+		return
+	}
+	slog.Warn(
+		fmt.Sprintf(
+			"A newer version of %s is available: %s (current: %s). Download it from %s",
+			programName,
+			update.LatestVersion,
+			update.CurrentVersion,
+			update.ReleaseURL,
+		),
+	)
+}
+
+// shouldCheckForNewVersion reports whether the version check should run for
+// the given command. It is skipped for "context env" (whose output is
+// meant to be eval'd), "version" (redundant), "help", and any "completion"
+// subcommand (whose output is a shell script).
+func shouldCheckForNewVersion(cmd *cobra.Command) bool {
+	commandPath := cmd.CommandPath()
+	if commandPath == programName+" context env" ||
+		commandPath == programName+" version" ||
+		commandPath == programName+" help" {
+		return false
+	}
+	return !strings.HasPrefix(commandPath, programName+" completion")
 }
