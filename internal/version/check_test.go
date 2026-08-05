@@ -318,7 +318,7 @@ func TestCheckForUpdateSkipsDevelopmentBuild(t *testing.T) {
 		Version = originalVersion
 	})
 
-	update, err := CheckForUpdate(t.TempDir())
+	update, err := CheckForUpdate(t.TempDir(), http.DefaultClient)
 	if err != nil {
 		t.Fatalf("unexpected development build error: %s", err)
 	}

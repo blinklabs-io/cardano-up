@@ -120,14 +120,15 @@ func TestShouldCheckForNewVersion(t *testing.T) {
 // TestCheckForNewVersionRespectsOptOutEnvVar checks that setting
 // NO_UPDATE_CHECK skips the check entirely - before any network call would
 // be made - even for a command and version that would otherwise trigger it.
-// version.CheckForUpdate always issues its request through
-// http.DefaultClient, with no injection point at the public API, so this
-// swaps out its Transport for the duration of the test with one that fails
-// the test outright if it's ever invoked. Only checking for absent log
-// output wouldn't prove this: fetch errors are logged at Debug, which the
-// buffer-backed logger below never surfaces anyway, so a regressed opt-out
-// guard could silently let a real (successful or failed) network call
-// through and this test would still pass.
+// checkForNewVersion takes an *http.Client explicitly, so this passes one
+// backed by a RoundTripper that fails the test outright if it's ever
+// invoked, rather than mutating the shared http.DefaultClient.Transport
+// (which would be fragile under parallel tests or any other code path
+// using the default client during this window). Only checking for absent
+// log output wouldn't prove this on its own: fetch errors are logged at
+// Debug, which the buffer-backed logger below never surfaces anyway, so a
+// regressed opt-out guard could silently let a real (successful or failed)
+// network call through and this test would still pass.
 func TestCheckForNewVersionRespectsOptOutEnvVar(t *testing.T) {
 	t.Setenv(noUpdateCheckEnvVar, "1")
 
@@ -135,7 +136,7 @@ func TestCheckForNewVersionRespectsOptOutEnvVar(t *testing.T) {
 	// this, a real pre-existing cache file on the machine running the test
 	// (e.g. left over from manually exercising the real binary) would let
 	// checkForNewVersion answer from disk and never reach the network
-	// layer at all, making the Transport guard below moot.
+	// layer at all, making the injected client below moot.
 	cacheDir := t.TempDir()
 	t.Setenv("HOME", cacheDir)
 	t.Setenv("XDG_CACHE_HOME", cacheDir)
@@ -145,14 +146,14 @@ func TestCheckForNewVersionRespectsOptOutEnvVar(t *testing.T) {
 	version.Version = "v0.0.1"
 	t.Cleanup(func() { version.Version = originalVersion })
 
-	originalTransport := http.DefaultClient.Transport
-	http.DefaultClient.Transport = roundTripFunc(
-		func(req *http.Request) (*http.Response, error) {
-			t.Fatal("unexpected network call made while NO_UPDATE_CHECK is set")
-			return nil, nil
-		},
-	)
-	t.Cleanup(func() { http.DefaultClient.Transport = originalTransport })
+	failingClient := &http.Client{
+		Transport: roundTripFunc(
+			func(req *http.Request) (*http.Response, error) {
+				t.Fatal("unexpected network call made while NO_UPDATE_CHECK is set")
+				return nil, nil
+			},
+		),
+	}
 
 	var buf bytes.Buffer
 	logger := slog.New(consolelog.NewHandler(&buf, nil))
@@ -163,7 +164,7 @@ func TestCheckForNewVersionRespectsOptOutEnvVar(t *testing.T) {
 		t.Fatalf("failed to resolve command: %s", err)
 	}
 
-	checkForNewVersion(cmd, logger)
+	checkForNewVersion(cmd, logger, failingClient)
 
 	if buf.Len() != 0 {
 		t.Fatalf("expected no output when opt-out env var is set, got: %q", buf.String())

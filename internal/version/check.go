@@ -54,7 +54,11 @@ type releaseInfo struct {
 
 // CheckForUpdate returns release information when the running release is
 // older than the latest published release. Development builds are skipped.
-func CheckForUpdate(cacheDir string) (*Update, error) {
+// httpClient makes the request; callers should normally pass
+// http.DefaultClient. Taking it explicitly, rather than defaulting
+// internally, gives callers an injection point for testing without needing
+// to mutate the shared http.DefaultClient.Transport.
+func CheckForUpdate(cacheDir string, httpClient *http.Client) (*Update, error) {
 	if Version == "" {
 		return nil, nil
 	}
@@ -68,7 +72,7 @@ func CheckForUpdate(cacheDir string) (*Update, error) {
 		Version,
 		cacheDir,
 		latestReleaseURL,
-		http.DefaultClient,
+		httpClient,
 		time.Now(),
 	)
 }

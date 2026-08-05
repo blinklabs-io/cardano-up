@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -105,7 +106,7 @@ func newRootCommand(deps *rootCommandDeps) *cobra.Command {
 			deps.versionCheckDone = make(chan struct{})
 			go func() {
 				defer close(deps.versionCheckDone)
-				checkForNewVersion(cmd, versionCheckLogger)
+				checkForNewVersion(cmd, versionCheckLogger, http.DefaultClient)
 			}()
 		},
 	}
@@ -196,8 +197,11 @@ func createPackageManager() *pkgmgr.PackageManager {
 // newRootCommand), which waits for it to finish before the process exits;
 // any error here is only logged at debug level and never blocks or fails
 // the command. Set NO_UPDATE_CHECK to any non-empty value to disable this
-// entirely, e.g. for offline or CI use.
-func checkForNewVersion(cmd *cobra.Command, logger *slog.Logger) {
+// entirely, e.g. for offline or CI use. httpClient is passed through to
+// version.CheckForUpdate explicitly (production code passes
+// http.DefaultClient) so tests can inject a fake one instead of mutating
+// the shared http.DefaultClient.Transport.
+func checkForNewVersion(cmd *cobra.Command, logger *slog.Logger, httpClient *http.Client) {
 	if version.Version == "" || !shouldCheckForNewVersion(cmd.CommandPath()) {
 		return
 	}
@@ -211,6 +215,7 @@ func checkForNewVersion(cmd *cobra.Command, logger *slog.Logger) {
 	}
 	update, err := version.CheckForUpdate(
 		filepath.Join(userCacheDir, programName),
+		httpClient,
 	)
 	if err != nil {
 		logger.Debug("failed to check for a newer version: " + err.Error())
