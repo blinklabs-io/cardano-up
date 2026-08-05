@@ -93,9 +93,9 @@ func checkForUpdate(
 		return nil, fmt.Errorf("parse current version: %w", err)
 	}
 
-	release, err := loadCachedRelease(cacheDir, now)
+	release, latest, err := loadCachedRelease(cacheDir, now)
 	if err != nil || release == nil {
-		release, err = fetchLatestRelease(ctx, releaseURL, httpClient)
+		release, latest, err = fetchLatestRelease(ctx, releaseURL, httpClient)
 		if err != nil {
 			return nil, err
 		}
@@ -104,10 +104,6 @@ func checkForUpdate(
 		_ = saveCachedRelease(cacheDir, *release)
 	}
 
-	latest, err := hashicorpversion.NewVersion(release.TagName)
-	if err != nil {
-		return nil, fmt.Errorf("parse latest version: %w", err)
-	}
 	if !latest.GreaterThan(current) {
 		return nil, nil
 	}
@@ -119,41 +115,47 @@ func checkForUpdate(
 }
 
 // loadCachedRelease reads the cached release info from cacheDir. It returns
-// a nil release (with no error) when the cache file is missing or older
-// than versionCacheTTL, signaling the caller to fetch a fresh copy.
+// a nil release (with no error) when the cached copy is older than
+// versionCacheTTL, and an error when the file is missing, unreadable, or
+// invalid, either of which signals the caller to fetch a fresh copy. The
+// returned version is release.TagName already parsed by validateRelease, so
+// callers never need to parse it a second time.
 func loadCachedRelease(
 	cacheDir string,
 	now time.Time,
-) (*releaseInfo, error) {
+) (*releaseInfo, *hashicorpversion.Version, error) {
 	cachePath := filepath.Join(cacheDir, versionCacheFile)
 	stat, err := os.Stat(cachePath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if stat.ModTime().Before(now.Add(-versionCacheTTL)) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	content, err := os.ReadFile(cachePath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var release releaseInfo
 	if err := json.Unmarshal(content, &release); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if err := validateRelease(release); err != nil {
-		return nil, fmt.Errorf("invalid cached release: %w", err)
+	parsed, err := validateRelease(release)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid cached release: %w", err)
 	}
-	return &release, nil
+	return &release, parsed, nil
 }
 
 // fetchLatestRelease calls the GitHub releases API and returns the parsed
-// release info for the latest published release.
+// release info for the latest published release, along with release.TagName
+// already parsed by validateRelease so callers never need to parse it a
+// second time.
 func fetchLatestRelease(
 	ctx context.Context,
 	releaseURL string,
 	httpClient *http.Client,
-) (*releaseInfo, error) {
+) (*releaseInfo, *hashicorpversion.Version, error) {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
@@ -161,50 +163,52 @@ func fetchLatestRelease(
 		nil,
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2026-03-10")
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if resp == nil {
-		return nil, errors.New("empty latest release response")
+		return nil, nil, errors.New("empty latest release response")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, resp.Body)
-		return nil, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"latest release request returned %s",
 			resp.Status,
 		)
 	}
 	var release releaseInfo
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if err := validateRelease(release); err != nil {
-		return nil, fmt.Errorf("invalid latest release: %w", err)
+	parsed, err := validateRelease(release)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid latest release: %w", err)
 	}
-	return &release, nil
+	return &release, parsed, nil
 }
 
 // validateRelease checks that a releaseInfo has the fields needed to build
-// an Update, whether it came from the cache or a fresh API response. It
-// parses TagName as a version so a malformed tag is rejected here, before a
-// fetched release is cached or a cached release is reused.
-func validateRelease(release releaseInfo) error {
+// an Update, whether it came from the cache or a fresh API response, and
+// returns TagName parsed as a version. A malformed tag is rejected here,
+// before a fetched release is cached or a cached release is reused.
+func validateRelease(release releaseInfo) (*hashicorpversion.Version, error) {
 	if release.TagName == "" {
-		return errors.New("missing tag name")
+		return nil, errors.New("missing tag name")
 	}
 	if release.HTMLURL == "" {
-		return errors.New("missing release URL")
+		return nil, errors.New("missing release URL")
 	}
-	if _, err := hashicorpversion.NewVersion(release.TagName); err != nil {
-		return fmt.Errorf("invalid tag name %q: %w", release.TagName, err)
+	parsed, err := hashicorpversion.NewVersion(release.TagName)
+	if err != nil {
+		return nil, fmt.Errorf("invalid tag name %q: %w", release.TagName, err)
 	}
-	return nil
+	return parsed, nil
 }
 
 // saveCachedRelease writes release to cacheDir so the next check within
