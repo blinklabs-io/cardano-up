@@ -36,12 +36,22 @@ var globalFlags = struct {
 	context string
 }{}
 
-func main() {
+// rootCommandDeps carries state out of newRootCommand that main needs after
+// Execute() returns. It's a struct (rather than a bare returned channel) so
+// PersistentPreRun, which runs after newRootCommand has already returned,
+// has somewhere to publish the channel it creates.
+type rootCommandDeps struct {
 	// versionCheckDone is nil unless PersistentPreRun ran (e.g. it doesn't
 	// for --help), in which case it's closed once the background version
 	// check finishes.
-	var versionCheckDone chan struct{}
+	versionCheckDone chan struct{}
+}
 
+// newRootCommand builds the full command tree. It's factored out of main so
+// tests can exercise shouldCheckForNewVersion against the real, production
+// command tree via Find, instead of a hand-built replica that could drift
+// from it.
+func newRootCommand(deps *rootCommandDeps) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use: programName,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
@@ -57,6 +67,16 @@ func main() {
 			)
 			slog.SetDefault(logger)
 
+			// The version-check notice logs to stderr, not stdout: some
+			// commands (e.g. "logs --follow") stream meaningful data to
+			// stdout that callers may parse or pipe, and a notice landing
+			// in the middle of that stream would corrupt it.
+			versionCheckLogger := slog.New(
+				consolelog.NewHandler(os.Stderr, &slog.HandlerOptions{
+					Level: logLevel,
+				}),
+			)
+
 			// Run the version check concurrently with the command itself,
 			// so a slow or unreachable GitHub endpoint doesn't delay the
 			// start of command execution. main waits for it below, after
@@ -68,10 +88,10 @@ func main() {
 			// pre-existing pattern used throughout this CLI; closing that
 			// gap would mean converting every such call site to return an
 			// error instead, which is a much larger, separate change.
-			versionCheckDone = make(chan struct{})
+			deps.versionCheckDone = make(chan struct{})
 			go func() {
-				defer close(versionCheckDone)
-				checkForNewVersion(cmd)
+				defer close(deps.versionCheckDone)
+				checkForNewVersion(cmd, versionCheckLogger)
 			}()
 		},
 	}
@@ -101,9 +121,16 @@ func main() {
 		validateCommand(),
 	)
 
+	return rootCmd
+}
+
+func main() {
+	deps := &rootCommandDeps{}
+	rootCmd := newRootCommand(deps)
+
 	cmdErr := rootCmd.Execute()
-	if versionCheckDone != nil {
-		<-versionCheckDone
+	if deps.versionCheckDone != nil {
+		<-deps.versionCheckDone
 	}
 	if cmdErr != nil {
 		// NOTE: we purposely don't display the error, since cobra will have already displayed it
@@ -147,30 +174,31 @@ func createPackageManager() *pkgmgr.PackageManager {
 }
 
 // checkForNewVersion looks up whether a newer release is available and, if
-// so, logs a warning naming the current and latest versions. It is run in a
-// goroutine from the root command's PersistentPreRun (see main), which waits
-// for it to finish before the process exits; any error here is only logged
-// at debug level and never blocks or fails the command.
-func checkForNewVersion(cmd *cobra.Command) {
-	if version.Version == "" || !shouldCheckForNewVersion(cmd) {
+// so, logs a warning naming the current and latest versions to logger. It is
+// run in a goroutine from the root command's PersistentPreRun (see
+// newRootCommand), which waits for it to finish before the process exits;
+// any error here is only logged at debug level and never blocks or fails
+// the command.
+func checkForNewVersion(cmd *cobra.Command, logger *slog.Logger) {
+	if version.Version == "" || !shouldCheckForNewVersion(cmd.CommandPath()) {
 		return
 	}
 	userCacheDir, err := os.UserCacheDir()
 	if err != nil {
-		slog.Debug("failed to determine cache directory for version check: " + err.Error())
+		logger.Debug("failed to determine cache directory for version check: " + err.Error())
 		return
 	}
 	update, err := version.CheckForUpdate(
 		filepath.Join(userCacheDir, programName),
 	)
 	if err != nil {
-		slog.Debug("failed to check for a newer version: " + err.Error())
+		logger.Debug("failed to check for a newer version: " + err.Error())
 		return
 	}
 	if update == nil {
 		return
 	}
-	slog.Warn(
+	logger.Warn(
 		fmt.Sprintf(
 			"A newer version of %s is available: %s (current: %s). Download it from %s",
 			programName,
@@ -182,14 +210,15 @@ func checkForNewVersion(cmd *cobra.Command) {
 }
 
 // shouldCheckForNewVersion reports whether the version check should run for
-// the given command. It is skipped for "context env" (whose output is
-// meant to be eval'd), "version" (redundant), "help", any "completion"
-// subcommand (whose output is a shell script), and cobra's hidden
-// "__complete"/"__completeNoDesc" commands (invoked by shells on every TAB
-// keypress during interactive completion, so they must never block on a
-// network call or print a warning).
-func shouldCheckForNewVersion(cmd *cobra.Command) bool {
-	commandPath := cmd.CommandPath()
+// the given command path (as returned by cobra.Command.CommandPath()). It's
+// skipped for "context env" (whose output is meant to be eval'd), "version"
+// (redundant), "help", any "completion" subcommand (whose output is a shell
+// script), and cobra's hidden "__complete"/"__completeNoDesc" commands
+// (invoked by shells on every TAB keypress during interactive completion, so
+// they must never block on a network call or print a warning). Taking a
+// plain string, rather than a *cobra.Command, keeps this directly testable
+// against real command paths without needing a live cobra tree.
+func shouldCheckForNewVersion(commandPath string) bool {
 	if commandPath == programName+" context env" ||
 		commandPath == programName+" version" ||
 		commandPath == programName+" help" {

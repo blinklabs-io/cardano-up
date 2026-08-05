@@ -23,68 +23,69 @@ import (
 // TestShouldCheckForNewVersion checks that the version check is skipped for
 // "context env", "version", any "completion" subcommand, and cobra's hidden
 // "__complete" shell-completion command, and is run for all other commands.
+// It resolves real subcommand paths from the production command tree built
+// by newRootCommand, rather than a hand-built replica, so the coverage
+// tracks the actual command names rather than a copy that could drift from
+// them.
 func TestShouldCheckForNewVersion(t *testing.T) {
-	rootCmd := &cobra.Command{Use: programName}
-	contextCmd := &cobra.Command{Use: "context"}
-	contextEnvCmd := &cobra.Command{Use: "env"}
-	contextListCmd := &cobra.Command{Use: "list"}
-	contextCmd.AddCommand(contextEnvCmd, contextListCmd)
-	completionCmd := &cobra.Command{Use: "completion"}
-	completionBashCmd := &cobra.Command{Use: "bash"}
-	completionCmd.AddCommand(completionBashCmd)
-	versionCmd := &cobra.Command{Use: "version"}
-	upCmd := &cobra.Command{Use: "up"}
-	// Mirrors how cobra itself registers the hidden completion-request
-	// command during Execute(): a single "__complete" command aliased as
-	// "__completeNoDesc", both invoked by shells on every TAB keypress.
-	shellCompCmd := &cobra.Command{
-		Use:     cobra.ShellCompRequestCmd,
-		Aliases: []string{cobra.ShellCompNoDescRequestCmd},
-	}
-	rootCmd.AddCommand(contextCmd, completionCmd, versionCmd, upCmd, shellCompCmd)
+	rootCmd := newRootCommand(&rootCommandDeps{})
+	// cobra only registers the default "completion" command inside
+	// Execute(); call the exported initializer directly so Find can resolve
+	// it without actually executing the command tree.
+	rootCmd.InitDefaultCompletionCmd()
 
 	tests := []struct {
 		name string
-		cmd  *cobra.Command
+		args []string
 		want bool
 	}{
 		{
 			name: "context env is skipped",
-			cmd:  contextEnvCmd,
+			args: []string{"context", "env"},
 			want: false,
 		},
 		{
 			name: "completion is skipped",
-			cmd:  completionBashCmd,
+			args: []string{"completion", "bash"},
 			want: false,
 		},
 		{
 			name: "version is skipped",
-			cmd:  versionCmd,
-			want: false,
-		},
-		{
-			name: "hidden shell completion request is skipped",
-			cmd:  shellCompCmd,
+			args: []string{"version"},
 			want: false,
 		},
 		{
 			name: "context list is checked",
-			cmd:  contextListCmd,
+			args: []string{"context", "list"},
 			want: true,
 		},
 		{
 			name: "up is checked",
-			cmd:  upCmd,
+			args: []string{"up"},
 			want: true,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := shouldCheckForNewVersion(test.cmd); got != test.want {
+			cmd, _, err := rootCmd.Find(test.args)
+			if err != nil {
+				t.Fatalf("failed to resolve command %v: %s", test.args, err)
+			}
+			if got := shouldCheckForNewVersion(cmd.CommandPath()); got != test.want {
 				t.Fatalf("unexpected check decision: got %t, want %t", got, test.want)
 			}
 		})
 	}
+
+	// cobra only registers "__complete" (aliased as "__completeNoDesc")
+	// inside Execute() itself, with no exported way to add it without
+	// actually running the command tree, so this case is checked directly
+	// against the path cobra's own exported constant would produce.
+	t.Run("hidden shell completion request is skipped", func(t *testing.T) {
+		commandPath := programName + " " + cobra.ShellCompRequestCmd
+		if got := shouldCheckForNewVersion(commandPath); got != false {
+			t.Fatalf("unexpected check decision: got %t, want false", got)
+		}
+	})
 }
