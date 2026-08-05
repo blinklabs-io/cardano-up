@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/blinklabs-io/cardano-up/internal/consolelog"
 	"github.com/blinklabs-io/cardano-up/internal/version"
@@ -29,6 +30,19 @@ import (
 
 const (
 	programName = "cardano-up"
+
+	// noUpdateCheckEnvVar disables the version check entirely when set to
+	// any non-empty value, for offline, air-gapped, or automation/CI
+	// environments that don't want an outbound request to GitHub.
+	noUpdateCheckEnvVar = "NO_UPDATE_CHECK"
+
+	// versionCheckMaxWait bounds how long main will wait for the version
+	// check goroutine below before giving up on it and letting the process
+	// exit anyway. It's set a little above the check's own internal
+	// network timeout as a safety margin, not as the primary bound - it
+	// exists so main's exit is never at the mercy of the check
+	// implementation alone.
+	versionCheckMaxWait = 2 * time.Second
 )
 
 var globalFlags = struct {
@@ -130,7 +144,10 @@ func main() {
 
 	cmdErr := rootCmd.Execute()
 	if deps.versionCheckDone != nil {
-		<-deps.versionCheckDone
+		select {
+		case <-deps.versionCheckDone:
+		case <-time.After(versionCheckMaxWait):
+		}
 	}
 	if cmdErr != nil {
 		// NOTE: we purposely don't display the error, since cobra will have already displayed it
@@ -178,9 +195,13 @@ func createPackageManager() *pkgmgr.PackageManager {
 // run in a goroutine from the root command's PersistentPreRun (see
 // newRootCommand), which waits for it to finish before the process exits;
 // any error here is only logged at debug level and never blocks or fails
-// the command.
+// the command. Set NO_UPDATE_CHECK to any non-empty value to disable this
+// entirely, e.g. for offline or CI use.
 func checkForNewVersion(cmd *cobra.Command, logger *slog.Logger) {
 	if version.Version == "" || !shouldCheckForNewVersion(cmd.CommandPath()) {
+		return
+	}
+	if _, disabled := os.LookupEnv(noUpdateCheckEnvVar); disabled {
 		return
 	}
 	userCacheDir, err := os.UserCacheDir()

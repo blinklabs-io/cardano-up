@@ -15,8 +15,12 @@
 package main
 
 import (
+	"bytes"
+	"log/slog"
 	"testing"
 
+	"github.com/blinklabs-io/cardano-up/internal/consolelog"
+	"github.com/blinklabs-io/cardano-up/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -80,12 +84,60 @@ func TestShouldCheckForNewVersion(t *testing.T) {
 
 	// cobra only registers "__complete" (aliased as "__completeNoDesc")
 	// inside Execute() itself, with no exported way to add it without
-	// actually running the command tree, so this case is checked directly
-	// against the path cobra's own exported constant would produce.
-	t.Run("hidden shell completion request is skipped", func(t *testing.T) {
-		commandPath := programName + " " + cobra.ShellCompRequestCmd
-		if got := shouldCheckForNewVersion(commandPath); got != false {
-			t.Fatalf("unexpected check decision: got %t, want false", got)
-		}
-	})
+	// actually running the command tree, so these cases are checked
+	// directly against the paths cobra's own exported constants would
+	// produce. "__completeNoDesc" is an alias, not a separate command, so a
+	// real invocation's CommandPath() is always "... __complete" regardless
+	// of which name the shell invoked it as - shouldCheckForNewVersion only
+	// ever sees that one form in production. The second case below still
+	// pins down real, independent coverage: it confirms the skip is a
+	// prefix match broad enough to also catch "__completeNoDesc" directly,
+	// not narrowed to an exact match on "__complete" alone.
+	hiddenCompletionCases := []struct {
+		name       string
+		commandArg string
+	}{
+		{
+			name:       "__complete is skipped",
+			commandArg: cobra.ShellCompRequestCmd,
+		},
+		{
+			name:       "__completeNoDesc is skipped",
+			commandArg: cobra.ShellCompNoDescRequestCmd,
+		},
+	}
+	for _, test := range hiddenCompletionCases {
+		t.Run(test.name, func(t *testing.T) {
+			commandPath := programName + " " + test.commandArg
+			if got := shouldCheckForNewVersion(commandPath); got != false {
+				t.Fatalf("unexpected check decision: got %t, want false", got)
+			}
+		})
+	}
+}
+
+// TestCheckForNewVersionRespectsOptOutEnvVar checks that setting
+// NO_UPDATE_CHECK skips the check entirely - before any network call would
+// be made - even for a command and version that would otherwise trigger it.
+func TestCheckForNewVersionRespectsOptOutEnvVar(t *testing.T) {
+	t.Setenv(noUpdateCheckEnvVar, "1")
+
+	originalVersion := version.Version
+	version.Version = "v0.0.1"
+	t.Cleanup(func() { version.Version = originalVersion })
+
+	var buf bytes.Buffer
+	logger := slog.New(consolelog.NewHandler(&buf, nil))
+
+	rootCmd := newRootCommand(&rootCommandDeps{})
+	cmd, _, err := rootCmd.Find([]string{"list"})
+	if err != nil {
+		t.Fatalf("failed to resolve command: %s", err)
+	}
+
+	checkForNewVersion(cmd, logger)
+
+	if buf.Len() != 0 {
+		t.Fatalf("expected no output when opt-out env var is set, got: %q", buf.String())
+	}
 }
