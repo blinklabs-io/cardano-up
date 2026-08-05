@@ -238,5 +238,9 @@ func saveCachedRelease(cacheDir string, release releaseInfo) error {
 		os.Remove(tmpPath)
 		return err
 	}
-	return os.Rename(tmpPath, filepath.Join(cacheDir, versionCacheFile))
+	if err := os.Rename(tmpPath, filepath.Join(cacheDir, versionCacheFile)); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	return nil
 }
