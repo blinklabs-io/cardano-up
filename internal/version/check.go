@@ -29,10 +29,16 @@ import (
 )
 
 const (
-	latestReleaseURL    = "https://api.github.com/repos/blinklabs-io/cardano-up/releases/latest"
-	versionCacheFile    = "latest_version.json"
-	versionCacheTTL     = 24 * time.Hour
-	versionCheckTimeout = 3 * time.Second
+	latestReleaseURL = "https://api.github.com/repos/blinklabs-io/cardano-up/releases/latest"
+	versionCacheFile = "latest_version.json"
+	versionCacheTTL  = 24 * time.Hour
+	// versionCheckTimeout bounds the worst case: main waits for this check to
+	// finish before the process exits (see cmd/cardano-up/main.go), so on an
+	// unresponsive endpoint this is the maximum added delay to a command
+	// that would otherwise return faster. Kept well above real-world GitHub
+	// API latency (well under 1s in practice) so a normal, working request
+	// isn't cut short.
+	versionCheckTimeout = 1500 * time.Millisecond
 )
 
 type Update struct {
@@ -198,7 +204,10 @@ func validateRelease(release releaseInfo) error {
 }
 
 // saveCachedRelease writes release to cacheDir so the next check within
-// versionCacheTTL can skip the network call.
+// versionCacheTTL can skip the network call. It writes to a temporary file
+// and renames it into place, since the process runs this from a background
+// goroutine that can be cut off by an os.Exit elsewhere at any moment — a
+// direct write could otherwise leave a truncated cache file on disk.
 func saveCachedRelease(cacheDir string, release releaseInfo) error {
 	if err := os.MkdirAll(cacheDir, 0o700); err != nil {
 		return err
@@ -207,9 +216,23 @@ func saveCachedRelease(cacheDir string, release releaseInfo) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(
-		filepath.Join(cacheDir, versionCacheFile),
-		content,
-		0o600,
-	)
+	tmpFile, err := os.CreateTemp(cacheDir, versionCacheFile+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmpFile.Name()
+	if _, err := tmpFile.Write(content); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	if err := os.Chmod(tmpPath, 0o600); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+	return os.Rename(tmpPath, filepath.Join(cacheDir, versionCacheFile))
 }

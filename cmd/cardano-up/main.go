@@ -37,10 +37,10 @@ var globalFlags = struct {
 }{}
 
 func main() {
-	var (
-		versionCheckDone    chan struct{}
-		versionUpdateNotice string
-	)
+	// versionCheckDone is nil unless PersistentPreRun ran (e.g. it doesn't
+	// for --help), in which case it's closed once the background version
+	// check finishes.
+	var versionCheckDone chan struct{}
 
 	rootCmd := &cobra.Command{
 		Use: programName,
@@ -58,16 +58,20 @@ func main() {
 			slog.SetDefault(logger)
 
 			// Run the version check concurrently with the command itself,
-			// so a slow or unreachable GitHub endpoint adds latency only up
-			// to the shortfall versus the command's own runtime instead of
-			// stacking a full extra network round trip in front of every
-			// invocation. The result is collected below, after the command
-			// finishes, so the notice never interleaves with the command's
-			// own output.
+			// so a slow or unreachable GitHub endpoint doesn't delay the
+			// start of command execution. main waits for it below, after
+			// Execute() returns, so it isn't cut off mid-request by the
+			// process exiting the instant the command's own work is done —
+			// Go does not wait for background goroutines to finish on
+			// program exit. This wait is skipped for subcommands that call
+			// os.Exit directly on failure instead of returning an error, a
+			// pre-existing pattern used throughout this CLI; closing that
+			// gap would mean converting every such call site to return an
+			// error instead, which is a much larger, separate change.
 			versionCheckDone = make(chan struct{})
 			go func() {
 				defer close(versionCheckDone)
-				versionUpdateNotice = checkForNewVersion(cmd)
+				checkForNewVersion(cmd)
 			}()
 		},
 	}
@@ -98,12 +102,8 @@ func main() {
 	)
 
 	cmdErr := rootCmd.Execute()
-	// versionCheckDone is nil when PersistentPreRun never ran, e.g. --help.
 	if versionCheckDone != nil {
 		<-versionCheckDone
-	}
-	if versionUpdateNotice != "" {
-		slog.Warn(versionUpdateNotice)
 	}
 	if cmdErr != nil {
 		// NOTE: we purposely don't display the error, since cobra will have already displayed it
@@ -147,36 +147,37 @@ func createPackageManager() *pkgmgr.PackageManager {
 }
 
 // checkForNewVersion looks up whether a newer release is available and, if
-// so, returns a message naming the current and latest versions. It runs in
-// a goroutine started from the root command's PersistentPreRun (see main),
-// so any error here is only logged at debug level and never blocks the
-// command from running; the caller logs the returned message, if any, once
-// the command has finished.
-func checkForNewVersion(cmd *cobra.Command) string {
+// so, logs a warning naming the current and latest versions. It is run in a
+// goroutine from the root command's PersistentPreRun (see main), which waits
+// for it to finish before the process exits; any error here is only logged
+// at debug level and never blocks or fails the command.
+func checkForNewVersion(cmd *cobra.Command) {
 	if version.Version == "" || !shouldCheckForNewVersion(cmd) {
-		return ""
+		return
 	}
 	userCacheDir, err := os.UserCacheDir()
 	if err != nil {
 		slog.Debug("failed to determine cache directory for version check: " + err.Error())
-		return ""
+		return
 	}
 	update, err := version.CheckForUpdate(
 		filepath.Join(userCacheDir, programName),
 	)
 	if err != nil {
 		slog.Debug("failed to check for a newer version: " + err.Error())
-		return ""
+		return
 	}
 	if update == nil {
-		return ""
+		return
 	}
-	return fmt.Sprintf(
-		"A newer version of %s is available: %s (current: %s). Download it from %s",
-		programName,
-		update.LatestVersion,
-		update.CurrentVersion,
-		update.ReleaseURL,
+	slog.Warn(
+		fmt.Sprintf(
+			"A newer version of %s is available: %s (current: %s). Download it from %s",
+			programName,
+			update.LatestVersion,
+			update.CurrentVersion,
+			update.ReleaseURL,
+		),
 	)
 }
 
