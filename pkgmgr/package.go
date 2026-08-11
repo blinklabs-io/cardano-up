@@ -735,22 +735,37 @@ func (p Package) stopService(cfg Config, context string) error {
 			}
 			// Stop the Docker container if it's running
 			slog.Info("Stopping container " + containerName)
-			stopErr := dockerService.Stop()
-			// Reconcile against actual container state rather than trusting
-			// a nil Stop() error, so rollback only targets containers that
-			// really transitioned to stopped (and still catches ones that
-			// stopped despite Stop() reporting an error).
-			nowRunning, runningErr := dockerService.Running()
-			if runningErr != nil {
-				// Final state is unknown, so track it for a best-effort
-				// rollback attempt rather than risk leaving it stopped.
+			if err := dockerService.Stop(); err != nil {
+				// Don't track this service for rollback: a container found
+				// stopped despite this error could have been stopped by a
+				// concurrent, unrelated operation, and rolling it back would
+				// wrongly undo that operation's intended effect. Only a
+				// Stop() call this code issued and confirmed below counts as
+				// this call's own transition.
+				stopErrors = append(
+					stopErrors,
+					fmt.Sprintf(
+						"failed to stop Docker container %s: %v",
+						containerName,
+						err,
+					),
+				)
+				continue
+			}
+			// Confirm the container actually stopped - a nil Stop() error
+			// alone isn't proof of the state transition.
+			nowRunning, err := dockerService.Running()
+			if err != nil {
+				// Our own Stop() call above reported success, so this call
+				// owns the transition even though it can't be reconfirmed -
+				// track it for a best-effort rollback attempt.
 				stoppedServices = append(stoppedServices, dockerService)
 				stopErrors = append(
 					stopErrors,
 					fmt.Sprintf(
 						"error checking Docker container status for %s: %v",
 						containerName,
-						runningErr,
+						err,
 					),
 				)
 				continue
@@ -766,17 +781,6 @@ func (p Package) stopService(cfg Config, context string) error {
 				continue
 			}
 			stoppedServices = append(stoppedServices, dockerService)
-			if stopErr != nil {
-				stopErrors = append(
-					stopErrors,
-					fmt.Sprintf(
-						"failed to stop Docker container %s: %v",
-						containerName,
-						stopErr,
-					),
-				)
-				continue
-			}
 		}
 	}
 

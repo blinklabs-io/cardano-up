@@ -361,24 +361,26 @@ func TestStopService_PostStopHookSkippedOnStopFailure(t *testing.T) {
 	}
 }
 
-// TestStopService_RollsBackContainerThatStoppedDespiteReportedError verifies
-// that when Stop() returns an error but the container actually transitioned
-// to stopped, stopService still tracks it (via a Running() reconciliation
-// check) so that rollback restarts it rather than trusting a nil/non-nil
-// Stop() error as proof of whether the container's state changed.
-func TestStopService_RollsBackContainerThatStoppedDespiteReportedError(t *testing.T) {
+// TestStopService_DoesNotRollBackOnAmbiguousStopError verifies that when
+// Stop() itself returns an error, stopService does not attempt to roll back
+// (restart) that container, even if it later observes the container as
+// stopped. A container found stopped after a failed Stop() call could have
+// been stopped by a concurrent, unrelated operation, and restarting it would
+// risk undoing that other operation's intended effect. Only a Stop() call
+// this code issued and confirmed successful is eligible for rollback.
+func TestStopService_DoesNotRollBackOnAmbiguousStopError(t *testing.T) {
 	origNewServiceFromContainerName := newServiceFromContainerName
 	t.Cleanup(func() {
 		newServiceFromContainerName = origNewServiceFromContainerName
 	})
 
-	partialFailureSvc := &fakeServiceLifecycle{
+	ambiguousSvc := &fakeServiceLifecycle{
 		running:              true,
-		stopErr:              errors.New("stop reported an error but the container did stop"),
+		stopErr:              errors.New("stop reported an error but the container ended up stopped"),
 		stopErrLeavesStopped: true,
 	}
 	newServiceFromContainerName = func(containerName string, logger *slog.Logger) (serviceLifecycle, error) {
-		return partialFailureSvc, nil
+		return ambiguousSvc, nil
 	}
 
 	cfg := Config{
@@ -405,11 +407,8 @@ func TestStopService_RollsBackContainerThatStoppedDespiteReportedError(t *testin
 	if err == nil {
 		t.Fatal("expected stopService to fail")
 	}
-	if !partialFailureSvc.stopped {
-		t.Fatal("expected the container to have actually stopped")
-	}
-	if !partialFailureSvc.started {
-		t.Fatal("expected the container that actually stopped to be rolled back (restarted) despite Stop() reporting an error")
+	if ambiguousSvc.started {
+		t.Fatal("expected no rollback for a Stop() call that reported an error, to avoid undoing a possibly-concurrent stop")
 	}
 }
 
