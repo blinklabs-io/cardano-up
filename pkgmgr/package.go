@@ -735,18 +735,37 @@ func (p Package) stopService(cfg Config, context string) error {
 			}
 			// Stop the Docker container if it's running
 			slog.Info("Stopping container " + containerName)
-			if err := dockerService.Stop(); err != nil {
+			stopErr := dockerService.Stop()
+			// Reconcile against actual container state rather than trusting
+			// a nil Stop() error, so rollback only targets containers that
+			// really transitioned to stopped (and still catches ones that
+			// stopped despite Stop() reporting an error).
+			nowRunning, runningErr := dockerService.Running()
+			if runningErr != nil {
+				stopErrors = append(
+					stopErrors,
+					fmt.Sprintf(
+						"error checking Docker container status for %s: %v",
+						containerName,
+						runningErr,
+					),
+				)
+				continue
+			}
+			if !nowRunning {
+				stoppedServices = append(stoppedServices, dockerService)
+			}
+			if stopErr != nil {
 				stopErrors = append(
 					stopErrors,
 					fmt.Sprintf(
 						"failed to stop Docker container %s: %v",
 						containerName,
-						err,
+						stopErr,
 					),
 				)
 				continue
 			}
-			stoppedServices = append(stoppedServices, dockerService)
 		}
 	}
 
@@ -775,7 +794,7 @@ func (p Package) rollbackStoppedServices(stoppedServices []serviceLifecycle) {
 		if err := stoppedServices[idx].Start(); err != nil {
 			slog.Warn(
 				fmt.Sprintf(
-					"failed to roll back stopped service after stop failure: %v",
+					"failed to roll back stopped service: %v",
 					err,
 				),
 			)

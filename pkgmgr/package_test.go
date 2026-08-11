@@ -16,6 +16,7 @@ package pkgmgr
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"log/slog"
 	"os"
@@ -33,6 +34,13 @@ type fakeServiceLifecycle struct {
 	running bool
 	started bool
 	stopped bool
+
+	// stopErr, if set, is returned by Stop(). By default this simulates a
+	// total stop failure (the container stays running). Set
+	// stopErrLeavesStopped to simulate a partial failure where the
+	// container actually stopped despite Stop() reporting an error.
+	stopErr              error
+	stopErrLeavesStopped bool
 }
 
 func (f *fakeServiceLifecycle) Running() (bool, error) {
@@ -46,6 +54,13 @@ func (f *fakeServiceLifecycle) Start() error {
 }
 
 func (f *fakeServiceLifecycle) Stop() error {
+	if f.stopErr != nil {
+		if f.stopErrLeavesStopped {
+			f.stopped = true
+			f.running = false
+		}
+		return f.stopErr
+	}
 	f.stopped = true
 	f.running = false
 	return nil
@@ -256,8 +271,28 @@ func TestServiceHooks_PreStartPostStartAndPreStop(t *testing.T) {
 
 // TestStopService_PostStopHookSkippedOnStopFailure verifies that
 // postStopScript does not run when a Docker container fails to stop,
-// matching the conservative skip-on-failure behavior of postStartScript.
+// matching the conservative skip-on-failure behavior of postStartScript. It
+// also verifies that a container already stopped earlier in the same call
+// is rolled back (restarted) when a later container fails to stop.
 func TestStopService_PostStopHookSkippedOnStopFailure(t *testing.T) {
+	origNewServiceFromContainerName := newServiceFromContainerName
+	t.Cleanup(func() {
+		newServiceFromContainerName = origNewServiceFromContainerName
+	})
+
+	stoppedSvc := &fakeServiceLifecycle{running: true}
+	brokenSvc := &fakeServiceLifecycle{
+		running: true,
+		stopErr: errors.New("simulated stop failure"),
+	}
+	services := map[string]*fakeServiceLifecycle{
+		"mypkg-1.0.0-testctx-stopped": stoppedSvc,
+		"mypkg-1.0.0-testctx-broken":  brokenSvc,
+	}
+	newServiceFromContainerName = func(containerName string, logger *slog.Logger) (serviceLifecycle, error) {
+		return services[containerName], nil
+	}
+
 	tmpDir := t.TempDir()
 	hookLog := filepath.Join(tmpDir, "hooks.log")
 	postStopScript := filepath.Join(tmpDir, "poststop.sh")
@@ -280,7 +315,13 @@ func TestStopService_PostStopHookSkippedOnStopFailure(t *testing.T) {
 		InstallSteps: []PackageInstallStep{
 			{
 				Docker: &PackageInstallStepDocker{
-					ContainerName: "missing",
+					ContainerName: "stopped",
+					Image:         "alpine:3.20",
+				},
+			},
+			{
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "broken",
 					Image:         "alpine:3.20",
 				},
 			},
@@ -289,10 +330,68 @@ func TestStopService_PostStopHookSkippedOnStopFailure(t *testing.T) {
 
 	err := pkg.stopService(cfg, "testctx")
 	if err == nil {
-		t.Fatal("expected stopService to fail for a nonexistent container")
+		t.Fatal("expected stopService to fail when a container fails to stop")
 	}
 	if _, statErr := os.Stat(hookLog); !os.IsNotExist(statErr) {
 		t.Fatal("expected postStopScript to be skipped when stopping a service fails")
+	}
+	if !stoppedSvc.started {
+		t.Fatal("expected the earlier successfully-stopped service to be rolled back (restarted)")
+	}
+	if brokenSvc.started {
+		t.Fatal("expected the service that failed to stop to not be started during rollback")
+	}
+}
+
+// TestStopService_RollsBackContainerThatStoppedDespiteReportedError verifies
+// that when Stop() returns an error but the container actually transitioned
+// to stopped, stopService still tracks it (via a Running() reconciliation
+// check) so that rollback restarts it rather than trusting a nil/non-nil
+// Stop() error as proof of whether the container's state changed.
+func TestStopService_RollsBackContainerThatStoppedDespiteReportedError(t *testing.T) {
+	origNewServiceFromContainerName := newServiceFromContainerName
+	t.Cleanup(func() {
+		newServiceFromContainerName = origNewServiceFromContainerName
+	})
+
+	partialFailureSvc := &fakeServiceLifecycle{
+		running:              true,
+		stopErr:              errors.New("stop reported an error but the container did stop"),
+		stopErrLeavesStopped: true,
+	}
+	newServiceFromContainerName = func(containerName string, logger *slog.Logger) (serviceLifecycle, error) {
+		return partialFailureSvc, nil
+	}
+
+	cfg := Config{
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Template: &Template{
+			tmpl:     template.New("test"),
+			baseVars: make(map[string]any),
+		},
+	}
+	pkg := Package{
+		Name:    "mypkg",
+		Version: "1.0.0",
+		InstallSteps: []PackageInstallStep{
+			{
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "flaky",
+					Image:         "alpine:3.20",
+				},
+			},
+		},
+	}
+
+	err := pkg.stopService(cfg, "testctx")
+	if err == nil {
+		t.Fatal("expected stopService to fail")
+	}
+	if !partialFailureSvc.stopped {
+		t.Fatal("expected the container to have actually stopped")
+	}
+	if !partialFailureSvc.started {
+		t.Fatal("expected the container that actually stopped to be rolled back (restarted) despite Stop() reporting an error")
 	}
 }
 
