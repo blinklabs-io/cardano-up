@@ -161,6 +161,9 @@ func TestOSAndARCH(t *testing.T) {
 	}
 }
 
+// TestServiceHooks_PreStartPostStartAndPreStop verifies that startService
+// and stopService run their hook scripts in the correct order: preStart and
+// postStart around a start, then preStop and postStop around a stop.
 func TestServiceHooks_PreStartPostStartAndPreStop(t *testing.T) {
 	tmpDir := t.TempDir()
 	hookLog := filepath.Join(tmpDir, "hooks.log")
@@ -186,6 +189,13 @@ func TestServiceHooks_PreStartPostStartAndPreStop(t *testing.T) {
 		t.Fatalf("failed to write preStop script: %v", err)
 	}
 
+	// Create postStop script
+	postStopScript := filepath.Join(tmpDir, "poststop.sh")
+	postStopContent := "#!/bin/sh\necho 'poststop executed' >> " + hookLog
+	if err := os.WriteFile(postStopScript, []byte(postStopContent), 0755); err != nil {
+		t.Fatalf("failed to write postStop script: %v", err)
+	}
+
 	// Initialize a config object
 	cfg := Config{
 		CacheDir: tmpDir,
@@ -203,6 +213,7 @@ func TestServiceHooks_PreStartPostStartAndPreStop(t *testing.T) {
 		PreStartScript:  preStartScript,
 		PostStartScript: postStartScript,
 		PreStopScript:   preStopScript,
+		PostStopScript:  postStopScript,
 		InstallSteps:    []PackageInstallStep{},
 	}
 
@@ -224,7 +235,7 @@ func TestServiceHooks_PreStartPostStartAndPreStop(t *testing.T) {
 		)
 	}
 
-	// Execute stopService and expect preStopScript to run
+	// Execute stopService and expect preStopScript and postStopScript to run
 	if err := pkg.stopService(cfg, "testctx"); err != nil {
 		t.Fatalf("stopService failed: %v", err)
 	}
@@ -234,12 +245,144 @@ func TestServiceHooks_PreStartPostStartAndPreStop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hook log file not found: %v", err)
 	}
-	if string(hookOutput) != "prestart executed\npoststart executed\nprestop executed\n" {
+	if string(hookOutput) != "prestart executed\npoststart executed\nprestop executed\npoststop executed\n" {
 		t.Errorf(
 			"unexpected hook output: got %q, want %q",
 			string(hookOutput),
-			"prestart executed\npoststart executed\nprestop executed\n",
+			"prestart executed\npoststart executed\nprestop executed\npoststop executed\n",
 		)
+	}
+}
+
+// TestStopService_PostStopHookSkippedOnStopFailure verifies that
+// postStopScript does not run when a Docker container fails to stop,
+// matching the conservative skip-on-failure behavior of postStartScript.
+func TestStopService_PostStopHookSkippedOnStopFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	hookLog := filepath.Join(tmpDir, "hooks.log")
+	postStopScript := filepath.Join(tmpDir, "poststop.sh")
+	postStopContent := "#!/bin/sh\necho 'poststop executed' >> " + hookLog
+	if err := os.WriteFile(postStopScript, []byte(postStopContent), 0755); err != nil {
+		t.Fatalf("failed to write postStop script: %v", err)
+	}
+
+	cfg := Config{
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Template: &Template{
+			tmpl:     template.New("test"),
+			baseVars: make(map[string]any),
+		},
+	}
+	pkg := Package{
+		Name:           "mypkg",
+		Version:        "1.0.0",
+		PostStopScript: postStopScript,
+		InstallSteps: []PackageInstallStep{
+			{
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "missing",
+					Image:         "alpine:3.20",
+				},
+			},
+		},
+	}
+
+	err := pkg.stopService(cfg, "testctx")
+	if err == nil {
+		t.Fatal("expected stopService to fail for a nonexistent container")
+	}
+	if _, statErr := os.Stat(hookLog); !os.IsNotExist(statErr) {
+		t.Fatal("expected postStopScript to be skipped when stopping a service fails")
+	}
+}
+
+// TestStopService_PostStopHookFailure verifies that stopService surfaces a
+// wrapped "post-stop hook failed" error when postStopScript exits non-zero.
+func TestStopService_PostStopHookFailure(t *testing.T) {
+	cfg := Config{
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Template: &Template{
+			tmpl:     template.New("test"),
+			baseVars: make(map[string]any),
+		},
+	}
+	pkg := Package{
+		Name:           "mypkg",
+		Version:        "1.0.0",
+		PostStopScript: "exit 1",
+		InstallSteps:   []PackageInstallStep{},
+	}
+
+	err := pkg.stopService(cfg, "testctx")
+	if err == nil {
+		t.Fatal("expected post-stop hook failure")
+	}
+	if !strings.Contains(err.Error(), "post-stop hook failed") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestStopService_RollsBackStoppedServicesOnPostStopFailure verifies that
+// when postStopScript fails, stopService restarts only the containers it
+// stopped during this call, leaving already-stopped containers untouched.
+func TestStopService_RollsBackStoppedServicesOnPostStopFailure(t *testing.T) {
+	origNewServiceFromContainerName := newServiceFromContainerName
+	t.Cleanup(func() {
+		newServiceFromContainerName = origNewServiceFromContainerName
+	})
+
+	stoppedSvc := &fakeServiceLifecycle{running: true}
+	alreadyStoppedSvc := &fakeServiceLifecycle{running: false}
+	services := map[string]*fakeServiceLifecycle{
+		"mypkg-1.0.0-testctx-running": stoppedSvc,
+		"mypkg-1.0.0-testctx-stopped": alreadyStoppedSvc,
+	}
+	newServiceFromContainerName = func(containerName string, logger *slog.Logger) (serviceLifecycle, error) {
+		return services[containerName], nil
+	}
+
+	cfg := Config{
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Template: &Template{
+			tmpl:     template.New("test"),
+			baseVars: make(map[string]any),
+		},
+	}
+	pkg := Package{
+		Name:           "mypkg",
+		Version:        "1.0.0",
+		PostStopScript: "exit 1",
+		InstallSteps: []PackageInstallStep{
+			{
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "running",
+					Image:         "alpine:3.20",
+				},
+			},
+			{
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "stopped",
+					Image:         "alpine:3.20",
+				},
+			},
+		},
+	}
+
+	err := pkg.stopService(cfg, "testctx")
+	if err == nil {
+		t.Fatal("expected post-stop hook failure")
+	}
+	if !strings.Contains(err.Error(), "post-stop hook failed") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !stoppedSvc.stopped {
+		t.Fatal("expected running service to be stopped")
+	}
+	if !stoppedSvc.started {
+		t.Fatal("expected newly-stopped service to be restarted during rollback")
+	}
+	if alreadyStoppedSvc.started {
+		t.Fatal("expected already-stopped service to be left stopped")
 	}
 }
 

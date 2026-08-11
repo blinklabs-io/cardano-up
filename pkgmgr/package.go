@@ -50,6 +50,7 @@ type Package struct {
 	PreStartScript      string               `yaml:"preStartScript,omitempty"`
 	PostStartScript     string               `yaml:"postStartScript,omitempty"`
 	PreStopScript       string               `yaml:"preStopScript,omitempty"`
+	PostStopScript      string               `yaml:"postStopScript,omitempty"`
 	PreUninstallScript  string               `yaml:"preUninstallScript,omitempty"`
 	PostUninstallScript string               `yaml:"postUninstallScript,omitempty"`
 	PostInstallNotes    string               `yaml:"postInstallNotes,omitempty"`
@@ -691,6 +692,7 @@ func (p Package) stopService(cfg Config, context string) error {
 	}
 
 	var stopErrors []string
+	stoppedServices := make([]serviceLifecycle, 0)
 	for _, step := range p.InstallSteps {
 		if step.Docker != nil {
 			if step.Docker.PullOnly {
@@ -701,7 +703,7 @@ func (p Package) stopService(cfg Config, context string) error {
 				pkgName,
 				step.Docker.ContainerName,
 			)
-			dockerService, err := NewDockerServiceFromContainerName(
+			dockerService, err := newServiceFromContainerName(
 				containerName,
 				cfg.Logger,
 			)
@@ -716,7 +718,22 @@ func (p Package) stopService(cfg Config, context string) error {
 				)
 				continue
 			}
-			// Stop the Docker container
+			wasRunning, err := dockerService.Running()
+			if err != nil {
+				stopErrors = append(
+					stopErrors,
+					fmt.Sprintf(
+						"error checking Docker container status for %s: %v",
+						containerName,
+						err,
+					),
+				)
+				continue
+			}
+			if !wasRunning {
+				continue
+			}
+			// Stop the Docker container if it's running
 			slog.Info("Stopping container " + containerName)
 			if err := dockerService.Stop(); err != nil {
 				stopErrors = append(
@@ -727,16 +744,43 @@ func (p Package) stopService(cfg Config, context string) error {
 						err,
 					),
 				)
+				continue
 			}
+			stoppedServices = append(stoppedServices, dockerService)
 		}
 	}
 
 	if len(stopErrors) > 0 {
+		p.rollbackStoppedServices(stoppedServices)
 		slog.Error(strings.Join(stopErrors, "\n"))
 		return ErrOperationFailed
 	}
 
+	// Run post-stop script
+	if p.PostStopScript != "" {
+		if err := p.runHookScript(cfg, p.PostStopScript); err != nil {
+			p.rollbackStoppedServices(stoppedServices)
+			return fmt.Errorf("post-stop hook failed: %w", err)
+		}
+	}
+
 	return nil
+}
+
+func (p Package) rollbackStoppedServices(stoppedServices []serviceLifecycle) {
+	if len(stoppedServices) == 0 {
+		return
+	}
+	for idx := len(stoppedServices) - 1; idx >= 0; idx-- {
+		if err := stoppedServices[idx].Start(); err != nil {
+			slog.Warn(
+				fmt.Sprintf(
+					"failed to roll back stopped service after stop failure: %v",
+					err,
+				),
+			)
+		}
+	}
 }
 
 func (p Package) services(
