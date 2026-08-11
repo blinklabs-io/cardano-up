@@ -74,7 +74,10 @@ type PackageOutput struct {
 type serviceLifecycle interface {
 	Running() (bool, error)
 	Start() error
-	Stop() error
+	// Stop stops the service if it is running. The returned bool reports
+	// whether this call actually issued a stop (true), versus finding it
+	// already stopped and doing nothing (false).
+	Stop() (bool, error)
 }
 
 var newServiceFromContainerName = func(containerName string, logger *slog.Logger) (serviceLifecycle, error) {
@@ -670,7 +673,7 @@ func (p Package) rollbackStartedServices(startedServices []serviceLifecycle) {
 		return
 	}
 	for idx := len(startedServices) - 1; idx >= 0; idx-- {
-		if err := startedServices[idx].Stop(); err != nil {
+		if _, err := startedServices[idx].Stop(); err != nil {
 			slog.Warn(
 				fmt.Sprintf(
 					"failed to roll back started service after start failure: %v",
@@ -718,30 +721,19 @@ func (p Package) stopService(cfg Config, context string) error {
 				)
 				continue
 			}
-			wasRunning, err := dockerService.Running()
+			// Stop() itself checks whether the container is running before
+			// acting, and reports whether it actually issued a stop. Relying
+			// on that report - rather than a separate Running() check made
+			// beforehand by this code - avoids a race where a concurrent,
+			// unrelated operation stops the container in between the two
+			// checks: this code would then see a "successful" no-op Stop()
+			// and wrongly believe it owns a transition it never caused.
+			stoppedNow, err := dockerService.Stop()
 			if err != nil {
-				stopErrors = append(
-					stopErrors,
-					fmt.Sprintf(
-						"error checking Docker container status for %s: %v",
-						containerName,
-						err,
-					),
-				)
-				continue
-			}
-			if !wasRunning {
-				continue
-			}
-			// Stop the Docker container if it's running
-			slog.Info("Stopping container " + containerName)
-			if err := dockerService.Stop(); err != nil {
 				// Don't track this service for rollback: a container found
 				// stopped despite this error could have been stopped by a
 				// concurrent, unrelated operation, and rolling it back would
-				// wrongly undo that operation's intended effect. Only a
-				// Stop() call this code issued and confirmed below counts as
-				// this call's own transition.
+				// wrongly undo that operation's intended effect.
 				stopErrors = append(
 					stopErrors,
 					fmt.Sprintf(
@@ -752,13 +744,20 @@ func (p Package) stopService(cfg Config, context string) error {
 				)
 				continue
 			}
-			// Confirm the container actually stopped - a nil Stop() error
-			// alone isn't proof of the state transition.
+			if !stoppedNow {
+				// The container was already stopped; nothing to do or roll
+				// back, and no error since the desired end state holds.
+				continue
+			}
+			slog.Info("Stopped container " + containerName)
+			// Confirm the container is actually stopped - e.g. a restart
+			// policy could bring it back up immediately after a successful
+			// stop request.
 			nowRunning, err := dockerService.Running()
 			if err != nil {
-				// Our own Stop() call above reported success, so this call
-				// owns the transition even though it can't be reconfirmed -
-				// track it for a best-effort rollback attempt.
+				// This call's own Stop() reported success, so it owns the
+				// transition even though the final state can't be
+				// reconfirmed - track it for a best-effort rollback attempt.
 				stoppedServices = append(stoppedServices, dockerService)
 				stopErrors = append(
 					stopErrors,
@@ -1041,10 +1040,8 @@ func (p *PackageInstallStepDocker) uninstall(
 				return err
 			}
 		} else {
-			if running, _ := svc.Running(); running {
-				if err := svc.Stop(); err != nil {
-					return err
-				}
+			if _, err := svc.Stop(); err != nil {
+				return err
 			}
 			if err := svc.Remove(); err != nil {
 				return err

@@ -126,29 +126,35 @@ func (d *DockerService) Start() error {
 	return nil
 }
 
-func (d *DockerService) Stop() error {
+// Stop stops the container if it is running. The returned bool reports
+// whether this call actually issued a stop request (true), as opposed to
+// finding the container already stopped and doing nothing (false) - this
+// lets callers distinguish a transition they caused from one that had
+// already happened, e.g. via a concurrent, unrelated operation.
+func (d *DockerService) Stop() (bool, error) {
 	running, err := d.Running()
 	if err != nil {
-		return err
+		return false, err
 	}
-	if running {
-		client, err := d.getClient()
-		if err != nil {
-			return err
-		}
-		d.logger.Debug("stopping container " + d.ContainerName)
-		stopTimeout := 60
-		if err := client.ContainerStop(
-			context.Background(),
-			d.ContainerId,
-			container.StopOptions{
-				Timeout: &stopTimeout,
-			},
-		); err != nil {
-			return err
-		}
+	if !running {
+		return false, nil
 	}
-	return nil
+	client, err := d.getClient()
+	if err != nil {
+		return false, err
+	}
+	d.logger.Debug("stopping container " + d.ContainerName)
+	stopTimeout := 60
+	if err := client.ContainerStop(
+		context.Background(),
+		d.ContainerId,
+		container.StopOptions{
+			Timeout: &stopTimeout,
+		},
+	); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (d *DockerService) Create() error {

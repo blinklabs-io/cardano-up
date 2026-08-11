@@ -43,9 +43,10 @@ type fakeServiceLifecycle struct {
 	stopErr              error
 	stopErrLeavesStopped bool
 
-	// stopNoop, if true, makes Stop() report success without actually
-	// changing the container's running state - simulates a stop call that
-	// silently fails to take effect.
+	// stopNoop, if true, makes a successful Stop() report that it issued a
+	// stop (stoppedNow=true) without the container actually transitioning to
+	// not-running - simulates e.g. a restart policy immediately restarting
+	// the container right after a successful stop request.
 	stopNoop bool
 
 	// runningErrAfterStop, if set, is returned by Running() only once
@@ -67,21 +68,28 @@ func (f *fakeServiceLifecycle) Start() error {
 	return nil
 }
 
-func (f *fakeServiceLifecycle) Stop() error {
+// Stop mirrors DockerService.Stop(): it only acts (and reports
+// stoppedNow=true) if the container is currently running, matching the
+// production contract that a nil/false result means no real action was
+// taken.
+func (f *fakeServiceLifecycle) Stop() (bool, error) {
 	f.stopCalled = true
-	if f.stopNoop {
-		return nil
+	if !f.running {
+		return false, nil
 	}
 	if f.stopErr != nil {
 		if f.stopErrLeavesStopped {
 			f.stopped = true
 			f.running = false
 		}
-		return f.stopErr
+		return false, f.stopErr
+	}
+	if f.stopNoop {
+		return true, nil
 	}
 	f.stopped = true
 	f.running = false
-	return nil
+	return true, nil
 }
 
 var packageTestDefs = []struct {
