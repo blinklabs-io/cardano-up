@@ -742,6 +742,9 @@ func (p Package) stopService(cfg Config, context string) error {
 			// stopped despite Stop() reporting an error).
 			nowRunning, runningErr := dockerService.Running()
 			if runningErr != nil {
+				// Final state is unknown, so track it for a best-effort
+				// rollback attempt rather than risk leaving it stopped.
+				stoppedServices = append(stoppedServices, dockerService)
 				stopErrors = append(
 					stopErrors,
 					fmt.Sprintf(
@@ -752,9 +755,17 @@ func (p Package) stopService(cfg Config, context string) error {
 				)
 				continue
 			}
-			if !nowRunning {
-				stoppedServices = append(stoppedServices, dockerService)
+			if nowRunning {
+				stopErrors = append(
+					stopErrors,
+					fmt.Sprintf(
+						"failed to stop Docker container %s: container is still running",
+						containerName,
+					),
+				)
+				continue
 			}
+			stoppedServices = append(stoppedServices, dockerService)
 			if stopErr != nil {
 				stopErrors = append(
 					stopErrors,
