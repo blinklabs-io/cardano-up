@@ -126,29 +126,46 @@ func (d *DockerService) Start() error {
 	return nil
 }
 
-func (d *DockerService) Stop() error {
+// Stop stops the container if it is running. The returned bool reports
+// whether this call actually issued a stop request (true), as opposed to
+// finding the container already stopped and doing nothing (false) - this
+// lets callers distinguish a transition they caused from one that had
+// already happened, e.g. via a concurrent, unrelated operation.
+//
+// This is a best-effort signal, not a guarantee: if another actor stops the
+// container in the narrow window between the Running() check above and the
+// ContainerStop() call below, Docker's stop endpoint is idempotent and
+// returns success either way, and this method has no way to tell the two
+// cases apart. The underlying docker/docker/client SDK discards the
+// distinction the Docker Engine API itself makes here (204 "stopped by this
+// request" vs. 304 "already stopped") - ContainerStop() only returns an
+// error, never the response status - so recovering it would require
+// bypassing the SDK's exported API with a raw HTTP request. Given that
+// cost, this race is accepted rather than closed.
+func (d *DockerService) Stop() (bool, error) {
 	running, err := d.Running()
 	if err != nil {
-		return err
+		return false, err
 	}
-	if running {
-		client, err := d.getClient()
-		if err != nil {
-			return err
-		}
-		d.logger.Debug("stopping container " + d.ContainerName)
-		stopTimeout := 60
-		if err := client.ContainerStop(
-			context.Background(),
-			d.ContainerId,
-			container.StopOptions{
-				Timeout: &stopTimeout,
-			},
-		); err != nil {
-			return err
-		}
+	if !running {
+		return false, nil
 	}
-	return nil
+	client, err := d.getClient()
+	if err != nil {
+		return false, err
+	}
+	d.logger.Debug("stopping container " + d.ContainerName)
+	stopTimeout := 60
+	if err := client.ContainerStop(
+		context.Background(),
+		d.ContainerId,
+		container.StopOptions{
+			Timeout: &stopTimeout,
+		},
+	); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (d *DockerService) Create() error {

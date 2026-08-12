@@ -50,6 +50,7 @@ type Package struct {
 	PreStartScript      string               `yaml:"preStartScript,omitempty"`
 	PostStartScript     string               `yaml:"postStartScript,omitempty"`
 	PreStopScript       string               `yaml:"preStopScript,omitempty"`
+	PostStopScript      string               `yaml:"postStopScript,omitempty"`
 	PreUninstallScript  string               `yaml:"preUninstallScript,omitempty"`
 	PostUninstallScript string               `yaml:"postUninstallScript,omitempty"`
 	PostInstallNotes    string               `yaml:"postInstallNotes,omitempty"`
@@ -73,7 +74,10 @@ type PackageOutput struct {
 type serviceLifecycle interface {
 	Running() (bool, error)
 	Start() error
-	Stop() error
+	// Stop stops the service if it is running. The returned bool reports
+	// whether this call actually issued a stop (true), versus finding it
+	// already stopped and doing nothing (false).
+	Stop() (bool, error)
 }
 
 var newServiceFromContainerName = func(containerName string, logger *slog.Logger) (serviceLifecycle, error) {
@@ -669,7 +673,7 @@ func (p Package) rollbackStartedServices(startedServices []serviceLifecycle) {
 		return
 	}
 	for idx := len(startedServices) - 1; idx >= 0; idx-- {
-		if err := startedServices[idx].Stop(); err != nil {
+		if _, err := startedServices[idx].Stop(); err != nil {
 			slog.Warn(
 				fmt.Sprintf(
 					"failed to roll back started service after start failure: %v",
@@ -691,6 +695,7 @@ func (p Package) stopService(cfg Config, context string) error {
 	}
 
 	var stopErrors []string
+	stoppedServices := make([]serviceLifecycle, 0)
 	for _, step := range p.InstallSteps {
 		if step.Docker != nil {
 			if step.Docker.PullOnly {
@@ -701,7 +706,7 @@ func (p Package) stopService(cfg Config, context string) error {
 				pkgName,
 				step.Docker.ContainerName,
 			)
-			dockerService, err := NewDockerServiceFromContainerName(
+			dockerService, err := newServiceFromContainerName(
 				containerName,
 				cfg.Logger,
 			)
@@ -716,9 +721,19 @@ func (p Package) stopService(cfg Config, context string) error {
 				)
 				continue
 			}
-			// Stop the Docker container
-			slog.Info("Stopping container " + containerName)
-			if err := dockerService.Stop(); err != nil {
+			// Stop() itself checks whether the container is running before
+			// acting, and reports whether it actually issued a stop. Relying
+			// on that report - rather than a separate Running() check made
+			// beforehand by this code - avoids a race where a concurrent,
+			// unrelated operation stops the container in between the two
+			// checks: this code would then see a "successful" no-op Stop()
+			// and wrongly believe it owns a transition it never caused.
+			stoppedNow, err := dockerService.Stop()
+			if err != nil {
+				// Don't track this service for rollback: a container found
+				// stopped despite this error could have been stopped by a
+				// concurrent, unrelated operation, and rolling it back would
+				// wrongly undo that operation's intended effect.
 				stopErrors = append(
 					stopErrors,
 					fmt.Sprintf(
@@ -727,16 +742,78 @@ func (p Package) stopService(cfg Config, context string) error {
 						err,
 					),
 				)
+				continue
 			}
+			if !stoppedNow {
+				// The container was already stopped; nothing to do or roll
+				// back, and no error since the desired end state holds.
+				continue
+			}
+			slog.Info("Stopped container " + containerName)
+			// Confirm the container is actually stopped - e.g. a restart
+			// policy could bring it back up immediately after a successful
+			// stop request.
+			nowRunning, err := dockerService.Running()
+			if err != nil {
+				// This call's own Stop() reported success, so it owns the
+				// transition even though the final state can't be
+				// reconfirmed - track it for a best-effort rollback attempt.
+				stoppedServices = append(stoppedServices, dockerService)
+				stopErrors = append(
+					stopErrors,
+					fmt.Sprintf(
+						"error checking Docker container status for %s: %v",
+						containerName,
+						err,
+					),
+				)
+				continue
+			}
+			if nowRunning {
+				stopErrors = append(
+					stopErrors,
+					fmt.Sprintf(
+						"failed to stop Docker container %s: container is still running",
+						containerName,
+					),
+				)
+				continue
+			}
+			stoppedServices = append(stoppedServices, dockerService)
 		}
 	}
 
 	if len(stopErrors) > 0 {
+		p.rollbackStoppedServices(stoppedServices)
 		slog.Error(strings.Join(stopErrors, "\n"))
 		return ErrOperationFailed
 	}
 
+	// Run post-stop script
+	if p.PostStopScript != "" {
+		if err := p.runHookScript(cfg, p.PostStopScript); err != nil {
+			p.rollbackStoppedServices(stoppedServices)
+			return fmt.Errorf("post-stop hook failed: %w", err)
+		}
+	}
+
 	return nil
+}
+
+func (p Package) rollbackStoppedServices(stoppedServices []serviceLifecycle) {
+	if len(stoppedServices) == 0 {
+		return
+	}
+	for idx := len(stoppedServices) - 1; idx >= 0; idx-- {
+		if err := stoppedServices[idx].Start(); err != nil {
+			slog.Warn(
+				fmt.Sprintf(
+					"failed to roll back stopped service: %v",
+					err,
+				),
+			)
+		}
+	}
 }
 
 func (p Package) services(
@@ -963,10 +1040,8 @@ func (p *PackageInstallStepDocker) uninstall(
 				return err
 			}
 		} else {
-			if running, _ := svc.Running(); running {
-				if err := svc.Stop(); err != nil {
-					return err
-				}
+			if _, err := svc.Stop(); err != nil {
+				return err
 			}
 			if err := svc.Remove(); err != nil {
 				return err
