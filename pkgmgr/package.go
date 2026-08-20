@@ -195,7 +195,11 @@ func (p Package) install(
 			return "", nil, nil, err
 		}
 	}
-	// Perform install
+	// Perform install. Track the containers created along the way so that a
+	// later failure can remove them again: the pre-flight check above rejects
+	// a container that already exists, so anything left behind by a failed
+	// install would block the retry.
+	var createdSteps []*PackageInstallStepDocker
 	for _, installStep := range p.InstallSteps {
 		// Evaluate condition if defined
 		if installStep.Condition != "" {
@@ -217,13 +221,19 @@ func (p Package) install(
 				stepPorts = registeredPorts[installStep.Docker.ContainerName]
 			}
 			if err := installStep.Docker.install(cfg, pkgName, stepPorts); err != nil {
+				p.removeCreatedContainers(cfg, pkgName, createdSteps)
 				return "", nil, nil, err
+			}
+			if !installStep.Docker.PullOnly {
+				createdSteps = append(createdSteps, installStep.Docker)
 			}
 		} else if installStep.File != nil {
 			if err := installStep.File.install(cfg, pkgName, p.filePath); err != nil {
+				p.removeCreatedContainers(cfg, pkgName, createdSteps)
 				return "", nil, nil, err
 			}
 		} else {
+			p.removeCreatedContainers(cfg, pkgName, createdSteps)
 			return "", nil, nil, ErrNoInstallMethods
 		}
 	}
@@ -234,6 +244,7 @@ func (p Package) install(
 	// its service reads on first boot needs both: the config rendered by its
 	// file steps, and a chance to act before that service starts.
 	if err := p.startServices(cfg, context, runHooks); err != nil {
+		p.removeCreatedContainers(cfg, pkgName, createdSteps)
 		return "", nil, nil, err
 	}
 	// Capture port details for output templates
@@ -588,6 +599,29 @@ func (p Package) validate(cfg Config) error {
 		}
 	}
 	return nil
+}
+
+// removeCreatedContainers removes containers created earlier in the same
+// install, so a failed install leaves nothing behind for the pre-flight check
+// to reject on a retry. Images are kept: they were just pulled, and they are
+// not what blocks a retry. A cleanup failure is logged rather than returned,
+// so it cannot mask the error that triggered the cleanup.
+func (p Package) removeCreatedContainers(
+	cfg Config,
+	pkgName string,
+	steps []*PackageInstallStepDocker,
+) {
+	for _, step := range steps {
+		if err := step.uninstall(cfg, pkgName, true); err != nil {
+			cfg.Logger.Warn(
+				fmt.Sprintf(
+					"failed to remove container %q after a failed install: %s",
+					step.ContainerName,
+					err,
+				),
+			)
+		}
+	}
 }
 
 func (p Package) startService(cfg Config, context string) error {
