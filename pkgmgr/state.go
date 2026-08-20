@@ -123,7 +123,7 @@ func (s *State) saveFile(filename string, src any) error {
 }
 
 func (s *State) loadContexts() error {
-	if err := s.loadFile(contextsFilename, &(s.Contexts)); err != nil {
+	if err := s.loadFile(contextsFilename, &s.Contexts); err != nil {
 		return err
 	}
 	if len(s.Contexts) == 0 {
@@ -133,11 +133,11 @@ func (s *State) loadContexts() error {
 }
 
 func (s *State) saveContexts() error {
-	return s.saveFile(contextsFilename, &(s.Contexts))
+	return s.saveFile(contextsFilename, &s.Contexts)
 }
 
 func (s *State) loadActiveContext() error {
-	if err := s.loadFile(activeContextFilename, &(s.ActiveContext)); err != nil {
+	if err := s.loadFile(activeContextFilename, &s.ActiveContext); err != nil {
 		return err
 	}
 	if s.ActiveContext == "" {
@@ -147,19 +147,19 @@ func (s *State) loadActiveContext() error {
 }
 
 func (s *State) saveActiveContext() error {
-	return s.saveFile(activeContextFilename, &(s.ActiveContext))
+	return s.saveFile(activeContextFilename, &s.ActiveContext)
 }
 
 func (s *State) loadInstalledPackages() error {
-	return s.loadFile(installedPackagesFilename, &(s.InstalledPackages))
+	return s.loadFile(installedPackagesFilename, &s.InstalledPackages)
 }
 
 func (s *State) saveInstalledPackages() error {
-	return s.saveFile(installedPackagesFilename, &(s.InstalledPackages))
+	return s.saveFile(installedPackagesFilename, &s.InstalledPackages)
 }
 
 func (s *State) loadPortRegistry() error {
-	if err := s.loadFile(portRegistryFilename, &(s.PortRegistry)); err != nil {
+	if err := s.loadFile(portRegistryFilename, &s.PortRegistry); err != nil {
 		return err
 	}
 	if s.PortRegistry == nil {
@@ -169,5 +169,5 @@ func (s *State) loadPortRegistry() error {
 }
 
 func (s *State) savePortRegistry() error {
-	return s.saveFile(portRegistryFilename, &(s.PortRegistry))
+	return s.saveFile(portRegistryFilename, &s.PortRegistry)
 }
