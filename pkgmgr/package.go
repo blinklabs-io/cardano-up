@@ -200,6 +200,12 @@ func (p Package) install(
 	// a container that already exists, so anything left behind by a failed
 	// install would block the retry.
 	var createdSteps []*PackageInstallStepDocker
+	installed := false
+	defer func() {
+		if !installed {
+			p.removeCreatedContainers(cfg, pkgName, createdSteps)
+		}
+	}()
 	for _, installStep := range p.InstallSteps {
 		// Evaluate condition if defined
 		if installStep.Condition != "" {
@@ -221,7 +227,6 @@ func (p Package) install(
 				stepPorts = registeredPorts[installStep.Docker.ContainerName]
 			}
 			if err := installStep.Docker.install(cfg, pkgName, stepPorts); err != nil {
-				p.removeCreatedContainers(cfg, pkgName, createdSteps)
 				return "", nil, nil, err
 			}
 			if !installStep.Docker.PullOnly {
@@ -229,11 +234,9 @@ func (p Package) install(
 			}
 		} else if installStep.File != nil {
 			if err := installStep.File.install(cfg, pkgName, p.filePath); err != nil {
-				p.removeCreatedContainers(cfg, pkgName, createdSteps)
 				return "", nil, nil, err
 			}
 		} else {
-			p.removeCreatedContainers(cfg, pkgName, createdSteps)
 			return "", nil, nil, ErrNoInstallMethods
 		}
 	}
@@ -244,7 +247,6 @@ func (p Package) install(
 	// its service reads on first boot needs both: the config rendered by its
 	// file steps, and a chance to act before that service starts.
 	if err := p.startServices(cfg, context, runHooks); err != nil {
-		p.removeCreatedContainers(cfg, pkgName, createdSteps)
 		return "", nil, nil, err
 	}
 	// Capture port details for output templates
@@ -276,6 +278,7 @@ func (p Package) install(
 		}
 		retNotes = tmpNotes
 	}
+	installed = true
 	return retNotes, retOutputs, retPorts, nil
 }
 
@@ -652,6 +655,7 @@ func (p Package) startServices(
 		// up here would fail the whole start.
 		if step.Condition != "" {
 			if ok, err := cfg.Template.EvaluateCondition(step.Condition, nil); err != nil {
+				p.rollbackStartedServices(startedServices)
 				return NewInstallStepConditionError(step.Condition, err)
 			} else if !ok {
 				cfg.Logger.Debug(
@@ -890,6 +894,15 @@ func (p Package) services(
 	var ret []*DockerService
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	for _, step := range p.InstallSteps {
+		// Evaluate condition if defined. A step skipped at install time has
+		// no container, so looking one up would fail the whole call.
+		if step.Condition != "" {
+			if ok, err := cfg.Template.EvaluateCondition(step.Condition, nil); err != nil {
+				return ret, NewInstallStepConditionError(step.Condition, err)
+			} else if !ok {
+				continue
+			}
+		}
 		if step.Docker != nil {
 			if step.Docker.PullOnly {
 				continue

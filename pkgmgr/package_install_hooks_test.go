@@ -269,3 +269,56 @@ func TestStartServices_SkipsStepsWithFalseCondition(t *testing.T) {
 		}
 	}
 }
+
+// TestStartServices_RollsBackWhenConditionErrors verifies that a condition
+// that fails to evaluate rolls back services already started in the same
+// call, rather than leaving a partial startup running.
+func TestStartServices_RollsBackWhenConditionErrors(t *testing.T) {
+	origNewServiceFromContainerName := newServiceFromContainerName
+	t.Cleanup(func() {
+		newServiceFromContainerName = origNewServiceFromContainerName
+	})
+
+	started := &fakeServiceLifecycle{}
+	newServiceFromContainerName = func(containerName string, logger *slog.Logger) (serviceLifecycle, error) {
+		if containerName == "mypkg-1.0.0-testctx-started" {
+			return started, nil
+		}
+		return nil, ErrContainerNotExists
+	}
+
+	cfg := Config{
+		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Template: NewTemplate(nil),
+	}
+	pkg := Package{
+		Name:    "mypkg",
+		Version: "1.0.0",
+		InstallSteps: []PackageInstallStep{
+			{
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "started",
+					Image:         "alpine:3.20",
+				},
+			},
+			{
+				// eq with a single argument fails at evaluation time.
+				Condition: `eq "a"`,
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "second",
+					Image:         "alpine:3.20",
+				},
+			},
+		},
+	}
+
+	if err := pkg.startService(cfg, "testctx"); err == nil {
+		t.Fatal("expected startService to fail when a condition cannot be evaluated")
+	}
+	if !started.started {
+		t.Fatal("expected the first service to have been started")
+	}
+	if !started.stopped {
+		t.Fatal("expected the already-started service to be rolled back")
+	}
+}
