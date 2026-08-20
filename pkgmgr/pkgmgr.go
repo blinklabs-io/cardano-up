@@ -120,7 +120,7 @@ func (p *PackageManager) Up() error {
 	contextName, _ := p.effectiveContext()
 	var errs []error
 	for idx := range p.state.InstalledPackages {
-		installedPkg := &(p.state.InstalledPackages[idx])
+		installedPkg := &p.state.InstalledPackages[idx]
 		if installedPkg.Context != contextName {
 			continue
 		}
