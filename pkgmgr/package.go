@@ -613,6 +613,19 @@ func (p Package) startServices(
 	var startErrors []string
 	startedServices := make([]serviceLifecycle, 0)
 	for _, step := range p.InstallSteps {
+		// Evaluate condition if defined. A step skipped at install time was
+		// never materialized, so its container does not exist and looking it
+		// up here would fail the whole start.
+		if step.Condition != "" {
+			if ok, err := cfg.Template.EvaluateCondition(step.Condition, nil); err != nil {
+				return NewInstallStepConditionError(step.Condition, err)
+			} else if !ok {
+				cfg.Logger.Debug(
+					"skipping start step due to condition: " + step.Condition,
+				)
+				continue
+			}
+		}
 		if step.Docker != nil {
 			if step.Docker.PullOnly {
 				continue

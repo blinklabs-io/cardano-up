@@ -210,3 +210,62 @@ func TestStartService_PreStartHookRunsBeforeContainerStart(t *testing.T) {
 		t.Fatalf("unexpected order: got %v, want %v", got, want)
 	}
 }
+
+// TestStartServices_SkipsStepsWithFalseCondition verifies that starting a
+// package's services honors the same install-step conditions the install loop
+// applies. A step whose condition evaluates false is never materialized, so
+// its container does not exist and inspecting it fails with
+// ErrContainerNotExists - which would otherwise fail the whole operation.
+func TestStartServices_SkipsStepsWithFalseCondition(t *testing.T) {
+	origNewServiceFromContainerName := newServiceFromContainerName
+	t.Cleanup(func() {
+		newServiceFromContainerName = origNewServiceFromContainerName
+	})
+
+	created := &fakeServiceLifecycle{}
+	var askedFor []string
+	newServiceFromContainerName = func(containerName string, logger *slog.Logger) (serviceLifecycle, error) {
+		askedFor = append(askedFor, containerName)
+		if containerName == "mypkg-1.0.0-testctx-created" {
+			return created, nil
+		}
+		// Matches production behavior for a container that was never created.
+		return nil, ErrContainerNotExists
+	}
+
+	cfg := Config{
+		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Template: NewTemplate(nil),
+	}
+	pkg := Package{
+		Name:    "mypkg",
+		Version: "1.0.0",
+		InstallSteps: []PackageInstallStep{
+			{
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "created",
+					Image:         "alpine:3.20",
+				},
+			},
+			{
+				Condition: `eq "a" "b"`,
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "skipped",
+					Image:         "alpine:3.20",
+				},
+			},
+		},
+	}
+
+	if err := pkg.startService(cfg, "testctx"); err != nil {
+		t.Fatalf("startService failed: %v", err)
+	}
+	if !created.started {
+		t.Fatal("expected the materialized container to be started")
+	}
+	for _, name := range askedFor {
+		if name == "mypkg-1.0.0-testctx-skipped" {
+			t.Fatal("expected the condition-skipped step to not be looked up")
+		}
+	}
+}
