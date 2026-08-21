@@ -322,3 +322,73 @@ func TestStartServices_RollsBackWhenConditionErrors(t *testing.T) {
 		t.Fatal("expected the already-started service to be rolled back")
 	}
 }
+
+// TestConditionNeedsPackageTemplateVars pins the trap behind the condition
+// filtering in services(): a template variable that is absent renders as
+// false with no error, so a caller that passes a config without the
+// package-specific variables does not fail loudly - it silently decides the
+// condition is false and skips the step. Every caller of services() therefore
+// has to build those variables first, or info and logs would quietly omit a
+// service whose condition is actually true.
+func TestConditionNeedsPackageTemplateVars(t *testing.T) {
+	pkg := Package{
+		Name:    "mypkg",
+		Version: "1.0.0",
+		Options: []PackageOption{
+			{Name: "extra", Default: true},
+		},
+	}
+	base := Config{
+		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		DataDir:  t.TempDir(),
+		Template: NewTemplate(nil),
+	}
+
+	cfg := pkg.withPackageTemplateVars(base, "testctx", pkg.defaultOpts())
+	ok, err := cfg.Template.EvaluateCondition(`.Package.Options.extra`, nil)
+	if err != nil {
+		t.Fatalf("unexpected error with package template vars: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected .Package.Options.extra to be true with package template vars")
+	}
+
+	ok, err = base.Template.EvaluateCondition(`.Package.Options.extra`, nil)
+	if err != nil {
+		t.Fatalf("unexpected error without package template vars: %v", err)
+	}
+	if ok {
+		t.Fatal("expected the condition to evaluate false without package template vars")
+	}
+}
+
+// TestServices_SkipsStepsWithFalseCondition verifies that services() honors
+// install-step conditions, so a step that was never materialized is not
+// looked up as a container.
+func TestServices_SkipsStepsWithFalseCondition(t *testing.T) {
+	pkg := Package{
+		Name:    "mypkg",
+		Version: "1.0.0",
+		InstallSteps: []PackageInstallStep{
+			{
+				Condition: `eq "a" "b"`,
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "skipped",
+					Image:         "alpine:3.20",
+				},
+			},
+		},
+	}
+	cfg := Config{
+		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Template: NewTemplate(nil),
+	}
+
+	services, err := pkg.services(cfg, "testctx")
+	if err != nil {
+		t.Fatalf("services failed: %v", err)
+	}
+	if len(services) != 0 {
+		t.Fatalf("expected the condition-skipped step to yield no services, got %d", len(services))
+	}
+}

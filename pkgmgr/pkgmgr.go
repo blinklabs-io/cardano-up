@@ -482,7 +482,15 @@ func (p *PackageManager) Logs(
 	if !foundPackage {
 		return NewPackageNotInstalledError(pkgName, contextName)
 	}
-	services, err := logsPkg.Package.services(p.config, contextName)
+	// Build the package-specific template variables first: install-step
+	// conditions can reference them, and an absent variable renders as false
+	// rather than erroring, which would silently drop a service here.
+	logsCfg := logsPkg.Package.withPackageTemplateVars(
+		p.config,
+		contextName,
+		logsPkg.Options,
+	)
+	services, err := logsPkg.Package.services(logsCfg, contextName)
 	if err != nil {
 		return err
 	}
@@ -532,7 +540,12 @@ func (p *PackageManager) Info(pkgs ...string) error {
 			)
 		}
 		// Gather package services
-		services, err := infoPkg.Package.services(p.config, infoPkg.Context)
+		infoCfg := infoPkg.Package.withPackageTemplateVars(
+			p.config,
+			infoPkg.Context,
+			infoPkg.Options,
+		)
+		services, err := infoPkg.Package.services(infoCfg, infoPkg.Context)
 		if err != nil {
 			return err
 		}
