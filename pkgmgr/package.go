@@ -195,7 +195,17 @@ func (p Package) install(
 			return "", nil, nil, err
 		}
 	}
-	// Perform install
+	// Perform install. Track the containers created along the way so that a
+	// later failure can remove them again: the pre-flight check above rejects
+	// a container that already exists, so anything left behind by a failed
+	// install would block the retry.
+	var createdSteps []*PackageInstallStepDocker
+	installed := false
+	defer func() {
+		if !installed {
+			p.removeCreatedContainers(cfg, pkgName, createdSteps)
+		}
+	}()
 	for _, installStep := range p.InstallSteps {
 		// Evaluate condition if defined
 		if installStep.Condition != "" {
@@ -219,6 +229,9 @@ func (p Package) install(
 			if err := installStep.Docker.install(cfg, pkgName, stepPorts); err != nil {
 				return "", nil, nil, err
 			}
+			if !installStep.Docker.PullOnly {
+				createdSteps = append(createdSteps, installStep.Docker)
+			}
 		} else if installStep.File != nil {
 			if err := installStep.File.install(cfg, pkgName, p.filePath); err != nil {
 				return "", nil, nil, err
@@ -226,6 +239,15 @@ func (p Package) install(
 		} else {
 			return "", nil, nil, ErrNoInstallMethods
 		}
+	}
+	// Start the containers created above. Starting is deferred to here,
+	// rather than happening as each Docker step installs, so that every
+	// install step has been materialized before anything boots and the
+	// preStart hook has somewhere useful to run. A package that seeds state
+	// its service reads on first boot needs both: the config rendered by its
+	// file steps, and a chance to act before that service starts.
+	if err := p.startServices(cfg, context, runHooks); err != nil {
+		return "", nil, nil, err
 	}
 	// Capture port details for output templates
 	retPorts, err := p.currentPorts(cfg, context)
@@ -256,6 +278,7 @@ func (p Package) install(
 		}
 		retNotes = tmpNotes
 	}
+	installed = true
 	return retNotes, retOutputs, retPorts, nil
 }
 
@@ -581,11 +604,45 @@ func (p Package) validate(cfg Config) error {
 	return nil
 }
 
+// removeCreatedContainers removes containers created earlier in the same
+// install, so a failed install leaves nothing behind for the pre-flight check
+// to reject on a retry. Images are kept: they were just pulled, and they are
+// not what blocks a retry. A cleanup failure is logged rather than returned,
+// so it cannot mask the error that triggered the cleanup.
+func (p Package) removeCreatedContainers(
+	cfg Config,
+	pkgName string,
+	steps []*PackageInstallStepDocker,
+) {
+	for _, step := range steps {
+		if err := step.uninstall(cfg, pkgName, true); err != nil {
+			cfg.Logger.Warn(
+				fmt.Sprintf(
+					"failed to remove container %q after a failed install: %s",
+					step.ContainerName,
+					err,
+				),
+			)
+		}
+	}
+}
+
 func (p Package) startService(cfg Config, context string) error {
+	return p.startServices(cfg, context, true)
+}
+
+// startServices starts the package's services, running the start hooks when
+// runHooks is set. Upgrade installs with hooks disabled, so that seeding work
+// already done for the installed version is not repeated.
+func (p Package) startServices(
+	cfg Config,
+	context string,
+	runHooks bool,
+) error {
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 
 	// Run pre-start script
-	if p.PreStartScript != "" {
+	if runHooks && p.PreStartScript != "" {
 		if err := p.runHookScript(cfg, p.PreStartScript); err != nil {
 			return fmt.Errorf("pre-start hook failed: %w", err)
 		}
@@ -593,6 +650,20 @@ func (p Package) startService(cfg Config, context string) error {
 	var startErrors []string
 	startedServices := make([]serviceLifecycle, 0)
 	for _, step := range p.InstallSteps {
+		// Evaluate condition if defined. A step skipped at install time was
+		// never materialized, so its container does not exist and looking it
+		// up here would fail the whole start.
+		if step.Condition != "" {
+			if ok, err := cfg.Template.EvaluateCondition(step.Condition, nil); err != nil {
+				p.rollbackStartedServices(startedServices)
+				return NewInstallStepConditionError(step.Condition, err)
+			} else if !ok {
+				cfg.Logger.Debug(
+					"skipping start step due to condition: " + step.Condition,
+				)
+				continue
+			}
+		}
 		if step.Docker != nil {
 			if step.Docker.PullOnly {
 				continue
@@ -658,7 +729,7 @@ func (p Package) startService(cfg Config, context string) error {
 	}
 
 	// Run post-start script
-	if p.PostStartScript != "" {
+	if runHooks && p.PostStartScript != "" {
 		if err := p.runHookScript(cfg, p.PostStartScript); err != nil {
 			p.rollbackStartedServices(startedServices)
 			return fmt.Errorf("post-start hook failed: %w", err)
@@ -697,6 +768,20 @@ func (p Package) stopService(cfg Config, context string) error {
 	var stopErrors []string
 	stoppedServices := make([]serviceLifecycle, 0)
 	for _, step := range p.InstallSteps {
+		// Evaluate condition if defined. A step skipped at install time was
+		// never materialized, so its container does not exist and looking it
+		// up here would fail the stop for a package that installed cleanly.
+		if step.Condition != "" {
+			if ok, err := cfg.Template.EvaluateCondition(step.Condition, nil); err != nil {
+				p.rollbackStoppedServices(stoppedServices)
+				return NewInstallStepConditionError(step.Condition, err)
+			} else if !ok {
+				cfg.Logger.Debug(
+					"skipping stop step due to condition: " + step.Condition,
+				)
+				continue
+			}
+		}
 		if step.Docker != nil {
 			if step.Docker.PullOnly {
 				continue
@@ -823,6 +908,15 @@ func (p Package) services(
 	var ret []*DockerService
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	for _, step := range p.InstallSteps {
+		// Evaluate condition if defined. A step skipped at install time has
+		// no container, so looking one up would fail the whole call.
+		if step.Condition != "" {
+			if ok, err := cfg.Template.EvaluateCondition(step.Condition, nil); err != nil {
+				return ret, NewInstallStepConditionError(step.Condition, err)
+			} else if !ok {
+				continue
+			}
+		}
 		if step.Docker != nil {
 			if step.Docker.PullOnly {
 				continue
@@ -1009,18 +1103,12 @@ func (p *PackageInstallStepDocker) install(
 		Ports:         tmpPorts,
 	}
 	if p.PullOnly {
-		if err := svc.pullImage(); err != nil {
-			return err
-		}
-	} else {
-		if err := svc.Create(); err != nil {
-			return err
-		}
-		if err := svc.Start(); err != nil {
-			return err
-		}
+		return svc.pullImage()
 	}
-	return nil
+	// Create the container but leave it stopped. Package.install starts the
+	// package's services once every install step has been materialized, so
+	// that the preStart hook gets to run before any service boots.
+	return svc.Create()
 }
 
 func (p *PackageInstallStepDocker) uninstall(
