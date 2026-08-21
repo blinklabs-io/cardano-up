@@ -392,3 +392,109 @@ func TestServices_SkipsStepsWithFalseCondition(t *testing.T) {
 		t.Fatalf("expected the condition-skipped step to yield no services, got %d", len(services))
 	}
 }
+
+// TestStopService_SkipsStepsWithFalseCondition verifies that stopping a
+// package honors install-step conditions, so the stop path does not look up a
+// container that was never materialized. Without this, the first
+// `cardano-up down` fails for a package that installs successfully.
+func TestStopService_SkipsStepsWithFalseCondition(t *testing.T) {
+	origNewServiceFromContainerName := newServiceFromContainerName
+	t.Cleanup(func() {
+		newServiceFromContainerName = origNewServiceFromContainerName
+	})
+
+	created := &fakeServiceLifecycle{running: true}
+	var askedFor []string
+	newServiceFromContainerName = func(
+		containerName string,
+		logger *slog.Logger,
+	) (serviceLifecycle, error) {
+		askedFor = append(askedFor, containerName)
+		if containerName == "mypkg-1.0.0-testctx-created" {
+			return created, nil
+		}
+		return nil, ErrContainerNotExists
+	}
+
+	cfg := Config{
+		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Template: NewTemplate(nil),
+	}
+	pkg := Package{
+		Name:    "mypkg",
+		Version: "1.0.0",
+		InstallSteps: []PackageInstallStep{
+			{
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "created",
+					Image:         "alpine:3.20",
+				},
+			},
+			{
+				Condition: `eq "a" "b"`,
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "skipped",
+					Image:         "alpine:3.20",
+				},
+			},
+		},
+	}
+
+	if err := pkg.stopService(cfg, "testctx"); err != nil {
+		t.Fatalf("stopService failed: %v", err)
+	}
+	if !created.stopped {
+		t.Fatal("expected the materialized service to be stopped")
+	}
+	for _, name := range askedFor {
+		if name == "mypkg-1.0.0-testctx-skipped" {
+			t.Fatal("expected the condition-skipped step to not be looked up")
+		}
+	}
+}
+
+// TestInstalledPkgConfig_SuppliesConditionVars verifies that the config handed
+// to condition-aware lifecycle calls carries the installed package's options.
+// Uninstall, deactivate and stop all evaluate install-step conditions, and an
+// absent variable reads as false without error - so passing the bare manager
+// config makes uninstall skip a step whose container does exist, orphaning it
+// while the installed-package record is removed.
+func TestInstalledPkgConfig_SuppliesConditionVars(t *testing.T) {
+	pkg := Package{
+		Name:    "mypkg",
+		Version: "1.0.0",
+		Options: []PackageOption{
+			{Name: "extra", Default: true},
+		},
+	}
+	pm := &PackageManager{
+		config: Config{
+			Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+			DataDir:  t.TempDir(),
+			Template: NewTemplate(nil),
+		},
+	}
+	installedPkg := InstalledPackage{
+		Package: pkg,
+		Context: "testctx",
+		Options: map[string]bool{"extra": true},
+	}
+
+	cfg := pm.installedPkgConfig(installedPkg, "testctx")
+	ok, err := cfg.Template.EvaluateCondition(`.Package.Options.extra`, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected the installed package's options to be visible to the condition")
+	}
+
+	// The bare manager config is what caused the orphaning: silently false.
+	ok, err = pm.config.Template.EvaluateCondition(`.Package.Options.extra`, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Fatal("expected the bare manager config to evaluate the condition false")
+	}
+}
