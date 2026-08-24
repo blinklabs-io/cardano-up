@@ -104,26 +104,39 @@ func (d *DockerService) Running() (bool, error) {
 	return container.State.Running, nil
 }
 
-func (d *DockerService) Start() error {
+// Start starts the container if it is not already running. The returned bool
+// reports whether this call actually issued a start request (true), as
+// opposed to finding the container already running and doing nothing (false)
+// - this lets callers distinguish a transition they caused from one that had
+// already happened, e.g. via a concurrent, unrelated operation.
+//
+// As with Stop(), this is a best-effort signal, not a guarantee: if another
+// actor starts the container in the narrow window between the Running() check
+// below and the ContainerStart() call, Docker's start endpoint is idempotent
+// and returns success either way, and the docker/docker/client SDK discards
+// the distinction the Docker Engine API makes there (204 "started by this
+// request" vs. 304 "already started"). That residual race is accepted.
+func (d *DockerService) Start() (bool, error) {
 	running, err := d.Running()
 	if err != nil {
-		return err
+		return false, err
 	}
-	if !running {
-		client, err := d.getClient()
-		if err != nil {
-			return err
-		}
-		d.logger.Debug("starting container " + d.ContainerName)
-		if err := client.ContainerStart(
-			context.Background(),
-			d.ContainerId,
-			container.StartOptions{},
-		); err != nil {
-			return err
-		}
+	if running {
+		return false, nil
 	}
-	return nil
+	client, err := d.getClient()
+	if err != nil {
+		return false, err
+	}
+	d.logger.Debug("starting container " + d.ContainerName)
+	if err := client.ContainerStart(
+		context.Background(),
+		d.ContainerId,
+		container.StartOptions{},
+	); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // Stop stops the container if it is running. The returned bool reports
