@@ -53,6 +53,11 @@ type fakeServiceLifecycle struct {
 	// Stop() has been called - simulates a status check that fails right
 	// after an attempt to stop the container.
 	runningErrAfterStop error
+
+	// onStart, if set, is called by Start() before the service is marked
+	// running. Lets a test observe when a container start happens relative
+	// to hook execution.
+	onStart func()
 }
 
 func (f *fakeServiceLifecycle) Running() (bool, error) {
@@ -63,6 +68,9 @@ func (f *fakeServiceLifecycle) Running() (bool, error) {
 }
 
 func (f *fakeServiceLifecycle) Start() error {
+	if f.onStart != nil {
+		f.onStart()
+	}
 	f.started = true
 	f.running = true
 	return nil

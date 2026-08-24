@@ -180,11 +180,28 @@ func (p *PackageManager) refreshInstalledPackageRuntime(
 	return nil
 }
 
+// installedPkgConfig returns the manager config with the package-scoped
+// template variables that an install-step condition may reference. Every
+// condition-aware lifecycle call needs these: an absent variable renders as
+// false with no error, so without them a condition silently reads false and
+// the step is skipped rather than failing loudly.
+func (p *PackageManager) installedPkgConfig(
+	installedPkg InstalledPackage,
+	context string,
+) Config {
+	return installedPkg.Package.withPackageTemplateVars(
+		p.config,
+		context,
+		installedPkg.Options,
+	)
+}
+
 func (p *PackageManager) Down() error {
 	// Find installed packages
 	installedPackages := p.InstalledPackages()
 	for _, tmpPackage := range installedPackages {
-		err := tmpPackage.Package.stopService(p.config, tmpPackage.Context)
+		cfg := p.installedPkgConfig(tmpPackage, tmpPackage.Context)
+		err := tmpPackage.Package.stopService(cfg, tmpPackage.Context)
 		if err != nil {
 			return err
 		}
@@ -277,7 +294,12 @@ func (p *PackageManager) Install(pkgs ...string) error {
 			sb.WriteString("\n")
 		}
 		// Activate package
-		if err := installPkg.Install.activate(p.config, contextName); err != nil {
+		activateCfg := installPkg.Install.withPackageTemplateVars(
+			p.config,
+			contextName,
+			tmpPkgOpts,
+		)
+		if err := installPkg.Install.activate(activateCfg, contextName); err != nil {
 			p.config.Logger.Warn(
 				fmt.Sprintf("failed to activate package: %s", err),
 			)
@@ -328,7 +350,12 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 		pkgOpts := upgradePkg.Installed.Options
 		registeredPorts := p.registeredPorts(contextName, upgradePkg.Installed.Package.Name)
 		// Deactivate old package
-		if err := upgradePkg.Installed.Package.deactivate(p.config, contextName); err != nil {
+		deactivateCfg := upgradePkg.Installed.Package.withPackageTemplateVars(
+			p.config,
+			contextName,
+			pkgOpts,
+		)
+		if err := upgradePkg.Installed.Package.deactivate(deactivateCfg, contextName); err != nil {
 			p.config.Logger.Warn(
 				fmt.Sprintf("failed to deactivate package: %s", err),
 			)
@@ -377,7 +404,12 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 			return err
 		}
 		// Activate new package
-		if err := upgradePkg.Upgrade.activate(p.config, contextName); err != nil {
+		activateCfg := upgradePkg.Upgrade.withPackageTemplateVars(
+			p.config,
+			contextName,
+			pkgOpts,
+		)
+		if err := upgradePkg.Upgrade.activate(activateCfg, contextName); err != nil {
 			p.config.Logger.Warn(
 				fmt.Sprintf("failed to activate package: %s", err),
 			)
@@ -437,7 +469,8 @@ func (p *PackageManager) Uninstall(
 	}
 	for _, uninstallPkg := range uninstallPkgs {
 		// Deactivate package
-		if err := uninstallPkg.Package.deactivate(p.config, contextName); err != nil {
+		deactivateCfg := p.installedPkgConfig(uninstallPkg, contextName)
+		if err := uninstallPkg.Package.deactivate(deactivateCfg, contextName); err != nil {
 			p.config.Logger.Warn(
 				fmt.Sprintf("failed to deactivate package: %s", err),
 			)
@@ -482,7 +515,15 @@ func (p *PackageManager) Logs(
 	if !foundPackage {
 		return NewPackageNotInstalledError(pkgName, contextName)
 	}
-	services, err := logsPkg.Package.services(p.config, contextName)
+	// Build the package-specific template variables first: install-step
+	// conditions can reference them, and an absent variable renders as false
+	// rather than erroring, which would silently drop a service here.
+	logsCfg := logsPkg.Package.withPackageTemplateVars(
+		p.config,
+		contextName,
+		logsPkg.Options,
+	)
+	services, err := logsPkg.Package.services(logsCfg, contextName)
 	if err != nil {
 		return err
 	}
@@ -532,7 +573,12 @@ func (p *PackageManager) Info(pkgs ...string) error {
 			)
 		}
 		// Gather package services
-		services, err := infoPkg.Package.services(p.config, infoPkg.Context)
+		infoCfg := infoPkg.Package.withPackageTemplateVars(
+			p.config,
+			infoPkg.Context,
+			infoPkg.Options,
+		)
+		services, err := infoPkg.Package.services(infoCfg, infoPkg.Context)
 		if err != nil {
 			return err
 		}
@@ -605,7 +651,8 @@ func (p *PackageManager) uninstallPackage(
 	runHooks bool,
 ) error {
 	// Uninstall package
-	if err := uninstallPkg.Package.uninstall(p.config, uninstallPkg.Context, keepData, runHooks); err != nil {
+	uninstallCfg := p.installedPkgConfig(uninstallPkg, uninstallPkg.Context)
+	if err := uninstallPkg.Package.uninstall(uninstallCfg, uninstallPkg.Context, keepData, runHooks); err != nil {
 		return err
 	}
 	// Remove package from installed packages
@@ -689,7 +736,8 @@ func (p *PackageManager) SetActiveContext(name string) error {
 	// Deactivate packages in current context
 	activeContextName, _ := p.ActiveContext()
 	for _, pkg := range p.InstalledPackages() {
-		if err := pkg.Package.deactivate(p.config, activeContextName); err != nil {
+		deactivateCfg := p.installedPkgConfig(pkg, activeContextName)
+		if err := pkg.Package.deactivate(deactivateCfg, activeContextName); err != nil {
 			p.config.Logger.Warn(
 				fmt.Sprintf("failed to deactivate package: %s", err),
 			)
@@ -703,7 +751,8 @@ func (p *PackageManager) SetActiveContext(name string) error {
 	p.initTemplate()
 	// Activate packages in new context
 	for _, pkg := range p.InstalledPackages() {
-		if err := pkg.Package.activate(p.config, name); err != nil {
+		activateCfg := p.installedPkgConfig(pkg, name)
+		if err := pkg.Package.activate(activateCfg, name); err != nil {
 			p.config.Logger.Warn(
 				fmt.Sprintf("failed to activate package: %s", err),
 			)
