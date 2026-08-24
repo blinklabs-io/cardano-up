@@ -113,9 +113,14 @@ func (d *DockerService) Running() (bool, error) {
 // As with Stop(), this is a best-effort signal, not a guarantee: if another
 // actor starts the container in the narrow window between the Running() check
 // below and the ContainerStart() call, Docker's start endpoint is idempotent
-// and returns success either way, and the docker/docker/client SDK discards
-// the distinction the Docker Engine API makes there (204 "started by this
-// request" vs. 304 "already started"). That residual race is accepted.
+// and returns success either way. The Docker Engine API does distinguish the
+// two cases (204 "started by this request" vs. 304 "already started"), but
+// the underlying docker/docker/client SDK discards it - ContainerStart() only
+// returns an error, never the response status, and its shared error check
+// treats every status below 400 as success - so recovering the distinction
+// would require bypassing the SDK's exported API with a raw HTTP request.
+// Given that cost, this race is accepted rather than closed, exactly as on
+// the Stop() side.
 func (d *DockerService) Start() (bool, error) {
 	running, err := d.Running()
 	if err != nil {
