@@ -228,8 +228,14 @@ func TestExtractTarGzFileCumulativeSizeLimit(t *testing.T) {
 // TestExtractArchiveFileDispatch checks that each supported archive name is
 // routed to the correct extractor, including aliases and different casing.
 func TestExtractArchiveFileDispatch(t *testing.T) {
-	zipData := buildTestZip(t, map[string]string{"mybinary": testArchiveFileContent})
-	tarGzData := buildTestTarGz(t, map[string]string{"mybinary": testArchiveFileContent})
+	zipData := buildTestZip(
+		t,
+		map[string]string{"mybinary": testArchiveFileContent},
+	)
+	tarGzData := buildTestTarGz(
+		t,
+		map[string]string{"mybinary": testArchiveFileContent},
+	)
 
 	testDefs := []struct {
 		archiveType string
@@ -241,7 +247,11 @@ func TestExtractArchiveFileDispatch(t *testing.T) {
 		{archiveType: "tgz", data: tarGzData},
 	}
 	for _, testDef := range testDefs {
-		content, err := extractArchiveFile(testDef.archiveType, "mybinary", testDef.data)
+		content, err := extractArchiveFile(
+			testDef.archiveType,
+			"mybinary",
+			testDef.data,
+		)
 		if err != nil {
 			t.Fatalf(
 				"unexpected error for archive type %q: %s",

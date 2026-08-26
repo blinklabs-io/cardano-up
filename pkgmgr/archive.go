@@ -24,21 +24,44 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Supported values for the file install step's archive field
 const (
-	archiveTypeZip      = "zip"
-	archiveTypeTarGz    = "tar.gz"
-	archiveTypeTgz      = "tgz"
-	maxArchiveEntrySize = int64(512 * 1024 * 1024) // 512 MiB
+	archiveTypeZip   = "zip"
+	archiveTypeTarGz = "tar.gz"
+	archiveTypeTgz   = "tgz"
 )
 
-// maxDownloadSize bounds how much of a url-sourced file install step is
-// buffered into memory, so an oversized or malicious response can't exhaust
-// process memory before archive extraction limits even apply. It's a var
-// rather than a const so tests can lower it without downloading 512MiB+.
+// maxArchiveEntrySize bounds the decompressed size of any single file read
+// from an archive or the local filesystem. A file install step can raise
+// this for its own archive via archiveMaxSize, up to maxArchiveSizeCeiling.
+// It's a var rather than a const so tests can lower it without needing
+// multi-GiB test data.
+var maxArchiveEntrySize = int64(512 * 1024 * 1024) // 512 MiB
+
+// maxArchiveSizeCeiling bounds how high a package's archiveMaxSize override
+// can raise maxArchiveEntrySize. tar.gz extraction has to bound decompressed
+// bytes as it streams through the archive looking for the requested entry
+// (there's no central directory to consult up front, unlike ZIP), so this
+// ceiling keeps a careless or malicious override from turning that bound
+// into an effectively unbounded decompression sink. It's a var rather than
+// a const so tests can lower it without needing multi-GiB test data.
+var maxArchiveSizeCeiling = int64(4 * 1024 * 1024 * 1024) // 4 GiB
+
+// maxDownloadSize bounds how much of a url- or source-sourced file install
+// step is buffered into memory, so an oversized or malicious response or
+// local file can't exhaust process memory before archive extraction limits
+// even apply. It's a var rather than a const so tests can lower it without
+// downloading 512MiB+.
 var maxDownloadSize = maxArchiveEntrySize
+
+// downloadTimeout bounds how long a url-sourced file install step's HTTP
+// request may run, closing the DoS gap that maxDownloadSize's size cap
+// leaves open against a slow or stalling server. It's a var rather than a
+// const so tests can lower it without waiting out the full timeout.
+var downloadTimeout = 5 * time.Minute
 
 // validArchiveType returns whether archiveType is a supported archive type
 // for the file install step
@@ -59,17 +82,41 @@ func extractArchiveFile(
 	archivePath string,
 	data []byte,
 ) ([]byte, error) {
+	return extractArchiveFileWithLimit(
+		archiveType,
+		archivePath,
+		data,
+		maxArchiveEntrySize,
+	)
+}
+
+// extractArchiveFileWithLimit is extractArchiveFile with an explicit size
+// bound, letting a file install step raise it via archiveMaxSize.
+func extractArchiveFileWithLimit(
+	archiveType string,
+	archivePath string,
+	data []byte,
+	maxSize int64,
+) ([]byte, error) {
 	switch strings.ToLower(archiveType) {
 	case archiveTypeZip:
-		return extractZipFile(archivePath, data)
+		return extractZipFileWithLimit(archivePath, data, maxSize)
 	case archiveTypeTarGz, archiveTypeTgz:
-		return extractTarGzFile(archivePath, data)
+		return extractTarGzFileWithLimit(archivePath, data, maxSize)
 	default:
 		return nil, fmt.Errorf("unsupported archive type %q", archiveType)
 	}
 }
 
 func extractZipFile(archivePath string, data []byte) ([]byte, error) {
+	return extractZipFileWithLimit(archivePath, data, maxArchiveEntrySize)
+}
+
+func extractZipFileWithLimit(
+	archivePath string,
+	data []byte,
+	maxSize int64,
+) ([]byte, error) {
 	zipReader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read zip archive: %w", err)
@@ -85,11 +132,11 @@ func extractZipFile(archivePath string, data []byte) ([]byte, error) {
 		if filepath.Clean(zipFile.Name) != cleanPath {
 			continue
 		}
-		if zipFile.UncompressedSize64 > uint64(maxArchiveEntrySize) {
+		if zipFile.UncompressedSize64 > uint64(maxSize) {
 			return nil, fmt.Errorf(
 				"file %q exceeds maximum allowed size of %d bytes",
 				archivePath,
-				maxArchiveEntrySize,
+				maxSize,
 			)
 		}
 		zf, err := zipFile.Open()
@@ -97,7 +144,7 @@ func extractZipFile(archivePath string, data []byte) ([]byte, error) {
 			return nil, err
 		}
 		defer zf.Close()
-		return readArchiveEntry(zf, archivePath, maxArchiveEntrySize)
+		return readArchiveEntry(zf, archivePath, maxSize)
 	}
 	return nil, fmt.Errorf("file %q not found in zip archive", archivePath)
 }
@@ -140,17 +187,17 @@ func extractTarGzFileWithLimit(
 		if filepath.Clean(header.Name) != cleanPath {
 			continue
 		}
-		if header.Size > maxArchiveEntrySize {
+		if header.Size > maxDecompressedSize {
 			return nil, fmt.Errorf(
 				"file %q exceeds maximum allowed size of %d bytes",
 				archivePath,
-				maxArchiveEntrySize,
+				maxDecompressedSize,
 			)
 		}
 		content, err := readArchiveEntry(
 			tarReader,
 			archivePath,
-			maxArchiveEntrySize,
+			maxDecompressedSize,
 		)
 		if err != nil {
 			return nil, err
@@ -216,8 +263,10 @@ func drainTarGzArchive(
 	return nil
 }
 
-// readArchiveEntry limits extraction even if an archive reports an incorrect
-// uncompressed size in its metadata.
+// readArchiveEntry reads from reader up to maxSize bytes, returning an error
+// if more remains. It's a generic bounded reader used for archive entries
+// (even when one reports an incorrect uncompressed size in its metadata), a
+// raw local file opened via source, and a raw HTTP response body.
 func readArchiveEntry(
 	reader io.Reader,
 	archivePath string,

@@ -253,6 +253,11 @@ func (p *PackageManager) Install(pkgs ...string) error {
 				installPkg.Install.Version,
 			),
 		)
+		// Validate package before installing, since the registry may have
+		// loaded it without validation (see loadPackageRegistry)
+		if err := installPkg.Install.validate(p.config); err != nil {
+			return fmt.Errorf("package validation failed: %w", err)
+		}
 		// Build package options
 		tmpPkgOpts := installPkg.Install.defaultOpts()
 		maps.Copy(tmpPkgOpts, installPkg.Options)
@@ -346,6 +351,11 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 				upgradePkg.Upgrade.Version,
 			),
 		)
+		// Validate new package before upgrading, since the registry may have
+		// loaded it without validation (see loadPackageRegistry)
+		if err := upgradePkg.Upgrade.validate(p.config); err != nil {
+			return fmt.Errorf("package validation failed: %w", err)
+		}
 		// Capture options from existing package
 		pkgOpts := upgradePkg.Installed.Options
 		registeredPorts := p.registeredPorts(contextName, upgradePkg.Installed.Package.Name)
