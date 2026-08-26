@@ -243,6 +243,16 @@ func (p *PackageManager) Install(pkgs ...string) error {
 	if err != nil {
 		return err
 	}
+	// Validate every package in the resolved plan before installing any of
+	// them, since the registry may have loaded them without validation (see
+	// loadPackageRegistry). Validating inside the loop below would let
+	// earlier entries in the plan - e.g. resolved dependencies - install
+	// and persist successfully before a later, invalid entry is rejected.
+	for _, installPkg := range installPkgs {
+		if err := installPkg.Install.validate(p.config); err != nil {
+			return fmt.Errorf("package validation failed: %w", err)
+		}
+	}
 	installedPkgs := []string{}
 	var sb strings.Builder
 	for _, installPkg := range installPkgs {
@@ -253,11 +263,6 @@ func (p *PackageManager) Install(pkgs ...string) error {
 				installPkg.Install.Version,
 			),
 		)
-		// Validate package before installing, since the registry may have
-		// loaded it without validation (see loadPackageRegistry)
-		if err := installPkg.Install.validate(p.config); err != nil {
-			return fmt.Errorf("package validation failed: %w", err)
-		}
 		// Build package options
 		tmpPkgOpts := installPkg.Install.defaultOpts()
 		maps.Copy(tmpPkgOpts, installPkg.Options)
@@ -340,6 +345,17 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 	if err != nil {
 		return err
 	}
+	// Validate every new package version in the resolved plan before
+	// deactivating/uninstalling any currently-installed version, since the
+	// registry may have loaded them without validation (see
+	// loadPackageRegistry). Validating inside the loop below would let
+	// earlier entries in the plan tear down and replace their old version
+	// before a later, invalid entry is rejected.
+	for _, upgradePkg := range upgradePkgs {
+		if err := upgradePkg.Upgrade.validate(p.config); err != nil {
+			return fmt.Errorf("package validation failed: %w", err)
+		}
+	}
 	installedPkgs := []string{}
 	var sb strings.Builder
 	for _, upgradePkg := range upgradePkgs {
@@ -351,11 +367,6 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 				upgradePkg.Upgrade.Version,
 			),
 		)
-		// Validate new package before upgrading, since the registry may have
-		// loaded it without validation (see loadPackageRegistry)
-		if err := upgradePkg.Upgrade.validate(p.config); err != nil {
-			return fmt.Errorf("package validation failed: %w", err)
-		}
 		// Capture options from existing package
 		pkgOpts := upgradePkg.Installed.Options
 		registeredPorts := p.registeredPorts(contextName, upgradePkg.Installed.Package.Name)

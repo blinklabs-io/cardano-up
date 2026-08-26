@@ -149,3 +149,152 @@ func TestUpgradeRejectsInvalidNewPackageVersion(t *testing.T) {
 		)
 	}
 }
+
+// TestInstallValidatesEntirePlanBeforeInstallingAny checks that Install()
+// validates every package in the resolved plan before installing any of
+// them. Without this, "app" depending on "dep" would install and persist
+// "dep" (processed first in the resolved plan) before ever validating the
+// invalid "app" itself, leaving a resolved dependency installed despite the
+// overall command failing.
+func TestInstallValidatesEntirePlanBeforeInstallingAny(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := Config{
+		DataDir:   filepath.Join(tmpDir, "data"),
+		CacheDir:  filepath.Join(tmpDir, "cache"),
+		ConfigDir: filepath.Join(tmpDir, "config"),
+		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Template:  NewTemplate(nil),
+	}
+	pm := &PackageManager{
+		config: cfg,
+		state: &State{
+			config:        cfg,
+			ActiveContext: "default",
+			Contexts: map[string]Context{
+				"default": {Network: "preprod"},
+			},
+			PortRegistry: make(PortRegistry),
+		},
+	}
+	pm.availablePackages = []Package{
+		{
+			Name:     "dep",
+			Version:  "1.0.0",
+			filePath: filepath.Join("dep", "dep-1.0.0.yaml"),
+			InstallSteps: []PackageInstallStep{
+				{
+					File: &PackageInstallStepFile{
+						Filename: "output",
+						Content:  "hello",
+					},
+				},
+			},
+		},
+		{
+			// invalid: missing filePath, so Package.validate rejects it
+			Name:         "app",
+			Version:      "1.0.0",
+			Dependencies: []string{"dep"},
+			InstallSteps: []PackageInstallStep{
+				{
+					File: &PackageInstallStepFile{
+						Filename: "output",
+						Content:  "hello",
+					},
+				},
+			},
+		},
+	}
+
+	if err := pm.Install("app"); err == nil {
+		t.Fatal("expected install to fail validation, got nil error")
+	}
+	if len(pm.state.InstalledPackages) != 0 {
+		t.Fatalf(
+			"expected no installed packages (including resolved "+
+				"dependencies) after failed validation, got: %#v",
+			pm.state.InstalledPackages,
+		)
+	}
+}
+
+// TestUpgradeValidatesEntirePlanBeforeMutatingAny checks that Upgrade()
+// validates every package in the resolved plan before deactivating,
+// uninstalling, or installing any of them. Without this, upgrading "app"
+// (processed first in the resolved plan) would tear down its old version
+// and install the new one before ever validating the invalid new
+// dependency "newdep" the new version pulls in.
+func TestUpgradeValidatesEntirePlanBeforeMutatingAny(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := Config{
+		DataDir:   filepath.Join(tmpDir, "data"),
+		CacheDir:  filepath.Join(tmpDir, "cache"),
+		ConfigDir: filepath.Join(tmpDir, "config"),
+		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Template:  NewTemplate(nil),
+	}
+	installedApp := Package{
+		Name:     "app",
+		Version:  "1.0.0",
+		filePath: filepath.Join("app", "app-1.0.0.yaml"),
+	}
+	pm := &PackageManager{
+		config: cfg,
+		state: &State{
+			config:        cfg,
+			ActiveContext: "default",
+			Contexts: map[string]Context{
+				"default": {Network: "preprod"},
+			},
+			InstalledPackages: []InstalledPackage{
+				{
+					Package:       installedApp,
+					InstalledTime: time.Now(),
+					Context:       "default",
+					Options:       map[string]bool{},
+				},
+			},
+			PortRegistry: make(PortRegistry),
+		},
+	}
+	pm.availablePackages = []Package{
+		{
+			Name:         "app",
+			Version:      "2.0.0",
+			filePath:     filepath.Join("app", "app-2.0.0.yaml"),
+			Dependencies: []string{"newdep"},
+			InstallSteps: []PackageInstallStep{
+				{
+					File: &PackageInstallStepFile{
+						Filename: "output",
+						Content:  "hello",
+					},
+				},
+			},
+		},
+		{
+			// invalid: missing filePath, so Package.validate rejects it
+			Name:    "newdep",
+			Version: "1.0.0",
+			InstallSteps: []PackageInstallStep{
+				{
+					File: &PackageInstallStepFile{
+						Filename: "output",
+						Content:  "hello",
+					},
+				},
+			},
+		},
+	}
+
+	if err := pm.Upgrade("app"); err == nil {
+		t.Fatal("expected upgrade to fail validation, got nil error")
+	}
+	if len(pm.state.InstalledPackages) != 1 ||
+		pm.state.InstalledPackages[0].Package.Version != "1.0.0" {
+		t.Fatalf(
+			"expected app to remain at its original version, got: %#v",
+			pm.state.InstalledPackages,
+		)
+	}
+}

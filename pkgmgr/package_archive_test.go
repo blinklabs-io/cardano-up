@@ -15,6 +15,8 @@
 package pkgmgr
 
 import (
+	"context"
+	"errors"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -22,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"text/template"
 	"time"
@@ -452,7 +455,12 @@ func TestPackageInstallStepFileInstallUrlDownloadSizeLimit(t *testing.T) {
 
 // TestPackageInstallStepFileInstallUrlDownloadTimeout checks that install
 // aborts a url-sourced download once it exceeds downloadTimeout, instead of
-// hanging indefinitely against a slow or stalling server.
+// hanging indefinitely against a slow or stalling server. install() is run
+// in a goroutine under a bounded watchdog: without the production timeout
+// in place, the test server's handler blocks forever (it's only released
+// by closeBlock, which a broken fix would never let this test reach), so a
+// direct, synchronous call would hang until the whole test binary's global
+// timeout instead of failing this test with a clear message.
 func TestPackageInstallStepFileInstallUrlDownloadTimeout(t *testing.T) {
 	origDownloadTimeout := downloadTimeout
 	downloadTimeout = 10 * time.Millisecond
@@ -461,13 +469,15 @@ func TestPackageInstallStepFileInstallUrlDownloadTimeout(t *testing.T) {
 	})
 
 	blockCh := make(chan struct{})
+	var closeBlockOnce sync.Once
+	closeBlock := func() { closeBlockOnce.Do(func() { close(blockCh) }) }
 	srv := httptest.NewServer(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			<-blockCh
 		}),
 	)
 	defer func() {
-		close(blockCh)
+		closeBlock()
 		srv.Close()
 	}()
 
@@ -476,9 +486,27 @@ func TestPackageInstallStepFileInstallUrlDownloadTimeout(t *testing.T) {
 		Filename: "mybinary",
 		Url:      srv.URL + "/mybinary",
 	}
-	err := step.install(cfg, "test-1.0.0-testctx", "")
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- step.install(cfg, "test-1.0.0-testctx", "")
+	}()
+
+	var err error
+	select {
+	case err = <-errCh:
+	case <-time.After(5 * time.Second):
+		closeBlock()
+		t.Fatal(
+			"install() did not return within the watchdog window; " +
+				"the production download timeout does not appear to be enforced",
+		)
+	}
 	if err == nil {
 		t.Fatal("expected error for a download exceeding the timeout, got nil")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected a context.DeadlineExceeded error, got: %v", err)
 	}
 
 	writtenPath := filepath.Join(cfg.DataDir, "test-1.0.0-testctx", "mybinary")
