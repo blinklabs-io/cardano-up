@@ -28,7 +28,7 @@ func TestPackageInstallStepConfigValidate(t *testing.T) {
 		expectErr bool
 	}{
 		{
-			step:      PackageInstallStepConfig{Content: "foo"},
+			step:      PackageInstallStepConfig{Filename: "settings.yaml", Content: "foo"},
 			expectErr: false,
 		},
 		{
@@ -36,14 +36,20 @@ func TestPackageInstallStepConfigValidate(t *testing.T) {
 			expectErr: true,
 		},
 		{
+			step:      PackageInstallStepConfig{Content: "foo"},
+			expectErr: true, // missing filename
+		},
+		{
 			step: PackageInstallStepConfig{
-				Url:     "https://example.com/foo.zip",
-				Archive: "zip",
+				Filename: "settings.yaml",
+				Url:      "https://example.com/foo.zip",
+				Archive:  "zip",
 			},
 			expectErr: true, // missing archivePath
 		},
 		{
 			step: PackageInstallStepConfig{
+				Filename:    "settings.yaml",
 				Content:     "foo",
 				Archive:     "zip",
 				ArchivePath: "bin/foo",
@@ -144,6 +150,32 @@ func TestPackageInstallStepConfigInstallPathTraversal(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(cfg.DataDir, "escape.yaml")); err == nil {
 		t.Fatal("expected no file to be written outside the context directory")
+	}
+}
+
+// TestPackageInstallStepConfigInstallSymlinkedParentRejected checks that a
+// symlink placed inside the context directory cannot be used to redirect a
+// write outside of it, even though the filename itself contains no "..".
+func TestPackageInstallStepConfigInstallSymlinkedParentRejected(t *testing.T) {
+	cfg := newArchiveTestConfig(t)
+	contextDir := filepath.Join(cfg.DataDir, "testctx")
+	if err := os.MkdirAll(contextDir, 0o755); err != nil {
+		t.Fatalf("unexpected error creating context directory: %s", err)
+	}
+	outsideDir := t.TempDir()
+	if err := os.Symlink(outsideDir, filepath.Join(contextDir, "link")); err != nil {
+		t.Fatalf("unexpected error creating symlink: %s", err)
+	}
+
+	step := &PackageInstallStepConfig{
+		Filename: "link/settings.yaml",
+		Content:  "foo",
+	}
+	if err := step.install(cfg, "testctx", ""); err == nil {
+		t.Fatal("expected error for symlink escape, got nil")
+	}
+	if _, err := os.Stat(filepath.Join(outsideDir, "settings.yaml")); err == nil {
+		t.Fatal("expected no file to be written outside the context directory via the symlink")
 	}
 }
 

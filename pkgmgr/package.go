@@ -1414,6 +1414,10 @@ func (p *PackageInstallStepConfig) asFile() *PackageInstallStepFile {
 }
 
 func (p *PackageInstallStepConfig) validate(cfg Config) error {
+	if p.Filename == "" {
+		cfg.Logger.Debug("config file missing filename")
+		return errors.New("filename must be provided for config install types")
+	}
 	return p.asFile().validate(cfg)
 }
 
@@ -1427,25 +1431,36 @@ func (p *PackageInstallStepConfig) install(
 		return err
 	}
 	pkgContextDir := filepath.Join(cfg.DataDir, context)
-	filePath := filepath.Join(pkgContextDir, tmpFilePath)
-	filePath = filepath.Clean(filePath)
-	expectedPrefix := filepath.Clean(pkgContextDir) + string(os.PathSeparator)
-	if !strings.HasPrefix(filePath, expectedPrefix) {
-		return fmt.Errorf("invalid file path %q: path traversal detected", filePath)
+	if err := os.MkdirAll(pkgContextDir, fs.ModePerm); err != nil {
+		return err
 	}
+	relFilePath := filepath.Clean(tmpFilePath)
+	displayPath := filepath.Join(pkgContextDir, relFilePath)
+	// Open the context directory as an os.Root and do every subsequent
+	// filesystem operation through it. Unlike a lexical prefix check on the
+	// resolved path, Root rejects any component - including a symlink placed
+	// inside the context directory by a prior install step - that would
+	// resolve outside pkgContextDir, so a malicious or buggy filename can't
+	// escape it even via an intermediate symlink.
+	root, err := os.OpenRoot(pkgContextDir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
 	// Preserve an existing config file rather than overwriting it. This is
 	// what lets a package upgrade run install() again - via Upgrade(), which
 	// uninstalls the old version and installs the new one - without losing
 	// any changes the user made to the file after the initial install.
-	if _, err := os.Stat(filePath); err == nil {
-		cfg.Logger.Debug("preserving existing config file " + filePath)
+	if _, err := root.Lstat(relFilePath); err == nil {
+		cfg.Logger.Debug("preserving existing config file " + displayPath)
 		return nil
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return err
+		return fmt.Errorf("invalid file path %q: %w", displayPath, err)
 	}
-	parentDir := filepath.Dir(filePath)
-	if err := os.MkdirAll(parentDir, fs.ModePerm); err != nil {
-		return err
+	if parentDir := filepath.Dir(relFilePath); parentDir != "." {
+		if err := root.MkdirAll(parentDir, fs.ModePerm); err != nil {
+			return fmt.Errorf("invalid file path %q: %w", displayPath, err)
+		}
 	}
 	fileMode := fs.ModePerm
 	if p.Mode > 0 {
@@ -1455,10 +1470,19 @@ func (p *PackageInstallStepConfig) install(
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filePath, fileContent, fileMode); err != nil { //nolint:gosec // path traversal mitigated by prefix check above
+	f, err := root.OpenFile(
+		relFilePath,
+		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
+		fileMode,
+	)
+	if err != nil {
+		return fmt.Errorf("invalid file path %q: %w", displayPath, err)
+	}
+	defer f.Close()
+	if _, err := f.Write(fileContent); err != nil {
 		return err
 	}
-	cfg.Logger.Debug("wrote config file " + filePath)
+	cfg.Logger.Debug("wrote config file " + displayPath)
 	return nil
 }
 
