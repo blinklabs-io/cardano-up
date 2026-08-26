@@ -169,8 +169,7 @@ func (p Package) install(
 	// Run pre-flight checks
 	for _, installStep := range p.InstallSteps {
 		// Make sure only one install method is specified per install step
-		if installStep.Docker != nil &&
-			installStep.File != nil {
+		if installStep.countInstallMethods() > 1 {
 			return "", nil, nil, ErrMultipleInstallMethods
 		}
 		if installStep.Docker != nil {
@@ -234,6 +233,10 @@ func (p Package) install(
 			}
 		} else if installStep.File != nil {
 			if err := installStep.File.install(cfg, pkgName, p.filePath); err != nil {
+				return "", nil, nil, err
+			}
+		} else if installStep.Config != nil {
+			if err := installStep.Config.install(cfg, context, p.filePath); err != nil {
 				return "", nil, nil, err
 			}
 		} else {
@@ -417,8 +420,7 @@ func (p Package) uninstall(
 			}
 		}
 		// Make sure only one install method is specified per install step
-		if installStep.Docker != nil &&
-			installStep.File != nil {
+		if installStep.countInstallMethods() > 1 {
 			return ErrMultipleInstallMethods
 		}
 		if installStep.Docker != nil {
@@ -427,6 +429,10 @@ func (p Package) uninstall(
 			}
 		} else if installStep.File != nil {
 			if err := installStep.File.uninstall(cfg, pkgName); err != nil {
+				return err
+			}
+		} else if installStep.Config != nil {
+			if err := installStep.Config.uninstall(cfg, context); err != nil {
 				return err
 			}
 		} else {
@@ -512,6 +518,10 @@ func (p Package) activate(cfg Config, context string) error {
 			if err := installStep.File.activate(cfg, pkgName); err != nil {
 				return err
 			}
+		} else if installStep.Config != nil {
+			if err := installStep.Config.activate(cfg, pkgName); err != nil {
+				return err
+			}
 		} else {
 			return ErrNoInstallMethods
 		}
@@ -539,6 +549,10 @@ func (p Package) deactivate(cfg Config, context string) error {
 			}
 		} else if installStep.File != nil {
 			if err := installStep.File.deactivate(cfg, pkgName); err != nil {
+				return err
+			}
+		} else if installStep.Config != nil {
+			if err := installStep.Config.deactivate(cfg, pkgName); err != nil {
 				return err
 			}
 		} else {
@@ -589,12 +603,20 @@ func (p Package) validate(cfg Config) error {
 				return NewInstallStepConditionError(installStep.Condition, err)
 			}
 		}
+		// Make sure only one install method is specified per install step
+		if installStep.countInstallMethods() > 1 {
+			return ErrMultipleInstallMethods
+		}
 		if installStep.Docker != nil {
 			if err := installStep.Docker.validate(cfg); err != nil {
 				return err
 			}
 		} else if installStep.File != nil {
 			if err := installStep.File.validate(cfg); err != nil {
+				return err
+			}
+		} else if installStep.Config != nil {
+			if err := installStep.Config.validate(cfg); err != nil {
 				return err
 			}
 		} else {
@@ -976,6 +998,23 @@ type PackageInstallStep struct {
 	Condition string                    `yaml:"condition,omitempty"`
 	Docker    *PackageInstallStepDocker `yaml:"docker,omitempty"`
 	File      *PackageInstallStepFile   `yaml:"file,omitempty"`
+	Config    *PackageInstallStepConfig `yaml:"config,omitempty"`
+}
+
+// countInstallMethods returns how many install method fields (docker, file,
+// config) are set on this install step. Exactly one is required per step.
+func (installStep PackageInstallStep) countInstallMethods() int {
+	count := 0
+	if installStep.Docker != nil {
+		count++
+	}
+	if installStep.File != nil {
+		count++
+	}
+	if installStep.Config != nil {
+		count++
+	}
+	return count
 }
 
 type PackageInstallStepDocker struct {
@@ -1237,11 +1276,30 @@ func (p *PackageInstallStepFile) install(
 	if p.Mode > 0 {
 		fileMode = p.Mode
 	}
+	fileContent, err := p.resolveContent(cfg, packagePath)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filePath, fileContent, fileMode); err != nil { //nolint:gosec // path traversal mitigated by prefix check above
+		return err
+	}
+	cfg.Logger.Debug("wrote file " + filePath)
+	return nil
+}
+
+// resolveContent renders this file's content from whichever of content,
+// source, or url is set, extracting an archive member first when Archive is
+// set. It holds the logic shared by the file and config install step types,
+// which differ only in their destination path and overwrite behavior.
+func (p *PackageInstallStepFile) resolveContent(
+	cfg Config,
+	packagePath string,
+) ([]byte, error) {
 	var fileContent []byte
 	if p.Content != "" {
 		tmpContent, err := cfg.Template.Render(p.Content, nil)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		fileContent = []byte(tmpContent)
 	} else if p.Source != "" {
@@ -1256,78 +1314,74 @@ func (p *PackageInstallStepFile) install(
 			// into memory before the archive-entry limit even runs.
 			sourceFile, err := os.Open(fullSourcePath)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			defer sourceFile.Close()
 			tmpContentBytes, err := readArchiveEntry(sourceFile, fullSourcePath, maxDownloadSize)
 			if err != nil {
-				return fmt.Errorf("failed to read %q: %w", fullSourcePath, err)
+				return nil, fmt.Errorf("failed to read %q: %w", fullSourcePath, err)
 			}
 			fileContent = tmpContentBytes
 		} else {
 			tmpContentBytes, err := os.ReadFile(fullSourcePath)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			tmpContent, err := cfg.Template.Render(string(tmpContentBytes), nil)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			fileContent = []byte(tmpContent)
 		}
 	} else if p.Url != "" {
 		tmpUrl, err := cfg.Template.Render(p.Url, nil)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Validate URL
 		u, err := url.Parse(tmpUrl)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if u.Scheme == "" || u.Host == "" {
-			return errors.New("invalid URL given")
+			return nil, errors.New("invalid URL given")
 		}
 
 		// Fetch data
 		ctx := context.Background()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, tmpUrl, nil)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		resp, err := http.DefaultClient.Do(req) //nolint:gosec // URL is validated above
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if resp == nil {
-			return fmt.Errorf("nil response for URL: %s", tmpUrl)
+			return nil, fmt.Errorf("nil response for URL: %s", tmpUrl)
 		}
 		defer resp.Body.Close()
 		respBody, err := readArchiveEntry(resp.Body, tmpUrl, maxDownloadSize)
 		if err != nil {
-			return fmt.Errorf("failed to download %q: %w", tmpUrl, err)
+			return nil, fmt.Errorf("failed to download %q: %w", tmpUrl, err)
 		}
 
 		fileContent = respBody
 	} else {
-		return errors.New("packages must provide content, source, or url for file install types")
+		return nil, errors.New("packages must provide content, source, or url for file install types")
 	}
 	if p.Archive != "" {
 		tmpArchivePath, err := cfg.Template.Render(p.ArchivePath, nil)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		fileContent, err = extractArchiveFile(p.Archive, tmpArchivePath, fileContent)
 		if err != nil {
-			return fmt.Errorf("failed to extract %q from archive: %w", tmpArchivePath, err)
+			return nil, fmt.Errorf("failed to extract %q from archive: %w", tmpArchivePath, err)
 		}
 	}
-	if err := os.WriteFile(filePath, fileContent, fileMode); err != nil { //nolint:gosec // path traversal mitigated by prefix check above
-		return err
-	}
-	cfg.Logger.Debug("wrote file " + filePath)
-	return nil
+	return fileContent, nil
 }
 
 func (p *PackageInstallStepFile) uninstall(cfg Config, pkgName string) error {
@@ -1415,6 +1469,128 @@ func (p *PackageInstallStepFile) deactivate(cfg Config, pkgName string) error {
 		}
 		cfg.Logger.Debug("removed symlink " + binPath + "for " + pkgName)
 	}
+	return nil
+}
+
+// PackageInstallStepConfig manages a configuration file. Unlike the file
+// install step, a config file lives in the context-level directory (shared
+// and persisted across the package's own versions, rather than the
+// per-version package data directory) and, once written, is never
+// overwritten by a later install. This lets a package upgrade change its
+// rendered defaults without clobbering a config file the user has hand-edited
+// since the initial install. See issue #567.
+type PackageInstallStepConfig struct {
+	Filename    string      `yaml:"filename"`
+	Source      string      `yaml:"source,omitempty"`
+	Content     string      `yaml:"content,omitempty"`
+	Url         string      `yaml:"url,omitempty"`
+	Mode        fs.FileMode `yaml:"mode,omitempty"`
+	Archive     string      `yaml:"archive,omitempty"`
+	ArchivePath string      `yaml:"archivePath,omitempty"`
+}
+
+// asFile adapts this config step to a PackageInstallStepFile so it can reuse
+// the file step's content-source validation and resolution.
+func (p *PackageInstallStepConfig) asFile() *PackageInstallStepFile {
+	return &PackageInstallStepFile{
+		Content:     p.Content,
+		Source:      p.Source,
+		Url:         p.Url,
+		Archive:     p.Archive,
+		ArchivePath: p.ArchivePath,
+	}
+}
+
+func (p *PackageInstallStepConfig) validate(cfg Config) error {
+	if p.Filename == "" {
+		cfg.Logger.Debug("config file missing filename")
+		return errors.New("filename must be provided for config install types")
+	}
+	return p.asFile().validate(cfg)
+}
+
+func (p *PackageInstallStepConfig) install(
+	cfg Config,
+	context string,
+	packagePath string,
+) error {
+	tmpFilePath, err := cfg.Template.Render(p.Filename, nil)
+	if err != nil {
+		return err
+	}
+	pkgContextDir := filepath.Join(cfg.DataDir, context)
+	if err := os.MkdirAll(pkgContextDir, fs.ModePerm); err != nil {
+		return err
+	}
+	relFilePath := filepath.Clean(tmpFilePath)
+	displayPath := filepath.Join(pkgContextDir, relFilePath)
+	// Open the context directory as an os.Root and do every subsequent
+	// filesystem operation through it. Unlike a lexical prefix check on the
+	// resolved path, Root rejects any component - including a symlink placed
+	// inside the context directory by a prior install step - that would
+	// resolve outside pkgContextDir, so a malicious or buggy filename can't
+	// escape it even via an intermediate symlink.
+	root, err := os.OpenRoot(pkgContextDir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	// Preserve an existing config file rather than overwriting it. This is
+	// what lets a package upgrade run install() again - via Upgrade(), which
+	// uninstalls the old version and installs the new one - without losing
+	// any changes the user made to the file after the initial install.
+	if _, err := root.Lstat(relFilePath); err == nil {
+		cfg.Logger.Debug("preserving existing config file " + displayPath)
+		return nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("invalid file path %q: %w", displayPath, err)
+	}
+	if parentDir := filepath.Dir(relFilePath); parentDir != "." {
+		if err := root.MkdirAll(parentDir, fs.ModePerm); err != nil {
+			return fmt.Errorf("invalid file path %q: %w", displayPath, err)
+		}
+	}
+	fileMode := fs.ModePerm
+	if p.Mode > 0 {
+		fileMode = p.Mode
+	}
+	fileContent, err := p.asFile().resolveContent(cfg, packagePath)
+	if err != nil {
+		return err
+	}
+	f, err := root.OpenFile(
+		relFilePath,
+		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
+		fileMode,
+	)
+	if err != nil {
+		return fmt.Errorf("invalid file path %q: %w", displayPath, err)
+	}
+	defer f.Close()
+	if _, err := f.Write(fileContent); err != nil {
+		return err
+	}
+	cfg.Logger.Debug("wrote config file " + displayPath)
+	return nil
+}
+
+// uninstall intentionally leaves the config file in place. It is never
+// recreated by install() once it exists, so deleting it here - whether for a
+// real uninstall or as the first half of an Upgrade() - would either destroy
+// user changes or force every upgrade to fall back to the package's rendered
+// defaults, defeating the point of this install step type. A user who wants
+// the file gone can remove it manually.
+func (p *PackageInstallStepConfig) uninstall(cfg Config, context string) error {
+	return nil
+}
+
+func (p *PackageInstallStepConfig) activate(cfg Config, pkgName string) error {
+	// Nothing to do
+	return nil
+}
+
+func (p *PackageInstallStepConfig) deactivate(cfg Config, pkgName string) error {
+	// Nothing to do
 	return nil
 }
 
