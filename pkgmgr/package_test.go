@@ -54,6 +54,12 @@ type fakeServiceLifecycle struct {
 	// after an attempt to stop the container.
 	runningErrAfterStop error
 
+	// startRaced, if true, simulates a concurrent, unrelated operation
+	// starting the container after this call's status check but before its
+	// Start(): Running() reports not-running, while Start() finds the
+	// container already running and does nothing.
+	startRaced bool
+
 	// onStart, if set, is called by Start() before the service is marked
 	// running. Lets a test observe when a container start happens relative
 	// to hook execution.
@@ -67,13 +73,20 @@ func (f *fakeServiceLifecycle) Running() (bool, error) {
 	return f.running, nil
 }
 
-func (f *fakeServiceLifecycle) Start() error {
+// Start mirrors DockerService.Start(): it only acts if the container is not
+// already running, matching the production contract that finding it already
+// running is a successful no-op rather than a transition this call caused.
+func (f *fakeServiceLifecycle) Start() (bool, error) {
 	if f.onStart != nil {
 		f.onStart()
 	}
+	if f.running || f.startRaced {
+		f.running = true
+		return false, nil
+	}
 	f.started = true
 	f.running = true
-	return nil
+	return true, nil
 }
 
 // Stop mirrors DockerService.Stop(): it only acts (and reports
@@ -774,5 +787,58 @@ func TestRunHookScriptError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "exited with error") {
 		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+// TestStartService_DoesNotRollBackAServiceItDidNotStart pins the ownership
+// contract on the start side: a container that a concurrent, unrelated
+// operation started between this call's status check and its Start() was not
+// started by this call, so a rollback must leave it running. Start() reports
+// whether it actually issued a start, and only a true report makes the
+// service this call's to roll back.
+func TestStartService_DoesNotRollBackAServiceItDidNotStart(t *testing.T) {
+	origNewServiceFromContainerName := newServiceFromContainerName
+	t.Cleanup(func() {
+		newServiceFromContainerName = origNewServiceFromContainerName
+	})
+
+	racedSvc := &fakeServiceLifecycle{startRaced: true}
+	newServiceFromContainerName = func(containerName string, logger *slog.Logger) (serviceLifecycle, error) {
+		return racedSvc, nil
+	}
+
+	cfg := Config{
+		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Template: NewTemplate(nil),
+	}
+	pkg := Package{
+		Name:            "mypkg",
+		Version:         "1.0.0",
+		PostStartScript: "exit 1",
+		InstallSteps: []PackageInstallStep{
+			{
+				Docker: &PackageInstallStepDocker{
+					ContainerName: "raced",
+					Image:         "alpine:3.20",
+				},
+			},
+		},
+	}
+
+	err := pkg.startService(cfg, "testctx")
+	if err == nil {
+		t.Fatal("expected post-start hook failure")
+	}
+	if !strings.Contains(err.Error(), "post-start hook failed") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if racedSvc.started {
+		t.Fatal("expected the raced container to not be started by this call")
+	}
+	if racedSvc.stopped {
+		t.Fatal(
+			"rollback stopped the raced container: startService claimed " +
+				"a transition the concurrent actor caused, not this call",
+		)
 	}
 }

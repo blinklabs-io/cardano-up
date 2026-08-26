@@ -73,7 +73,10 @@ type PackageOutput struct {
 
 type serviceLifecycle interface {
 	Running() (bool, error)
-	Start() error
+	// Start starts the service if it is not already running. The returned
+	// bool reports whether this call actually issued a start (true), versus
+	// finding it already running and doing nothing (false).
+	Start() (bool, error)
 	// Stop stops the service if it is running. The returned bool reports
 	// whether this call actually issued a stop (true), versus finding it
 	// already stopped and doing nothing (false).
@@ -710,26 +713,21 @@ func (p Package) startServices(
 				)
 				continue
 			}
-			wasRunning, err := dockerService.Running()
+			// Start() itself checks whether the container is already
+			// running before acting, and reports whether it actually issued
+			// a start. Relying on that report - rather than a separate
+			// Running() check made beforehand by this code - avoids a race
+			// where a concurrent, unrelated operation starts the container
+			// in between the two checks: this code would then see a
+			// "successful" no-op Start() and wrongly believe it owns a
+			// transition it never caused.
+			startedNow, err := dockerService.Start()
 			if err != nil {
-				startErrors = append(
-					startErrors,
-					fmt.Sprintf(
-						"error checking Docker container status for %s: %v",
-						containerName,
-						err,
-					),
-				)
-				continue
-			}
-			if wasRunning {
-				continue
-			}
-			// Start the Docker container if it's not running
-			slog.Info(
-				"Starting Docker container " + containerName,
-			)
-			if err := dockerService.Start(); err != nil {
+				// Don't track this service for rollback: the start may not
+				// have happened at all, and a container left running despite
+				// this error could have been started by a concurrent,
+				// unrelated operation, so stopping it would wrongly undo that
+				// operation's intended effect.
 				startErrors = append(
 					startErrors,
 					fmt.Sprintf(
@@ -740,6 +738,12 @@ func (p Package) startServices(
 				)
 				continue
 			}
+			if !startedNow {
+				// The container was already running; nothing to do or roll
+				// back, and no error since the desired end state holds.
+				continue
+			}
+			slog.Info("Started Docker container " + containerName)
 			startedServices = append(startedServices, dockerService)
 		}
 	}
@@ -912,7 +916,7 @@ func (p Package) rollbackStoppedServices(stoppedServices []serviceLifecycle) {
 		return
 	}
 	for idx := len(stoppedServices) - 1; idx >= 0; idx-- {
-		if err := stoppedServices[idx].Start(); err != nil {
+		if _, err := stoppedServices[idx].Start(); err != nil {
 			slog.Warn(
 				fmt.Sprintf(
 					"failed to roll back stopped service: %v",
