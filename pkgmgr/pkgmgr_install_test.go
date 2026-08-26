@@ -123,8 +123,9 @@ func TestUpgradeRejectsInvalidNewPackageVersion(t *testing.T) {
 	}
 	pm.availablePackages = []Package{
 		{
-			Name:    "pkg",
-			Version: "2.0.0",
+			Name:     "pkg",
+			Version:  "2.0.0",
+			filePath: filepath.Join("pkg", "pkg-2.0.0.yaml"),
 			InstallSteps: []PackageInstallStep{
 				{
 					// Missing content/source/url; caught by

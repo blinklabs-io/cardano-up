@@ -367,7 +367,7 @@ installSteps:
 | `binary` | | Whether this file is an executable file for the package (expects bool, defaults to `false`) |
 | `archive` | | Archive format that `source` or `url` content should be extracted from. One of `zip`, `tar.gz`, or `tgz` |
 | `archivePath` | | Path of the file within the archive to extract as the destination file content. Required if `archive` is set. Supports templating |
-| `archiveMaxSize` | | Maximum decompressed size in bytes for the selected archive entry, overriding the default of 512 MiB. Only valid if `archive` is set. Capped at 4 GiB |
+| `archiveMaxSize` | | Maximum decompressed size in bytes. For `zip`, this limits the selected entry. For `tar.gz` and `tgz`, this limits total decompressed archive data. Overrides the default of 512 MiB. Only valid if `archive` is set. Capped at 4 GiB |
 
 ###### `config`
 
