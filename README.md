@@ -368,6 +368,36 @@ installSteps:
 | `archive` | | Archive format that `source` or `url` content should be extracted from. One of `zip`, `tar.gz`, or `tgz` |
 | `archivePath` | | Path of the file within the archive to extract as the destination file content. Required if `archive` is set. Supports templating |
 
+###### `config`
+
+The `config` install step type manages a configuration file. It supports the same content sources as `file`, but differs in two ways that make it suitable
+for files a user may want to hand-edit:
+
+* The destination file is created within the context directory (shared and persisted across the package's own versions), rather than the package's
+  per-version data directory used by `file`.
+* Once the destination file exists, later installs leave it untouched instead of overwriting it. This means a package upgrade will not clobber a
+  configuration file the user has customized since it was first installed. A `config` file is likewise left in place on uninstall; remove it manually if
+  you no longer want it.
+
+Example:
+
+```yaml
+installSteps:
+  - config:
+      filename: my-app/settings.yaml
+      source: my-source-settings.yaml
+```
+
+| Field | Required | Description |
+| --- | :---: | --- |
+| `filename` | x | Path of destination file, relative to the context directory |
+| `source` | | Path to source file. This should be a relative path within the package manifest directory. Used only if `content` is not provided |
+| `content` | | Inline content for destination file. Takes precedence over `source` and `url` if more than one is provided |
+| `url` | | URL to fetch destination file content from. Used only if `content` and `source` are not provided. Supports templating (e.g. `{{ .System.OS }}` and `{{ .System.ARCH }}`) |
+| `mode` | | Octal file mode for destination file |
+| `archive` | | Archive format that `source` or `url` content should be extracted from. One of `zip`, `tar.gz`, or `tgz` |
+| `archivePath` | | Path of the file within the archive to extract as the destination file content. Required if `archive` is set. Supports templating |
+
 ##### `dependencies`
 
 Dependencies for a package are specified in the following format. At minimum they contain a package name. They may optionally contain a list of required package
