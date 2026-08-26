@@ -94,7 +94,11 @@ func TestExtractZipFile(t *testing.T) {
 		"README.md":    "docs",
 	})
 
-	content, err := extractZipFile("bin/mybinary", data)
+	content, err := extractZipFileWithLimit(
+		"bin/mybinary",
+		data,
+		maxArchiveEntrySize,
+	)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -114,7 +118,8 @@ func TestExtractZipFileNotFound(t *testing.T) {
 		"bin/mybinary": testArchiveFileContent,
 	})
 
-	if _, err := extractZipFile("bin/missing", data); err == nil {
+	_, err := extractZipFileWithLimit("bin/missing", data, maxArchiveEntrySize)
+	if err == nil {
 		t.Fatal("expected error for missing file in archive, got nil")
 	}
 }
@@ -131,7 +136,8 @@ func TestExtractZipFileSkipsDirs(t *testing.T) {
 		t.Fatalf("unexpected error closing zip writer: %s", err)
 	}
 
-	if _, err := extractZipFile("bin", buf.Bytes()); err == nil {
+	_, err := extractZipFileWithLimit("bin", buf.Bytes(), maxArchiveEntrySize)
+	if err == nil {
 		t.Fatal("expected error when requested path is a directory, got nil")
 	}
 }
@@ -157,7 +163,12 @@ func TestExtractZipFileSkipsSymlinks(t *testing.T) {
 		t.Fatalf("unexpected error closing zip writer: %s", err)
 	}
 
-	if _, err := extractZipFile("bin/mybinary", buf.Bytes()); err == nil {
+	_, err = extractZipFileWithLimit(
+		"bin/mybinary",
+		buf.Bytes(),
+		maxArchiveEntrySize,
+	)
+	if err == nil {
 		t.Fatal("expected error when requested path is a symlink, got nil")
 	}
 }
@@ -170,7 +181,11 @@ func TestExtractTarGzFile(t *testing.T) {
 		"README.md":    "docs",
 	})
 
-	content, err := extractTarGzFile("bin/mybinary", data)
+	content, err := extractTarGzFileWithLimit(
+		"bin/mybinary",
+		data,
+		maxArchiveEntrySize,
+	)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -190,7 +205,12 @@ func TestExtractTarGzFileNotFound(t *testing.T) {
 		"bin/mybinary": testArchiveFileContent,
 	})
 
-	if _, err := extractTarGzFile("bin/missing", data); err == nil {
+	_, err := extractTarGzFileWithLimit(
+		"bin/missing",
+		data,
+		maxArchiveEntrySize,
+	)
+	if err == nil {
 		t.Fatal("expected error for missing file in archive, got nil")
 	}
 }
@@ -203,7 +223,12 @@ func TestExtractTarGzFileCorruptChecksum(t *testing.T) {
 	})
 	data[len(data)-8] ^= 0xff
 
-	if _, err := extractTarGzFile("bin/mybinary", data); err == nil {
+	_, err := extractTarGzFileWithLimit(
+		"bin/mybinary",
+		data,
+		maxArchiveEntrySize,
+	)
+	if err == nil {
 		t.Fatal("expected error for invalid gzip checksum, got nil")
 	}
 }
@@ -247,10 +272,11 @@ func TestExtractArchiveFileDispatch(t *testing.T) {
 		{archiveType: "tgz", data: tarGzData},
 	}
 	for _, testDef := range testDefs {
-		content, err := extractArchiveFile(
+		content, err := extractArchiveFileWithLimit(
 			testDef.archiveType,
 			"mybinary",
 			testDef.data,
+			maxArchiveEntrySize,
 		)
 		if err != nil {
 			t.Fatalf(
@@ -273,7 +299,13 @@ func TestExtractArchiveFileDispatch(t *testing.T) {
 // TestExtractArchiveFileUnsupportedType checks that extraction fails clearly
 // when an unsupported archive format is requested.
 func TestExtractArchiveFileUnsupportedType(t *testing.T) {
-	if _, err := extractArchiveFile("rar", "mybinary", nil); err == nil {
+	_, err := extractArchiveFileWithLimit(
+		"rar",
+		"mybinary",
+		nil,
+		maxArchiveEntrySize,
+	)
+	if err == nil {
 		t.Fatal("expected error for unsupported archive type, got nil")
 	}
 }

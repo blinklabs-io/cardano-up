@@ -74,24 +74,11 @@ func validArchiveType(archiveType string) bool {
 	}
 }
 
-// extractArchiveFile returns the content of the file at archivePath within
-// the archive represented by data. The archive is expected to be in the
-// format specified by archiveType (zip, tar.gz, or tgz)
-func extractArchiveFile(
-	archiveType string,
-	archivePath string,
-	data []byte,
-) ([]byte, error) {
-	return extractArchiveFileWithLimit(
-		archiveType,
-		archivePath,
-		data,
-		maxArchiveEntrySize,
-	)
-}
-
-// extractArchiveFileWithLimit is extractArchiveFile with an explicit size
-// bound, letting a file install step raise it via archiveMaxSize.
+// extractArchiveFileWithLimit returns the content of the file at
+// archivePath within the archive represented by data, bounded by maxSize.
+// The archive is expected to be in the format specified by archiveType
+// (zip, tar.gz, or tgz). A file install step can raise maxSize for its own
+// archive via archiveMaxSize.
 func extractArchiveFileWithLimit(
 	archiveType string,
 	archivePath string,
@@ -108,15 +95,17 @@ func extractArchiveFileWithLimit(
 	}
 }
 
-func extractZipFile(archivePath string, data []byte) ([]byte, error) {
-	return extractZipFileWithLimit(archivePath, data, maxArchiveEntrySize)
-}
-
 func extractZipFileWithLimit(
 	archivePath string,
 	data []byte,
 	maxSize int64,
 ) ([]byte, error) {
+	if maxSize < 0 {
+		return nil, fmt.Errorf(
+			"invalid maxSize %d: must not be negative",
+			maxSize,
+		)
+	}
 	zipReader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read zip archive: %w", err)
@@ -147,14 +136,6 @@ func extractZipFileWithLimit(
 		return readArchiveEntry(zf, archivePath, maxSize)
 	}
 	return nil, fmt.Errorf("file %q not found in zip archive", archivePath)
-}
-
-func extractTarGzFile(archivePath string, data []byte) ([]byte, error) {
-	return extractTarGzFileWithLimit(
-		archivePath,
-		data,
-		maxArchiveEntrySize,
-	)
 }
 
 func extractTarGzFileWithLimit(
