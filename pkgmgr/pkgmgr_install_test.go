@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -295,6 +296,85 @@ func TestUpgradeValidatesEntirePlanBeforeMutatingAny(t *testing.T) {
 		t.Fatalf(
 			"expected app to remain at its original version, got: %#v",
 			pm.state.InstalledPackages,
+		)
+	}
+}
+
+// TestUpgradeRemovesOldTemplatedFilenameFile is a production-shaped
+// Install-then-Upgrade probe for a package with a templated (e.g.
+// per-OS/ARCH) binary filename. Upgrade() calls uninstallPackage with
+// keepData=true, which skips the old version's whole data-directory
+// removal, so the old rendered file (e.g. binary-linux) is left behind
+// unless PackageInstallStepFile.uninstall() itself removes the correct,
+// rendered path - which it didn't, since it built the delete path from the
+// raw, un-rendered filename.
+func TestUpgradeRemovesOldTemplatedFilenameFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := Config{
+		DataDir:   filepath.Join(tmpDir, "data"),
+		CacheDir:  filepath.Join(tmpDir, "cache"),
+		ConfigDir: filepath.Join(tmpDir, "config"),
+		BinDir:    filepath.Join(tmpDir, "bin"),
+		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Template:  NewTemplate(nil),
+	}
+	pm := &PackageManager{
+		config: cfg,
+		state: &State{
+			config:        cfg,
+			ActiveContext: "default",
+			Contexts: map[string]Context{
+				"default": {Network: "preprod"},
+			},
+			PortRegistry: make(PortRegistry),
+		},
+	}
+	installStep := func() PackageInstallStep {
+		return PackageInstallStep{
+			File: &PackageInstallStepFile{
+				Filename: "binary-{{ .System.OS }}",
+				Binary:   true,
+				Content:  "hello",
+				Mode:     0o755,
+			},
+		}
+	}
+	pm.availablePackages = []Package{
+		{
+			Name:         "app",
+			Version:      "1.0.0",
+			filePath:     filepath.Join("app", "app-1.0.0.yaml"),
+			InstallSteps: []PackageInstallStep{installStep()},
+		},
+	}
+
+	if err := pm.Install("app"); err != nil {
+		t.Fatalf("install failed: %s", err)
+	}
+	oldFilePath := filepath.Join(
+		cfg.DataDir,
+		"app-1.0.0-default",
+		"binary-"+runtime.GOOS,
+	)
+	if _, err := os.Stat(oldFilePath); err != nil {
+		t.Fatalf("expected installed file at %s: %s", oldFilePath, err)
+	}
+
+	pm.availablePackages = append(pm.availablePackages, Package{
+		Name:         "app",
+		Version:      "2.0.0",
+		filePath:     filepath.Join("app", "app-2.0.0.yaml"),
+		InstallSteps: []PackageInstallStep{installStep()},
+	})
+	if err := pm.Upgrade("app"); err != nil {
+		t.Fatalf("upgrade failed: %s", err)
+	}
+
+	if _, err := os.Stat(oldFilePath); !os.IsNotExist(err) {
+		t.Fatalf(
+			"expected old rendered file %s to be removed after upgrade, stat err: %v",
+			oldFilePath,
+			err,
 		)
 	}
 }

@@ -245,6 +245,52 @@ func TestPackageInstallStepFileActivateTemplatedFilename(t *testing.T) {
 	}
 }
 
+// TestPackageInstallStepFileUninstallTemplatedFilename checks that
+// uninstall() removes the same rendered path install() wrote the file at,
+// when filename contains a template expression. Regression test for a bug
+// where uninstall() built the delete path from the raw, un-rendered
+// filename, so the actual rendered file (e.g. binary-linux) was never
+// removed - os.Remove silently no-ops on the literal, nonexistent
+// "{{ .System.OS }}"-suffixed path instead of erroring.
+func TestPackageInstallStepFileUninstallTemplatedFilename(t *testing.T) {
+	cfg := newArchiveTestConfig(t)
+	cfg.Template = cfg.Template.WithVars(
+		map[string]any{
+			"System": map[string]string{
+				"OS": "linux",
+			},
+		},
+	)
+	step := &PackageInstallStepFile{
+		Filename: "{{ .System.OS }}-mybinary",
+		Content:  testArchiveFileContent,
+		Binary:   true,
+		Mode:     0o755,
+	}
+	if err := step.install(cfg, "test-1.0.0-testctx", ""); err != nil {
+		t.Fatalf("install failed: %s", err)
+	}
+	writtenPath := filepath.Join(
+		cfg.DataDir,
+		"test-1.0.0-testctx",
+		"linux-mybinary",
+	)
+	if _, err := os.Stat(writtenPath); err != nil {
+		t.Fatalf("expected installed file at %s: %s", writtenPath, err)
+	}
+
+	if err := step.uninstall(cfg, "test-1.0.0-testctx"); err != nil {
+		t.Fatalf("uninstall failed: %s", err)
+	}
+	if _, err := os.Stat(writtenPath); !os.IsNotExist(err) {
+		t.Fatalf(
+			"expected rendered file %s to be removed by uninstall, stat err: %v",
+			writtenPath,
+			err,
+		)
+	}
+}
+
 // TestPackageInstallStepFileInstallArchiveTarGz checks that one binary can be
 // selected from a tar.gz archive and written to the package data directory.
 func TestPackageInstallStepFileInstallArchiveTarGz(t *testing.T) {

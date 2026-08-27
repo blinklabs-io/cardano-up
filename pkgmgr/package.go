@@ -1433,10 +1433,14 @@ func (p *PackageInstallStepFile) resolveContent(
 }
 
 func (p *PackageInstallStepFile) uninstall(cfg Config, pkgName string) error {
+	tmpFilePath, err := cfg.Template.Render(p.Filename, nil)
+	if err != nil {
+		return err
+	}
 	filePath := filepath.Join(
 		cfg.DataDir,
 		pkgName,
-		p.Filename,
+		tmpFilePath,
 	)
 	cfg.Logger.Debug("deleting file " + filePath)
 	if err := os.Remove(filePath); err != nil {
