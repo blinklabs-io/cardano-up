@@ -243,6 +243,16 @@ func (p *PackageManager) Install(pkgs ...string) error {
 	if err != nil {
 		return err
 	}
+	// Validate every package in the resolved plan before installing any of
+	// them, since the registry may have loaded them without validation (see
+	// loadPackageRegistry). Validating inside the loop below would let
+	// earlier entries in the plan - e.g. resolved dependencies - install
+	// and persist successfully before a later, invalid entry is rejected.
+	for _, installPkg := range installPkgs {
+		if err := installPkg.Install.validate(p.config); err != nil {
+			return fmt.Errorf("package validation failed: %w", err)
+		}
+	}
 	installedPkgs := []string{}
 	var sb strings.Builder
 	for _, installPkg := range installPkgs {
@@ -334,6 +344,17 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 	upgradePkgs, err := resolver.Upgrade(pkgs...)
 	if err != nil {
 		return err
+	}
+	// Validate every new package version in the resolved plan before
+	// deactivating/uninstalling any currently-installed version, since the
+	// registry may have loaded them without validation (see
+	// loadPackageRegistry). Validating inside the loop below would let
+	// earlier entries in the plan tear down and replace their old version
+	// before a later, invalid entry is rejected.
+	for _, upgradePkg := range upgradePkgs {
+		if err := upgradePkg.Upgrade.validate(p.config); err != nil {
+			return fmt.Errorf("package validation failed: %w", err)
+		}
 	}
 	installedPkgs := []string{}
 	var sb strings.Builder

@@ -1221,25 +1221,30 @@ func (p *PackageInstallStepDocker) deactivate(
 }
 
 type PackageInstallStepFile struct {
-	Binary      bool        `yaml:"binary"`
-	Filename    string      `yaml:"filename"`
-	Source      string      `yaml:"source"`
-	Content     string      `yaml:"content"`
-	Url         string      `yaml:"url"`
-	Mode        fs.FileMode `yaml:"mode,omitempty"`
-	Archive     string      `yaml:"archive,omitempty"`
-	ArchivePath string      `yaml:"archivePath,omitempty"`
+	Binary         bool        `yaml:"binary"`
+	Filename       string      `yaml:"filename"`
+	Source         string      `yaml:"source"`
+	Content        string      `yaml:"content"`
+	Url            string      `yaml:"url"`
+	Mode           fs.FileMode `yaml:"mode,omitempty"`
+	Archive        string      `yaml:"archive,omitempty"`
+	ArchivePath    string      `yaml:"archivePath,omitempty"`
+	ArchiveMaxSize int64       `yaml:"archiveMaxSize,omitempty"`
 }
 
 func (p *PackageInstallStepFile) validate(cfg Config) error {
 	if p.Content == "" && p.Source == "" && p.Url == "" {
 		cfg.Logger.Debug("file install step missing content, source, and url")
-		return errors.New("packages must provide content, source, or url for file install types")
+		return errors.New(
+			"packages must provide content, source, or url for file install types",
+		)
 	}
 	if p.Archive != "" {
 		if p.Content != "" {
 			cfg.Logger.Debug("archive combined with content")
-			return errors.New("archive cannot be combined with content; use source or url")
+			return errors.New(
+				"archive cannot be combined with content; use source or url",
+			)
 		}
 		if !validArchiveType(p.Archive) {
 			cfg.Logger.Debug("unsupported archive type: " + p.Archive)
@@ -1247,7 +1252,26 @@ func (p *PackageInstallStepFile) validate(cfg Config) error {
 		}
 		if p.ArchivePath == "" {
 			cfg.Logger.Debug("archive set without archivePath")
-			return errors.New("archivePath must be provided when archive is set")
+			return errors.New(
+				"archivePath must be provided when archive is set",
+			)
+		}
+	}
+	if p.ArchiveMaxSize != 0 {
+		if p.Archive == "" {
+			cfg.Logger.Debug("archiveMaxSize set without archive")
+			return errors.New("archiveMaxSize requires archive to be set")
+		}
+		if p.ArchiveMaxSize < 0 {
+			cfg.Logger.Debug("archiveMaxSize is negative")
+			return errors.New("archiveMaxSize must not be negative")
+		}
+		if p.ArchiveMaxSize > maxArchiveSizeCeiling {
+			cfg.Logger.Debug("archiveMaxSize exceeds ceiling")
+			return fmt.Errorf(
+				"archiveMaxSize exceeds maximum of %d bytes",
+				maxArchiveSizeCeiling,
+			)
 		}
 	}
 	return nil
@@ -1299,6 +1323,10 @@ func (p *PackageInstallStepFile) resolveContent(
 	cfg Config,
 	packagePath string,
 ) ([]byte, error) {
+	archiveMaxSize := maxArchiveEntrySize
+	if p.ArchiveMaxSize > 0 {
+		archiveMaxSize = p.ArchiveMaxSize
+	}
 	var fileContent []byte
 	if p.Content != "" {
 		tmpContent, err := cfg.Template.Render(p.Content, nil)
@@ -1321,7 +1349,11 @@ func (p *PackageInstallStepFile) resolveContent(
 				return nil, err
 			}
 			defer sourceFile.Close()
-			tmpContentBytes, err := readArchiveEntry(sourceFile, fullSourcePath, maxDownloadSize)
+			tmpContentBytes, err := readArchiveEntry(
+				sourceFile,
+				fullSourcePath,
+				maxDownloadSize,
+			)
 			if err != nil {
 				return nil, fmt.Errorf("failed to read %q: %w", fullSourcePath, err)
 			}
@@ -1353,7 +1385,8 @@ func (p *PackageInstallStepFile) resolveContent(
 		}
 
 		// Fetch data
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
+		defer cancel()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, tmpUrl, nil)
 		if err != nil {
 			return nil, err
@@ -1373,26 +1406,41 @@ func (p *PackageInstallStepFile) resolveContent(
 
 		fileContent = respBody
 	} else {
-		return nil, errors.New("packages must provide content, source, or url for file install types")
+		return nil, errors.New(
+			"packages must provide content, source, or url for file install types",
+		)
 	}
 	if p.Archive != "" {
 		tmpArchivePath, err := cfg.Template.Render(p.ArchivePath, nil)
 		if err != nil {
 			return nil, err
 		}
-		fileContent, err = extractArchiveFile(p.Archive, tmpArchivePath, fileContent)
+		fileContent, err = extractArchiveFileWithLimit(
+			p.Archive,
+			tmpArchivePath,
+			fileContent,
+			archiveMaxSize,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to extract %q from archive: %w", tmpArchivePath, err)
+			return nil, fmt.Errorf(
+				"failed to extract %q from archive: %w",
+				tmpArchivePath,
+				err,
+			)
 		}
 	}
 	return fileContent, nil
 }
 
 func (p *PackageInstallStepFile) uninstall(cfg Config, pkgName string) error {
+	tmpFilePath, err := cfg.Template.Render(p.Filename, nil)
+	if err != nil {
+		return err
+	}
 	filePath := filepath.Join(
 		cfg.DataDir,
 		pkgName,
-		p.Filename,
+		tmpFilePath,
 	)
 	cfg.Logger.Debug("deleting file " + filePath)
 	if err := os.Remove(filePath); err != nil {
@@ -1412,7 +1460,7 @@ func (p *PackageInstallStepFile) activate(cfg Config, pkgName string) error {
 		filePath := filepath.Join(
 			cfg.DataDir,
 			pkgName,
-			p.Filename,
+			tmpFilePath,
 		)
 		binPath := filepath.Join(
 			cfg.BinDir,

@@ -15,6 +15,8 @@
 package pkgmgr
 
 import (
+	"context"
+	"errors"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -22,8 +24,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"text/template"
+	"time"
 )
 
 func newArchiveTestConfig(t *testing.T) Config {
@@ -86,6 +90,40 @@ func TestPackageInstallStepFileValidate(t *testing.T) {
 			},
 			expectErr: true, // archive cannot be combined with content
 		},
+		{
+			step: PackageInstallStepFile{
+				Url:            "https://example.com/foo.zip",
+				Archive:        "zip",
+				ArchivePath:    "bin/foo",
+				ArchiveMaxSize: 1024,
+			},
+			expectErr: false,
+		},
+		{
+			step: PackageInstallStepFile{
+				Content:        "foo",
+				ArchiveMaxSize: 1024,
+			},
+			expectErr: true, // archiveMaxSize requires archive
+		},
+		{
+			step: PackageInstallStepFile{
+				Url:            "https://example.com/foo.zip",
+				Archive:        "zip",
+				ArchivePath:    "bin/foo",
+				ArchiveMaxSize: -1,
+			},
+			expectErr: true, // archiveMaxSize cannot be negative
+		},
+		{
+			step: PackageInstallStepFile{
+				Url:            "https://example.com/foo.zip",
+				Archive:        "zip",
+				ArchivePath:    "bin/foo",
+				ArchiveMaxSize: maxArchiveSizeCeiling + 1,
+			},
+			expectErr: true, // archiveMaxSize exceeds ceiling
+		},
 	}
 	cfg := newArchiveTestConfig(t)
 	for _, testDef := range testDefs {
@@ -99,8 +137,9 @@ func TestPackageInstallStepFileValidate(t *testing.T) {
 	}
 }
 
-// TestPackageInstallStepFileInstallArchiveZip checks that one binary is selected
-// from a ZIP archive, installed with its content, and linked on activation.
+// TestPackageInstallStepFileInstallArchiveZip checks that one binary is
+// selected from a ZIP archive, installed with its content, and linked on
+// activation.
 func TestPackageInstallStepFileInstallArchiveZip(t *testing.T) {
 	cfg := newArchiveTestConfig(t)
 	pkgSourceDir := t.TempDir()
@@ -151,6 +190,103 @@ func TestPackageInstallStepFileInstallArchiveZip(t *testing.T) {
 			"symlink target mismatch\n  got: %s\n  expected: %s",
 			linkTarget,
 			writtenPath,
+		)
+	}
+}
+
+// TestPackageInstallStepFileActivateTemplatedFilename checks that activate()
+// symlinks to the same rendered path install() wrote the file at, when
+// filename contains a template expression. Regression test for a bug where
+// activate() built the symlink source from the raw, un-rendered filename
+// while the symlink destination used the rendered one, producing a dangling
+// symlink for any package using a per-OS/ARCH templated filename.
+func TestPackageInstallStepFileActivateTemplatedFilename(t *testing.T) {
+	cfg := newArchiveTestConfig(t)
+	cfg.Template = cfg.Template.WithVars(
+		map[string]any{
+			"System": map[string]string{
+				"OS": "linux",
+			},
+		},
+	)
+	step := &PackageInstallStepFile{
+		Filename: "{{ .System.OS }}-mybinary",
+		Content:  testArchiveFileContent,
+		Binary:   true,
+		Mode:     0o755,
+	}
+	if err := step.install(cfg, "test-1.0.0-testctx", ""); err != nil {
+		t.Fatalf("install failed: %s", err)
+	}
+
+	writtenPath := filepath.Join(
+		cfg.DataDir,
+		"test-1.0.0-testctx",
+		"linux-mybinary",
+	)
+	if _, err := os.Stat(writtenPath); err != nil {
+		t.Fatalf("expected installed file at %s: %s", writtenPath, err)
+	}
+
+	if err := step.activate(cfg, "test-1.0.0-testctx"); err != nil {
+		t.Fatalf("activate failed: %s", err)
+	}
+	binPath := filepath.Join(cfg.BinDir, "linux-mybinary")
+	linkTarget, err := os.Readlink(binPath)
+	if err != nil {
+		t.Fatalf("unexpected error reading symlink: %s", err)
+	}
+	if linkTarget != writtenPath {
+		t.Fatalf(
+			"symlink target mismatch\n  got: %s\n  expected: %s",
+			linkTarget,
+			writtenPath,
+		)
+	}
+}
+
+// TestPackageInstallStepFileUninstallTemplatedFilename checks that
+// uninstall() removes the same rendered path install() wrote the file at,
+// when filename contains a template expression. Regression test for a bug
+// where uninstall() built the delete path from the raw, un-rendered
+// filename, so the actual rendered file (e.g. binary-linux) was never
+// removed - os.Remove silently no-ops on the literal, nonexistent
+// "{{ .System.OS }}"-suffixed path instead of erroring.
+func TestPackageInstallStepFileUninstallTemplatedFilename(t *testing.T) {
+	cfg := newArchiveTestConfig(t)
+	cfg.Template = cfg.Template.WithVars(
+		map[string]any{
+			"System": map[string]string{
+				"OS": "linux",
+			},
+		},
+	)
+	step := &PackageInstallStepFile{
+		Filename: "{{ .System.OS }}-mybinary",
+		Content:  testArchiveFileContent,
+		Binary:   true,
+		Mode:     0o755,
+	}
+	if err := step.install(cfg, "test-1.0.0-testctx", ""); err != nil {
+		t.Fatalf("install failed: %s", err)
+	}
+	writtenPath := filepath.Join(
+		cfg.DataDir,
+		"test-1.0.0-testctx",
+		"linux-mybinary",
+	)
+	if _, err := os.Stat(writtenPath); err != nil {
+		t.Fatalf("expected installed file at %s: %s", writtenPath, err)
+	}
+
+	if err := step.uninstall(cfg, "test-1.0.0-testctx"); err != nil {
+		t.Fatalf("uninstall failed: %s", err)
+	}
+	if _, err := os.Stat(writtenPath); !os.IsNotExist(err) {
+		t.Fatalf(
+			"expected rendered file %s to be removed by uninstall, stat err: %v",
+			writtenPath,
+			err,
 		)
 	}
 }
@@ -266,13 +402,15 @@ func TestPackageInstallStepFileInstallUrlArchive(t *testing.T) {
 	tarGzData := buildTestTarGz(t, map[string]string{
 		"mybinary": testArchiveFileContent,
 	})
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/releases/mybinary-linux-amd64.tar.gz" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.Write(tarGzData) //nolint:errcheck
-	}))
+	srv := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/releases/mybinary-linux-amd64.tar.gz" {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.Write(tarGzData) //nolint:errcheck
+		}),
+	)
 	defer srv.Close()
 
 	cfg := newArchiveTestConfig(t)
@@ -286,10 +424,11 @@ func TestPackageInstallStepFileInstallUrlArchive(t *testing.T) {
 	)
 
 	step := &PackageInstallStepFile{
-		Filename:    "mybinary",
-		Binary:      true,
-		Mode:        0o755,
-		Url:         srv.URL + "/releases/mybinary-{{ .System.OS }}-{{ .System.ARCH }}.tar.gz",
+		Filename: "mybinary",
+		Binary:   true,
+		Mode:     0o755,
+		Url: srv.URL +
+			"/releases/mybinary-{{ .System.OS }}-{{ .System.ARCH }}.tar.gz",
 		Archive:     "tar.gz",
 		ArchivePath: "mybinary",
 	}
@@ -337,9 +476,11 @@ func TestPackageInstallStepFileInstallUrlDownloadSizeLimit(t *testing.T) {
 		maxDownloadSize = origMaxDownloadSize
 	})
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(strings.Repeat("x", 100))) //nolint:errcheck
-	}))
+	srv := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(strings.Repeat("x", 100))) //nolint:errcheck
+		}),
+	)
 	defer srv.Close()
 
 	cfg := newArchiveTestConfig(t)
@@ -355,6 +496,68 @@ func TestPackageInstallStepFileInstallUrlDownloadSizeLimit(t *testing.T) {
 	writtenPath := filepath.Join(cfg.DataDir, "test-1.0.0-testctx", "mybinary")
 	if _, statErr := os.Stat(writtenPath); statErr == nil {
 		t.Fatal("expected no file to be written for oversized download")
+	}
+}
+
+// TestPackageInstallStepFileInstallUrlDownloadTimeout checks that install
+// aborts a url-sourced download once it exceeds downloadTimeout, instead of
+// hanging indefinitely against a slow or stalling server. install() is run
+// in a goroutine under a bounded watchdog: without the production timeout
+// in place, the test server's handler blocks forever (it's only released
+// by closeBlock, which a broken fix would never let this test reach), so a
+// direct, synchronous call would hang until the whole test binary's global
+// timeout instead of failing this test with a clear message.
+func TestPackageInstallStepFileInstallUrlDownloadTimeout(t *testing.T) {
+	origDownloadTimeout := downloadTimeout
+	downloadTimeout = 10 * time.Millisecond
+	t.Cleanup(func() {
+		downloadTimeout = origDownloadTimeout
+	})
+
+	blockCh := make(chan struct{})
+	var closeBlockOnce sync.Once
+	closeBlock := func() { closeBlockOnce.Do(func() { close(blockCh) }) }
+	srv := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			<-blockCh
+		}),
+	)
+	defer func() {
+		closeBlock()
+		srv.Close()
+	}()
+
+	cfg := newArchiveTestConfig(t)
+	step := &PackageInstallStepFile{
+		Filename: "mybinary",
+		Url:      srv.URL + "/mybinary",
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- step.install(cfg, "test-1.0.0-testctx", "")
+	}()
+
+	var err error
+	select {
+	case err = <-errCh:
+	case <-time.After(5 * time.Second):
+		closeBlock()
+		t.Fatal(
+			"install() did not return within the watchdog window; " +
+				"the production download timeout does not appear to be enforced",
+		)
+	}
+	if err == nil {
+		t.Fatal("expected error for a download exceeding the timeout, got nil")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected a context.DeadlineExceeded error, got: %v", err)
+	}
+
+	writtenPath := filepath.Join(cfg.DataDir, "test-1.0.0-testctx", "mybinary")
+	if _, statErr := os.Stat(writtenPath); statErr == nil {
+		t.Fatal("expected no file to be written for a timed-out download")
 	}
 }
 
@@ -410,10 +613,12 @@ func TestPackageInstallStepFileInstallArchivePathTemplated(t *testing.T) {
 func TestPackageInstallStepFileInstallUrlTemplated(t *testing.T) {
 	const expectedContent = "binary content"
 	var requestedPath string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestedPath = r.URL.Path
-		w.Write([]byte(expectedContent)) //nolint:errcheck
-	}))
+	srv := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestedPath = r.URL.Path
+			w.Write([]byte(expectedContent)) //nolint:errcheck
+		}),
+	)
 	defer srv.Close()
 
 	cfg := newArchiveTestConfig(t)
@@ -495,8 +700,126 @@ func TestPackageInstallStepFileInstallSourceArchiveSizeLimit(t *testing.T) {
 	}
 }
 
-// TestPackageInstallStepFileInstallArchiveModePreserved checks that the requested
-// file permissions are applied to the binary extracted from an archive.
+// TestPackageInstallStepFileInstallArchiveMaxSizeOverride checks that a
+// package-level archiveMaxSize is actually applied to extraction, by setting
+// it below the size of an entry that would otherwise pass under the default
+// maxArchiveEntrySize.
+func TestPackageInstallStepFileInstallArchiveMaxSizeOverride(t *testing.T) {
+	cfg := newArchiveTestConfig(t)
+	pkgSourceDir := t.TempDir()
+	tarGzPath := filepath.Join(pkgSourceDir, "release.tar.gz")
+	tarGzData := buildTestTarGz(t, map[string]string{
+		"mybinary": testArchiveFileContent,
+	})
+	if err := os.WriteFile(tarGzPath, tarGzData, 0o644); err != nil {
+		t.Fatalf("unexpected error writing test tar.gz: %s", err)
+	}
+
+	step := &PackageInstallStepFile{
+		Filename:       "mybinary",
+		Source:         "release.tar.gz",
+		Archive:        "tar.gz",
+		ArchivePath:    "mybinary",
+		ArchiveMaxSize: int64(len(testArchiveFileContent)) - 1,
+	}
+	packagePath := filepath.Join(pkgSourceDir, "test-1.0.0.yaml")
+	err := step.install(cfg, "test-1.0.0-testctx", packagePath)
+	if err == nil {
+		t.Fatal("expected error from archiveMaxSize override, got nil")
+	}
+
+	writtenPath := filepath.Join(cfg.DataDir, "test-1.0.0-testctx", "mybinary")
+	if _, statErr := os.Stat(writtenPath); statErr == nil {
+		t.Fatal(
+			"expected no file to be written when archiveMaxSize is exceeded",
+		)
+	}
+}
+
+// TestPackageInstallStepFileInstallArchiveMaxSizeAllowsLargerEntry checks
+// that raising archiveMaxSize permits extracting an entry that exceeds the
+// default maxArchiveEntrySize, proving the override actually reaches the
+// extraction path rather than the default silently still applying. It lowers
+// maxArchiveEntrySize itself so the "large" entry can stay tiny.
+func TestPackageInstallStepFileInstallArchiveMaxSizeAllowsLargerEntry(
+	t *testing.T,
+) {
+	origMaxArchiveEntrySize := maxArchiveEntrySize
+	maxArchiveEntrySize = 10
+	t.Cleanup(func() {
+		maxArchiveEntrySize = origMaxArchiveEntrySize
+	})
+
+	cfg := newArchiveTestConfig(t)
+	pkgSourceDir := t.TempDir()
+	tarGzPath := filepath.Join(pkgSourceDir, "release.tar.gz")
+	tarGzData := buildTestTarGz(t, map[string]string{
+		"mybinary": testArchiveFileContent, // 21 bytes, exceeds the lowered default
+	})
+	if err := os.WriteFile(tarGzPath, tarGzData, 0o644); err != nil {
+		t.Fatalf("unexpected error writing test tar.gz: %s", err)
+	}
+
+	step := &PackageInstallStepFile{
+		Filename:       "mybinary",
+		Source:         "release.tar.gz",
+		Archive:        "tar.gz",
+		ArchivePath:    "mybinary",
+		ArchiveMaxSize: 4096,
+	}
+	packagePath := filepath.Join(pkgSourceDir, "test-1.0.0.yaml")
+	if err := step.install(cfg, "test-1.0.0-testctx", packagePath); err != nil {
+		t.Fatalf("install failed despite archiveMaxSize override: %s", err)
+	}
+
+	writtenPath := filepath.Join(cfg.DataDir, "test-1.0.0-testctx", "mybinary")
+	content, err := os.ReadFile(writtenPath)
+	if err != nil {
+		t.Fatalf("unexpected error reading installed file: %s", err)
+	}
+	if string(content) != testArchiveFileContent {
+		t.Fatal("installed content did not match the archive entry")
+	}
+}
+
+// TestPackageInstallStepFileInstallArchiveMaxSizeDefaultStillApplies checks
+// that without an override, an entry exceeding the (lowered, for the test)
+// default maxArchiveEntrySize is still rejected, so the prior test's success
+// is actually due to the override and not a bypassed check.
+func TestPackageInstallStepFileInstallArchiveMaxSizeDefaultStillApplies(
+	t *testing.T,
+) {
+	origMaxArchiveEntrySize := maxArchiveEntrySize
+	maxArchiveEntrySize = 10
+	t.Cleanup(func() {
+		maxArchiveEntrySize = origMaxArchiveEntrySize
+	})
+
+	cfg := newArchiveTestConfig(t)
+	pkgSourceDir := t.TempDir()
+	tarGzPath := filepath.Join(pkgSourceDir, "release.tar.gz")
+	tarGzData := buildTestTarGz(t, map[string]string{
+		"mybinary": testArchiveFileContent, // 21 bytes, exceeds the lowered default
+	})
+	if err := os.WriteFile(tarGzPath, tarGzData, 0o644); err != nil {
+		t.Fatalf("unexpected error writing test tar.gz: %s", err)
+	}
+
+	step := &PackageInstallStepFile{
+		Filename:    "mybinary",
+		Source:      "release.tar.gz",
+		Archive:     "tar.gz",
+		ArchivePath: "mybinary",
+	}
+	packagePath := filepath.Join(pkgSourceDir, "test-1.0.0.yaml")
+	if err := step.install(cfg, "test-1.0.0-testctx", packagePath); err == nil {
+		t.Fatal("expected error without archiveMaxSize override, got nil")
+	}
+}
+
+// TestPackageInstallStepFileInstallArchiveModePreserved checks that the
+// requested file permissions are applied to the binary extracted from an
+// archive.
 func TestPackageInstallStepFileInstallArchiveModePreserved(t *testing.T) {
 	cfg := newArchiveTestConfig(t)
 	pkgSourceDir := t.TempDir()
