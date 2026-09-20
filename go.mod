@@ -1,6 +1,6 @@
 module github.com/blinklabs-io/cardano-up
 
-go 1.25.7
+go 1.26.0
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
@@ -9,7 +9,7 @@ require (
 	github.com/docker/go-connections v0.8.1
 	github.com/hashicorp/go-version v1.9.0
 	github.com/spf13/cobra v1.10.2
-	golang.org/x/sys v0.47.0
+	golang.org/x/sys v0.48.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
