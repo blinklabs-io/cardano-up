@@ -17,6 +17,7 @@ var runAttestationVerification = func(
 	artifactPath string,
 	repository string,
 ) ([]byte, error) {
+	// #nosec G204 -- arguments are passed directly to gh without shell interpretation.
 	cmd := exec.CommandContext(ctx, "gh", attestationVerificationArgs(artifactPath, repository)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -105,5 +106,21 @@ func githubReleaseRepository(rawURL string) string {
 	if len(parts) < 6 || parts[2] != "releases" || parts[3] != "download" {
 		return ""
 	}
+	if !validGitHubRepositoryPart(parts[0]) || !validGitHubRepositoryPart(parts[1]) {
+		return ""
+	}
 	return parts[0] + "/" + parts[1]
+}
+
+func validGitHubRepositoryPart(part string) bool {
+	if part == "" || part == "." || part == ".." || part[0] == '-' {
+		return false
+	}
+	for _, char := range part {
+		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') &&
+			(char < '0' || char > '9') && char != '-' && char != '_' && char != '.' {
+			return false
+		}
+	}
+	return true
 }

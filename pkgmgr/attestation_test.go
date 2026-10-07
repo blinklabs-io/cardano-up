@@ -38,6 +38,7 @@ func TestGitHubReleaseRepository(t *testing.T) {
 		{url: "https://example.com/releases/download/v1.2.3/cardano-up"},
 		{url: "https://github.com/blinklabs-io/cardano-up/releases/tag/v1.2.3"},
 		{url: "https://github.com/blinklabs-io/cardano-up"},
+		{url: "https://github.com/--repo/attacker/releases/download/v1/app"},
 	}
 	for _, testCase := range testCases {
 		if got := githubReleaseRepository(testCase.url); got != testCase.want {
