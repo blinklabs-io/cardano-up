@@ -882,7 +882,7 @@ func (p *PackageManager) registeredPorts(
 	contextName string,
 	pkgName string,
 ) PackagePortRegistry {
-	if len(p.state.PortRegistry) == 0 {
+	if p.state == nil || len(p.state.PortRegistry) == 0 {
 		return nil
 	}
 	contextRegistry, ok := p.state.PortRegistry[contextName]
