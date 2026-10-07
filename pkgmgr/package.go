@@ -16,6 +16,8 @@ package pkgmgr
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -56,6 +58,7 @@ type Package struct {
 	PostInstallNotes    string               `yaml:"postInstallNotes,omitempty"`
 	Options             []PackageOption      `yaml:"options,omitempty"`
 	Outputs             []PackageOutput      `yaml:"outputs,omitempty"`
+	Ports               []string             `yaml:"ports,omitempty"`
 	filePath            string
 }
 
@@ -156,6 +159,11 @@ func (p Package) install(
 	registeredPorts PackagePortRegistry,
 ) (string, map[string]string, PackagePortRegistry, error) {
 	cfg = p.withPackageTemplateVars(cfg, context, opts)
+	registeredPorts, err := p.allocatePorts(registeredPorts)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	cfg = cfgWithPorts(cfg, registeredPorts)
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	pkgCacheDir := filepath.Join(
 		cfg.CacheDir,
@@ -260,6 +268,7 @@ func (p Package) install(
 	if err != nil {
 		return "", nil, nil, err
 	}
+	retPorts = mergePackagePortRegistries(registeredPorts, retPorts)
 	cfg.Template = cfg.Template.WithVars(
 		map[string]any{
 			"Ports": retPorts,
@@ -361,6 +370,56 @@ func (p Package) currentPorts(
 		retPorts[shortContainerName] = tmpPortsContainer
 	}
 	return retPorts, nil
+}
+
+const nativePortService = "native"
+
+func (p Package) allocatePorts(registered PackagePortRegistry) (PackagePortRegistry, error) {
+	ret := clonePackagePortRegistry(registered)
+	if ret == nil {
+		ret = make(PackagePortRegistry)
+	}
+	registeredNativePorts := ret[nativePortService]
+	nativePorts := make(ServicePortMap, len(p.Ports))
+	for _, name := range p.Ports {
+		if name == "" || nativePorts[name] != "" {
+			continue
+		}
+		if port := registeredNativePorts[name]; port != "" {
+			nativePorts[name] = port
+			continue
+		}
+		port, err := allocateEphemeralPort("tcp")
+		if err != nil {
+			return nil, fmt.Errorf("failed to allocate native port %q: %w", name, err)
+		}
+		nativePorts[name] = port
+	}
+	if len(nativePorts) > 0 {
+		ret[nativePortService] = nativePorts
+	} else {
+		delete(ret, nativePortService)
+	}
+	return ret, nil
+}
+
+func mergePackagePortRegistries(
+	base PackagePortRegistry,
+	current PackagePortRegistry,
+) PackagePortRegistry {
+	ret := clonePackagePortRegistry(base)
+	if ret == nil {
+		ret = make(PackagePortRegistry)
+	}
+	for service, ports := range current {
+		ret[service] = cloneServicePortMap(ports)
+	}
+	return ret
+}
+
+func cfgWithPorts(cfg Config, ports PackagePortRegistry) Config {
+	cfg.Template = cfg.Template.WithVars(map[string]any{"Ports": ports})
+	return cfg
 }
 
 func (p Package) renderOutputs(
@@ -597,6 +656,16 @@ func (p Package) validate(cfg Config) error {
 			"package did not have expected file path: %s",
 			expectedFilePath,
 		)
+	}
+	seenPorts := make(map[string]struct{}, len(p.Ports))
+	for _, port := range p.Ports {
+		if port == "" {
+			return errors.New("native port names cannot be empty")
+		}
+		if _, ok := seenPorts[port]; ok {
+			return fmt.Errorf("duplicate native port name %q", port)
+		}
+		seenPorts[port] = struct{}{}
 	}
 	// Validate install steps
 	for _, installStep := range p.InstallSteps {
@@ -1221,15 +1290,16 @@ func (p *PackageInstallStepDocker) deactivate(
 }
 
 type PackageInstallStepFile struct {
-	Binary         bool        `yaml:"binary"`
-	Filename       string      `yaml:"filename"`
-	Source         string      `yaml:"source"`
-	Content        string      `yaml:"content"`
-	Url            string      `yaml:"url"`
-	Mode           fs.FileMode `yaml:"mode,omitempty"`
-	Archive        string      `yaml:"archive,omitempty"`
-	ArchivePath    string      `yaml:"archivePath,omitempty"`
-	ArchiveMaxSize int64       `yaml:"archiveMaxSize,omitempty"`
+	Binary         bool              `yaml:"binary"`
+	Filename       string            `yaml:"filename"`
+	Source         string            `yaml:"source"`
+	Content        string            `yaml:"content"`
+	Url            string            `yaml:"url"`
+	Mode           fs.FileMode       `yaml:"mode,omitempty"`
+	Archive        string            `yaml:"archive,omitempty"`
+	ArchivePath    string            `yaml:"archivePath,omitempty"`
+	ArchiveMaxSize int64             `yaml:"archiveMaxSize,omitempty"`
+	SHA256         map[string]string `yaml:"sha256,omitempty"`
 }
 
 func (p *PackageInstallStepFile) validate(cfg Config) error {
@@ -1238,6 +1308,17 @@ func (p *PackageInstallStepFile) validate(cfg Config) error {
 		return errors.New(
 			"packages must provide content, source, or url for file install types",
 		)
+	}
+	if len(p.SHA256) > 0 && (p.Url == "" || p.Content != "" || p.Source != "") {
+		return errors.New("sha256 requires a URL source")
+	}
+	for platform, digest := range p.SHA256 {
+		if platform == "" {
+			return errors.New("sha256 platform keys cannot be empty")
+		}
+		if err := validateSHA256(digest); err != nil {
+			return fmt.Errorf("invalid sha256 digest for platform %q: %w", platform, err)
+		}
 	}
 	if p.Archive != "" {
 		if p.Content != "" {
@@ -1380,7 +1461,7 @@ func (p *PackageInstallStepFile) resolveContent(
 		if err != nil {
 			return nil, err
 		}
-		if u.Scheme == "" || u.Host == "" {
+		if strings.ToLower(u.Scheme) != "https" || u.Host == "" {
 			return nil, errors.New("invalid URL given")
 		}
 
@@ -1391,7 +1472,21 @@ func (p *PackageInstallStepFile) resolveContent(
 		if err != nil {
 			return nil, err
 		}
-		resp, err := http.DefaultClient.Do(req) //nolint:gosec // URL is validated above
+		client := *http.DefaultClient
+		originalCheckRedirect := client.CheckRedirect
+		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			if strings.ToLower(req.URL.Scheme) != "https" {
+				return errors.New("URL redirects must use HTTPS")
+			}
+			if originalCheckRedirect != nil {
+				return originalCheckRedirect(req, via)
+			}
+			if len(via) >= 10 {
+				return errors.New("stopped after 10 redirects")
+			}
+			return nil
+		}
+		resp, err := client.Do(req) //nolint:gosec // URL is validated above
 		if err != nil {
 			return nil, err
 		}
@@ -1399,12 +1494,25 @@ func (p *PackageInstallStepFile) resolveContent(
 			return nil, fmt.Errorf("nil response for URL: %s", tmpUrl)
 		}
 		defer resp.Body.Close()
+		if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+			return nil, fmt.Errorf("download %q returned HTTP status %s", tmpUrl, resp.Status)
+		}
 		respBody, err := readArchiveEntry(resp.Body, tmpUrl, maxDownloadSize)
 		if err != nil {
 			return nil, fmt.Errorf("failed to download %q: %w", tmpUrl, err)
 		}
 
 		fileContent = respBody
+		if len(p.SHA256) > 0 {
+			platform := runtime.GOOS + "-" + runtime.GOARCH
+			expected, ok := p.SHA256[platform]
+			if !ok {
+				return nil, fmt.Errorf("no sha256 digest configured for platform %q", platform)
+			}
+			if err := verifySHA256(respBody, expected); err != nil {
+				return nil, fmt.Errorf("failed to verify download %q: %w", tmpUrl, err)
+			}
+		}
 	} else {
 		return nil, errors.New(
 			"packages must provide content, source, or url for file install types",
@@ -1532,13 +1640,14 @@ func (p *PackageInstallStepFile) deactivate(cfg Config, pkgName string) error {
 // rendered defaults without clobbering a config file the user has hand-edited
 // since the initial install. See issue #567.
 type PackageInstallStepConfig struct {
-	Filename    string      `yaml:"filename"`
-	Source      string      `yaml:"source,omitempty"`
-	Content     string      `yaml:"content,omitempty"`
-	Url         string      `yaml:"url,omitempty"`
-	Mode        fs.FileMode `yaml:"mode,omitempty"`
-	Archive     string      `yaml:"archive,omitempty"`
-	ArchivePath string      `yaml:"archivePath,omitempty"`
+	Filename    string            `yaml:"filename"`
+	Source      string            `yaml:"source,omitempty"`
+	Content     string            `yaml:"content,omitempty"`
+	Url         string            `yaml:"url,omitempty"`
+	Mode        fs.FileMode       `yaml:"mode,omitempty"`
+	Archive     string            `yaml:"archive,omitempty"`
+	ArchivePath string            `yaml:"archivePath,omitempty"`
+	SHA256      map[string]string `yaml:"sha256,omitempty"`
 }
 
 // asFile adapts this config step to a PackageInstallStepFile so it can reuse
@@ -1550,7 +1659,27 @@ func (p *PackageInstallStepConfig) asFile() *PackageInstallStepFile {
 		Url:         p.Url,
 		Archive:     p.Archive,
 		ArchivePath: p.ArchivePath,
+		SHA256:      p.SHA256,
 	}
+}
+
+func verifySHA256(content []byte, expected string) error {
+	if err := validateSHA256(expected); err != nil {
+		return err
+	}
+	actual := sha256.Sum256(content)
+	if !strings.EqualFold(hex.EncodeToString(actual[:]), expected) {
+		return errors.New("sha256 digest mismatch")
+	}
+	return nil
+}
+
+func validateSHA256(expected string) error {
+	digest, err := hex.DecodeString(expected)
+	if err != nil || len(digest) != sha256.Size {
+		return errors.New("digest must be 64 hexadecimal characters")
+	}
+	return nil
 }
 
 func (p *PackageInstallStepConfig) validate(cfg Config) error {

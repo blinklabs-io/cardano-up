@@ -45,6 +45,18 @@ func newArchiveTestConfig(t *testing.T) Config {
 	}
 }
 
+func newArchiveTLSServer(t *testing.T, handler http.Handler) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewTLSServer(handler)
+	originalClient := http.DefaultClient
+	http.DefaultClient = srv.Client()
+	t.Cleanup(func() {
+		http.DefaultClient = originalClient
+		srv.Close()
+	})
+	return srv
+}
+
 // TestPackageInstallStepFileValidate checks valid and invalid file-step archive
 // configurations, including missing inputs, paths, and unsupported formats.
 func TestPackageInstallStepFileValidate(t *testing.T) {
@@ -402,7 +414,7 @@ func TestPackageInstallStepFileInstallUrlArchive(t *testing.T) {
 	tarGzData := buildTestTarGz(t, map[string]string{
 		"mybinary": testArchiveFileContent,
 	})
-	srv := httptest.NewServer(
+	srv := newArchiveTLSServer(t,
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/releases/mybinary-linux-amd64.tar.gz" {
 				w.WriteHeader(http.StatusNotFound)
@@ -411,7 +423,6 @@ func TestPackageInstallStepFileInstallUrlArchive(t *testing.T) {
 			w.Write(tarGzData) //nolint:errcheck
 		}),
 	)
-	defer srv.Close()
 
 	cfg := newArchiveTestConfig(t)
 	cfg.Template = cfg.Template.WithVars(
@@ -476,12 +487,11 @@ func TestPackageInstallStepFileInstallUrlDownloadSizeLimit(t *testing.T) {
 		maxDownloadSize = origMaxDownloadSize
 	})
 
-	srv := httptest.NewServer(
+	srv := newArchiveTLSServer(t,
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(strings.Repeat("x", 100))) //nolint:errcheck
 		}),
 	)
-	defer srv.Close()
 
 	cfg := newArchiveTestConfig(t)
 	step := &PackageInstallStepFile{
@@ -509,7 +519,7 @@ func TestPackageInstallStepFileInstallUrlDownloadSizeLimit(t *testing.T) {
 // timeout instead of failing this test with a clear message.
 func TestPackageInstallStepFileInstallUrlDownloadTimeout(t *testing.T) {
 	origDownloadTimeout := downloadTimeout
-	downloadTimeout = 10 * time.Millisecond
+	downloadTimeout = 100 * time.Millisecond
 	t.Cleanup(func() {
 		downloadTimeout = origDownloadTimeout
 	})
@@ -517,15 +527,12 @@ func TestPackageInstallStepFileInstallUrlDownloadTimeout(t *testing.T) {
 	blockCh := make(chan struct{})
 	var closeBlockOnce sync.Once
 	closeBlock := func() { closeBlockOnce.Do(func() { close(blockCh) }) }
-	srv := httptest.NewServer(
+	srv := newArchiveTLSServer(t,
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			<-blockCh
 		}),
 	)
-	defer func() {
-		closeBlock()
-		srv.Close()
-	}()
+	defer closeBlock()
 
 	cfg := newArchiveTestConfig(t)
 	step := &PackageInstallStepFile{
@@ -613,13 +620,12 @@ func TestPackageInstallStepFileInstallArchivePathTemplated(t *testing.T) {
 func TestPackageInstallStepFileInstallUrlTemplated(t *testing.T) {
 	const expectedContent = "binary content"
 	var requestedPath string
-	srv := httptest.NewServer(
+	srv := newArchiveTLSServer(t,
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestedPath = r.URL.Path
 			w.Write([]byte(expectedContent)) //nolint:errcheck
 		}),
 	)
-	defer srv.Close()
 
 	cfg := newArchiveTestConfig(t)
 	cfg.Template = cfg.Template.WithVars(
