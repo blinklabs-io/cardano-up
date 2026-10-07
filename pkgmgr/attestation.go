@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -100,7 +101,7 @@ func verifyGitHubReleaseAttestation(ctx context.Context, releaseURL string, arti
 	}
 	parts := strings.SplitN(repository, "/", 2)
 	digest := sha256.Sum256(artifact)
-	endpoint := githubAttestationsAPI + url.PathEscape(parts[0]) + "/" + url.PathEscape(parts[1]) + "/attestations/sha256:" + fmt.Sprintf("%x", digest)
+	endpoint := githubAttestationsAPI + url.PathEscape(parts[0]) + "/" + url.PathEscape(parts[1]) + "/attestations/sha256:" + hex.EncodeToString(digest[:])
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return err
@@ -183,7 +184,7 @@ func downloadAttestationBundle(ctx context.Context, bundleURL string) ([]byte, e
 func verifyAttestationBundle(ctx context.Context, data []byte, repository string, digest [sha256.Size]byte) error {
 	decodedLen, err := snappy.DecodedLen(data)
 	if err != nil || decodedLen > maxAttestationJSON {
-		return fmt.Errorf("invalid or oversized compressed attestation bundle")
+		return errors.New("invalid or oversized compressed attestation bundle")
 	}
 	decoded, err := snappy.Decode(nil, data)
 	if err != nil {
