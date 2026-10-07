@@ -157,12 +157,22 @@ func (p Package) install(
 	opts map[string]bool,
 	runHooks bool,
 	registeredPorts PackagePortRegistry,
+	reservedPorts map[string]struct{},
 ) (string, map[string]string, PackagePortRegistry, error) {
 	cfg = p.withPackageTemplateVars(cfg, context, opts)
-	registeredPorts, err := p.allocatePorts(registeredPorts)
+	registeredPorts, portReservations, err := p.allocatePorts(
+		registeredPorts,
+		reservedPorts,
+	)
 	if err != nil {
 		return "", nil, nil, err
 	}
+	// Keep selected ports bound while install steps run, so they cannot be claimed before services start.
+	defer func() {
+		for _, listener := range portReservations {
+			_ = listener.Close()
+		}
+	}()
 	cfg = cfgWithPorts(cfg, registeredPorts)
 	pkgName := fmt.Sprintf("%s-%s-%s", p.Name, p.Version, context)
 	pkgCacheDir := filepath.Join(
@@ -260,6 +270,10 @@ func (p Package) install(
 	// preStart hook has somewhere useful to run. A package that seeds state
 	// its service reads on first boot needs both: the config rendered by its
 	// file steps, and a chance to act before that service starts.
+	for _, listener := range portReservations {
+		_ = listener.Close()
+	}
+	portReservations = nil
 	if err := p.startServices(cfg, context, runHooks); err != nil {
 		return "", nil, nil, err
 	}
@@ -374,33 +388,52 @@ func (p Package) currentPorts(
 
 const nativePortService = "native"
 
-func (p Package) allocatePorts(registered PackagePortRegistry) (PackagePortRegistry, error) {
+func (p Package) allocatePorts(
+	registered PackagePortRegistry,
+	reservedPorts map[string]struct{},
+) (PackagePortRegistry, []net.Listener, error) {
 	ret := clonePackagePortRegistry(registered)
 	if ret == nil {
 		ret = make(PackagePortRegistry)
 	}
+	excluded := make(map[string]struct{}, len(reservedPorts)+len(p.Ports))
+	for port := range reservedPorts {
+		excluded[port] = struct{}{}
+	}
 	registeredNativePorts := ret[nativePortService]
 	nativePorts := make(ServicePortMap, len(p.Ports))
+	var reservations []net.Listener
 	for _, name := range p.Ports {
 		if name == "" || nativePorts[name] != "" {
 			continue
 		}
 		if port := registeredNativePorts[name]; port != "" {
-			nativePorts[name] = port
-			continue
+			if _, reserved := excluded[port]; !reserved {
+				listener, err := reserveNativePort(port)
+				if err == nil {
+					nativePorts[name] = port
+					excluded[port] = struct{}{}
+					reservations = append(reservations, listener)
+					continue
+				}
+			}
 		}
-		port, err := allocateEphemeralPort("tcp")
+		port, listener, err := allocateNativePort(excluded)
 		if err != nil {
-			return nil, fmt.Errorf("failed to allocate native port %q: %w", name, err)
+			for _, reservation := range reservations {
+				_ = reservation.Close()
+			}
+			return nil, nil, fmt.Errorf("failed to allocate native port %q: %w", name, err)
 		}
 		nativePorts[name] = port
+		reservations = append(reservations, listener)
 	}
 	if len(nativePorts) > 0 {
 		ret[nativePortService] = nativePorts
 	} else {
 		delete(ret, nativePortService)
 	}
-	return ret, nil
+	return ret, reservations, nil
 }
 
 func mergePackagePortRegistries(
@@ -680,6 +713,12 @@ func (p Package) validate(cfg Config) error {
 			return ErrMultipleInstallMethods
 		}
 		if installStep.Docker != nil {
+			if len(p.Ports) > 0 && installStep.Docker.ContainerName == nativePortService {
+				return fmt.Errorf(
+					"Docker container name %q is reserved for native ports",
+					nativePortService,
+				)
+			}
 			if err := installStep.Docker.validate(cfg); err != nil {
 				return err
 			}
@@ -1461,7 +1500,7 @@ func (p *PackageInstallStepFile) resolveContent(
 		if err != nil {
 			return nil, err
 		}
-		if strings.ToLower(u.Scheme) != "https" || u.Host == "" {
+		if !allowedDownloadURL(u) || u.Host == "" {
 			return nil, errors.New("invalid URL given")
 		}
 
@@ -1475,8 +1514,8 @@ func (p *PackageInstallStepFile) resolveContent(
 		client := *http.DefaultClient
 		originalCheckRedirect := client.CheckRedirect
 		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-			if strings.ToLower(req.URL.Scheme) != "https" {
-				return errors.New("URL redirects must use HTTPS")
+			if !allowedDownloadURL(req.URL) {
+				return errors.New("URL redirects must use HTTPS or a private HTTP host")
 			}
 			if originalCheckRedirect != nil {
 				return originalCheckRedirect(req, via)
@@ -1513,6 +1552,9 @@ func (p *PackageInstallStepFile) resolveContent(
 				return nil, fmt.Errorf("failed to verify download %q: %w", tmpUrl, err)
 			}
 		}
+		if err := verifyGitHubReleaseAttestation(ctx, tmpUrl, respBody); err != nil {
+			return nil, fmt.Errorf("failed to verify download %q: %w", tmpUrl, err)
+		}
 	} else {
 		return nil, errors.New(
 			"packages must provide content, source, or url for file install types",
@@ -1538,6 +1580,22 @@ func (p *PackageInstallStepFile) resolveContent(
 		}
 	}
 	return fileContent, nil
+}
+
+func allowedDownloadURL(u *url.URL) bool {
+	switch strings.ToLower(u.Scheme) {
+	case "https":
+		return true
+	case "http":
+		host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+		if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+			return true
+		}
+		ip := net.ParseIP(host)
+		return ip != nil && (ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast())
+	default:
+		return false
+	}
 }
 
 func (p *PackageInstallStepFile) uninstall(cfg Config, pkgName string) error {

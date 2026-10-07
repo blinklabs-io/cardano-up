@@ -9,11 +9,8 @@ Place the downloaded binary in `/usr/local/bin`, `~/.local/bin`, or some other c
 that location has been added to your `$PATH`. Our recommendation is to use `~/.local/bin` as that is where this
 tool will install wrapper scripts.
 
-To verify a downloaded release binary's GitHub attestation, run:
-
-```bash
-gh attestation verify ./cardano-up --repo blinklabs-io/cardano-up --signer-repo blinklabs-io/actions
-```
+GitHub release assets are checked against their published build attestations
+automatically before installation.
 
 NOTE: On MacOS, you will need to allow `/` to be used by Docker Desktop
 
@@ -306,11 +303,12 @@ The package manifest format is a YAML file with the following fields:
 | `tags` | | Tags for the package |
 | `options` | | Install-time options |
 | `outputs` | | Package outputs |
-| `ports` | | Names of native service ports to allocate dynamically. Use `.Ports.native.<name>` in templates and scripts |
+| `ports` | | Names of native service ports to allocate dynamically. Use `{{ .Ports.native.<name> }}` for identifier names or `{{ index .Ports.native "name-with-punctuation" }}` in templates and scripts |
 
-For example, declaring `ports: [api]` makes the allocated host port available as
-`{{ .Ports.native.api }}` in package scripts and output values. Allocations are
-retained for each context.
+For example, declaring `ports: [api, api-http]` makes the allocated host ports
+available as `{{ .Ports.native.api }}` and
+`{{ index .Ports.native "api-http" }}` in package scripts and output values.
+Allocations are retained for each context.
 
 ##### `installSteps`
 
@@ -376,7 +374,7 @@ installSteps:
 | `filename` | x | Name of destination file. This will be created within the package's data directory |
 | `source` | | Path to source file. This should be a relative path within the package manifest directory. Used only if `content` is not provided |
 | `content` | | Inline content for destination file. Takes precedence over `source` and `url` if more than one is provided |
-| `url` | | HTTPS URL to fetch destination file content from. Used only if `content` and `source` are not provided. Supports templating (e.g. `{{ .System.OS }}` and `{{ .System.ARCH }}`) |
+| `url` | | HTTPS URL, or HTTP URL on localhost or a private network, to fetch destination file content from. Used only if `content` and `source` are not provided. Supports templating (e.g. `{{ .System.OS }}` and `{{ .System.ARCH }}`) |
 | `sha256` | | Optional map of `OS-ARCH` to the expected SHA-256 digest of the downloaded content, before archive extraction |
 | `mode` | | Octal file mode for destination file |
 | `binary` | | Whether this file is an executable file for the package (expects bool, defaults to `false`) |

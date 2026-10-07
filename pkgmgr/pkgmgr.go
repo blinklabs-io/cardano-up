@@ -272,12 +272,18 @@ func (p *PackageManager) Install(pkgs ...string) error {
 		maps.Copy(tmpPkgOpts, installPkg.Options)
 		// Install package
 		registeredPorts := p.registeredPorts(contextName, installPkg.Install.Name)
+		reservedNativePorts := reservedNativePorts(
+			p.state.PortRegistry,
+			contextName,
+			installPkg.Install.Name,
+		)
 		notes, outputs, usedPorts, err := installPkg.Install.install(
 			p.config,
 			contextName,
 			tmpPkgOpts,
 			true,
 			registeredPorts,
+			reservedNativePorts,
 		)
 		if err != nil {
 			return err
@@ -370,6 +376,11 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 		// Capture options from existing package
 		pkgOpts := upgradePkg.Installed.Options
 		registeredPorts := p.registeredPorts(contextName, upgradePkg.Installed.Package.Name)
+		reservedNativePorts := reservedNativePorts(
+			p.state.PortRegistry,
+			contextName,
+			upgradePkg.Installed.Package.Name,
+		)
 		// Deactivate old package
 		deactivateCfg := upgradePkg.Installed.Package.withPackageTemplateVars(
 			p.config,
@@ -393,6 +404,7 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 			pkgOpts,
 			false,
 			registeredPorts,
+			reservedNativePorts,
 		)
 		if err != nil {
 			return err

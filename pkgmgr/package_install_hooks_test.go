@@ -97,7 +97,7 @@ func TestInstall_RunsPreStartHookAfterInstallSteps(t *testing.T) {
 		},
 	}
 
-	if _, _, _, err := pkg.install(cfg, "testctx", nil, true, nil); err != nil {
+	if _, _, _, err := pkg.install(cfg, "testctx", nil, true, nil, nil); err != nil {
 		t.Fatalf("install failed: %v", err)
 	}
 
@@ -135,7 +135,7 @@ func TestInstall_SkipsPreStartHookWhenHooksDisabled(t *testing.T) {
 		InstallSteps:   []PackageInstallStep{},
 	}
 
-	if _, _, _, err := pkg.install(cfg, "testctx", nil, false, nil); err != nil {
+	if _, _, _, err := pkg.install(cfg, "testctx", nil, false, nil, nil); err != nil {
 		t.Fatalf("install failed: %v", err)
 	}
 

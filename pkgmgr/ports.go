@@ -1,5 +1,10 @@
 package pkgmgr
 
+import (
+	"errors"
+	"net"
+)
+
 // Tracks host port allocations by context and package.
 type PortRegistry map[string]ContextPortRegistry
 
@@ -32,4 +37,52 @@ func clonePackagePortRegistry(src PackagePortRegistry) PackagePortRegistry {
 		dst[svc] = cloneServicePortMap(ports)
 	}
 	return dst
+}
+
+func reservedNativePorts(
+	registry PortRegistry,
+	currentContext string,
+	currentPackage string,
+) map[string]struct{} {
+	ret := make(map[string]struct{})
+	for contextName, contextRegistry := range registry {
+		for packageName, packageRegistry := range contextRegistry {
+			if contextName == currentContext && packageName == currentPackage {
+				continue
+			}
+			for _, port := range packageRegistry[nativePortService] {
+				if port != "" {
+					ret[port] = struct{}{}
+				}
+			}
+		}
+	}
+	return ret
+}
+
+func allocateNativePort(
+	reserved map[string]struct{},
+) (string, net.Listener, error) {
+	for range 32 {
+		listener, err := net.Listen("tcp", ":0")
+		if err != nil {
+			return "", nil, err
+		}
+		_, port, err := net.SplitHostPort(listener.Addr().String())
+		if err != nil {
+			_ = listener.Close()
+			return "", nil, err
+		}
+		if _, exists := reserved[port]; exists {
+			_ = listener.Close()
+			continue
+		}
+		reserved[port] = struct{}{}
+		return port, listener, nil
+	}
+	return "", nil, errors.New("failed to allocate an unreserved native port")
+}
+
+func reserveNativePort(port string) (net.Listener, error) {
+	return net.Listen("tcp", net.JoinHostPort("", port))
 }
