@@ -1552,7 +1552,7 @@ func (p *PackageInstallStepFile) resolveContent(
 				return nil, fmt.Errorf("failed to verify download %q: %w", tmpUrl, err)
 			}
 		}
-		if err := verifyGitHubReleaseAttestation(ctx, tmpUrl, respBody); err != nil {
+		if err := verifyGitHubReleaseAttestation(ctx, tmpUrl, respBody, cfg.Logger); err != nil {
 			return nil, fmt.Errorf("failed to verify download %q: %w", tmpUrl, err)
 		}
 	} else {

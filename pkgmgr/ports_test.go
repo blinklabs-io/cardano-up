@@ -11,9 +11,11 @@ func TestReservedNativePortsAcrossContexts(t *testing.T) {
 		"context-a": {
 			"same-package": {
 				nativePortService: {"api": "41001"},
+				"docker":          {"8080": "41004"},
 			},
 			"other-package": {
 				nativePortService: {"api": "41002"},
+				"docker":          {"8080": "41005"},
 			},
 		},
 		"context-b": {
@@ -24,7 +26,7 @@ func TestReservedNativePortsAcrossContexts(t *testing.T) {
 	}
 
 	got := reservedNativePorts(registry, "context-a", "same-package")
-	for _, port := range []string{"41002", "41003"} {
+	for _, port := range []string{"41002", "41003", "41004", "41005"} {
 		if _, ok := got[port]; !ok {
 			t.Errorf("expected saved native port %s to be reserved", port)
 		}

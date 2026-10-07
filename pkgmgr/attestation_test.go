@@ -4,15 +4,23 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
+
+type commandErrorWithExitCode int
+
+func (e commandErrorWithExitCode) Error() string { return "gh command failed" }
+
+func (e commandErrorWithExitCode) ExitCode() int { return int(e) }
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 	return f(r)
@@ -38,6 +46,33 @@ func TestGitHubReleaseRepository(t *testing.T) {
 	}
 }
 
+func TestAttestationVerificationArgs(t *testing.T) {
+	testCases := []struct {
+		name       string
+		repository string
+		want       []string
+	}{
+		{
+			name:       "Blink Labs release enforces trusted reusable workflow",
+			repository: "blinklabs-io/cardano-up",
+			want:       []string{"attestation", "verify", "artifact", "--repo", "blinklabs-io/cardano-up", "--signer-repo", "blinklabs-io/actions"},
+		},
+		{
+			name:       "third-party release uses its own repository identity",
+			repository: "example/project",
+			want:       []string{"attestation", "verify", "artifact", "--repo", "example/project"},
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			got := attestationVerificationArgs("artifact", testCase.repository)
+			if !reflect.DeepEqual(got, testCase.want) {
+				t.Fatalf("attestationVerificationArgs() = %v, want %v", got, testCase.want)
+			}
+		})
+	}
+}
+
 func TestVerifyGitHubReleaseAttestation(t *testing.T) {
 	original := runAttestationVerification
 	t.Cleanup(func() { runAttestationVerification = original })
@@ -60,9 +95,9 @@ func TestVerifyGitHubReleaseAttestation(t *testing.T) {
 			if string(got) != content {
 				t.Fatalf("unexpected artifact bytes %q", got)
 			}
-			return []byte(`[{"verificationResult":{}}]`), nil
+			return nil, nil
 		}
-		if err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte(content)); err != nil {
+		if err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte(content), slog.Default()); err != nil {
 			t.Fatalf("unexpected verification error: %s", err)
 		}
 	})
@@ -73,10 +108,9 @@ func TestVerifyGitHubReleaseAttestation(t *testing.T) {
 			string,
 			string,
 		) ([]byte, error) {
-			return []byte("No attestations found with predicate type: https://slsa.dev/provenance/v1"),
-				errors.New("gh returned no attestations")
+			return []byte("HTTP 404: Not Found"), errors.New("gh returned no attestations")
 		}
-		if err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte(content)); err != nil {
+		if err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte(content), slog.Default()); err != nil {
 			t.Fatalf("missing optional attestation should not fail: %s", err)
 		}
 	})
@@ -85,16 +119,16 @@ func TestVerifyGitHubReleaseAttestation(t *testing.T) {
 		runAttestationVerification = func(context.Context, string, string) ([]byte, error) {
 			return nil, &exec.Error{Name: "gh", Err: exec.ErrNotFound}
 		}
-		if err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte(content)); err != nil {
+		if err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte(content), slog.Default()); err != nil {
 			t.Fatalf("missing optional gh CLI should not fail: %s", err)
 		}
 	})
 
 	t.Run("gh authentication unavailable", func(t *testing.T) {
 		runAttestationVerification = func(context.Context, string, string) ([]byte, error) {
-			return []byte("You are not logged into any GitHub hosts. Run gh auth login."), errors.New("gh auth failed")
+			return nil, commandErrorWithExitCode(4)
 		}
-		if err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte(content)); err != nil {
+		if err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte(content), slog.Default()); err != nil {
 			t.Fatalf("missing optional gh authentication should not fail: %s", err)
 		}
 	})
@@ -107,7 +141,7 @@ func TestVerifyGitHubReleaseAttestation(t *testing.T) {
 		) ([]byte, error) {
 			return []byte("attestation signer did not match"), errors.New("verification failed")
 		}
-		if err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte(content)); err == nil {
+		if err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte(content), slog.Default()); err == nil {
 			t.Fatal("expected invalid release attestation to block installation")
 		}
 	})
@@ -121,7 +155,7 @@ func TestVerifyGitHubReleaseAttestation(t *testing.T) {
 			t.Fatal("unexpected attestation lookup for non-release URL")
 			return nil, nil
 		}
-		if err := verifyGitHubReleaseAttestation(context.Background(), "https://example.com/app", []byte(content)); err != nil {
+		if err := verifyGitHubReleaseAttestation(context.Background(), "https://example.com/app", []byte(content), slog.Default()); err != nil {
 			t.Fatalf("unexpected error for non-release URL: %s", err)
 		}
 	})
@@ -154,7 +188,7 @@ func TestPackageInstallVerifiesGitHubReleaseBeforeWriting(t *testing.T) {
 			if got, err := os.ReadFile(artifactPath); err != nil || string(got) != "release artifact" {
 				t.Fatalf("attestation checked wrong artifact: %q, %v", got, err)
 			}
-			return []byte(`[{"verificationResult":{}}]`), nil
+			return nil, nil
 		}
 		cfg := newArchiveTestConfig(t)
 		step := &PackageInstallStepFile{

@@ -47,12 +47,14 @@ func reservedNativePorts(
 	ret := make(map[string]struct{})
 	for contextName, contextRegistry := range registry {
 		for packageName, packageRegistry := range contextRegistry {
-			if contextName == currentContext && packageName == currentPackage {
-				continue
-			}
-			for _, port := range packageRegistry[nativePortService] {
-				if port != "" {
-					ret[port] = struct{}{}
+			for serviceName, servicePorts := range packageRegistry {
+				if contextName == currentContext && packageName == currentPackage && serviceName == nativePortService {
+					continue
+				}
+				for _, hostPort := range servicePorts {
+					if hostPort != "" {
+						ret[hostPort] = struct{}{}
+					}
 				}
 			}
 		}

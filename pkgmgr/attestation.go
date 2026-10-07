@@ -3,9 +3,9 @@ package pkgmgr
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/exec"
@@ -17,19 +17,7 @@ var runAttestationVerification = func(
 	artifactPath string,
 	repository string,
 ) ([]byte, error) {
-	cmd := exec.CommandContext(
-		ctx,
-		"gh",
-		"attestation",
-		"verify",
-		artifactPath,
-		"--repo",
-		repository,
-		"--signer-repo",
-		"blinklabs-io/actions",
-		"--format",
-		"json",
-	)
+	cmd := exec.CommandContext(ctx, "gh", attestationVerificationArgs(artifactPath, repository)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	output, err := cmd.Output()
@@ -39,10 +27,19 @@ var runAttestationVerification = func(
 	return output, err
 }
 
+func attestationVerificationArgs(artifactPath, repository string) []string {
+	args := []string{"attestation", "verify", artifactPath, "--repo", repository}
+	if strings.HasPrefix(repository, "blinklabs-io/") {
+		args = append(args, "--signer-repo", "blinklabs-io/actions")
+	}
+	return args
+}
+
 func verifyGitHubReleaseAttestation(
 	ctx context.Context,
 	rawURL string,
 	artifact []byte,
+	logger *slog.Logger,
 ) error {
 	repository := githubReleaseRepository(rawURL)
 	if repository == "" {
@@ -62,11 +59,16 @@ func verifyGitHubReleaseAttestation(
 	}
 
 	output, err := runAttestationVerification(ctx, file.Name(), repository)
-	if isMissingAttestationError(output) {
-		return nil
-	}
 	if err != nil {
-		if errors.Is(err, exec.ErrNotFound) || isUnavailableGitHubAuth(output) {
+		if isMissingAttestationError(output) {
+			return nil
+		}
+		if errors.Is(err, exec.ErrNotFound) {
+			logger.Warn("skipping GitHub release attestation verification: gh is not installed")
+			return nil
+		}
+		if commandExitCode(err) == 4 {
+			logger.Warn("skipping GitHub release attestation verification: gh is not authenticated")
 			return nil
 		}
 		return fmt.Errorf(
@@ -76,25 +78,22 @@ func verifyGitHubReleaseAttestation(
 			strings.TrimSpace(string(output)),
 		)
 	}
-	var verified []json.RawMessage
-	if err := json.Unmarshal(output, &verified); err != nil {
-		return fmt.Errorf("GitHub release attestation verification returned invalid JSON: %w", err)
-	}
-	if len(verified) == 0 {
-		return nil
-	}
 	return nil
 }
 
 func isMissingAttestationError(output []byte) bool {
-	return strings.Contains(strings.ToLower(string(output)), "no attestations found")
+	message := strings.ToLower(string(output))
+	return strings.Contains(message, "no attestations found") ||
+		strings.Contains(message, "404: not found") ||
+		strings.Contains(message, "404 not found")
 }
 
-func isUnavailableGitHubAuth(output []byte) bool {
-	message := strings.ToLower(string(output))
-	return strings.Contains(message, "not logged into") ||
-		strings.Contains(message, "authentication required") ||
-		strings.Contains(message, "gh auth login")
+func commandExitCode(err error) int {
+	var exitError interface{ ExitCode() int }
+	if errors.As(err, &exitError) {
+		return exitError.ExitCode()
+	}
+	return -1
 }
 
 func githubReleaseRepository(rawURL string) string {
