@@ -715,7 +715,7 @@ func (p Package) validate(cfg Config) error {
 		if installStep.Docker != nil {
 			if len(p.Ports) > 0 && installStep.Docker.ContainerName == nativePortService {
 				return fmt.Errorf(
-					"Docker container name %q is reserved for native ports",
+					"docker container name %q is reserved for native ports",
 					nativePortService,
 				)
 			}

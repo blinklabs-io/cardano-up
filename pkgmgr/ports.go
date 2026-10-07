@@ -64,7 +64,8 @@ func allocateNativePort(
 	reserved map[string]struct{},
 ) (string, net.Listener, error) {
 	for range 32 {
-		listener, err := net.Listen("tcp", ":0")
+		// Reserve across interfaces because native services may bind beyond loopback.
+		listener, err := net.Listen("tcp", ":0") // #nosec G102 -- reservation prevents port conflicts
 		if err != nil {
 			return "", nil, err
 		}
