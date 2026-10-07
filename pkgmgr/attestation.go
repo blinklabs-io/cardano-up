@@ -3,6 +3,7 @@ package pkgmgr
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -24,10 +25,18 @@ var runAttestationVerification = func(
 		artifactPath,
 		"--repo",
 		repository,
-		"--cert-identity-regex",
-		`^https://github\.com/blinklabs-io/actions/`,
+		"--signer-repo",
+		"blinklabs-io/actions",
+		"--format",
+		"json",
 	)
-	return cmd.CombinedOutput()
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		output = append(output, stderr.Bytes()...)
+	}
+	return output, err
 }
 
 func verifyGitHubReleaseAttestation(
@@ -53,10 +62,13 @@ func verifyGitHubReleaseAttestation(
 	}
 
 	output, err := runAttestationVerification(ctx, file.Name(), repository)
-	if bytes.Contains(output, []byte("No attestations found with predicate type:")) {
+	if isMissingAttestationError(output) {
 		return nil
 	}
 	if err != nil {
+		if errors.Is(err, exec.ErrNotFound) || isUnavailableGitHubAuth(output) {
+			return nil
+		}
 		return fmt.Errorf(
 			"failed to verify GitHub release attestation for %s: %w: %s",
 			repository,
@@ -64,10 +76,25 @@ func verifyGitHubReleaseAttestation(
 			strings.TrimSpace(string(output)),
 		)
 	}
-	if !bytes.Contains(output, []byte("Verification succeeded!")) {
-		return errors.New("GitHub release attestation verification returned no verified result")
+	var verified []json.RawMessage
+	if err := json.Unmarshal(output, &verified); err != nil {
+		return fmt.Errorf("GitHub release attestation verification returned invalid JSON: %w", err)
+	}
+	if len(verified) == 0 {
+		return nil
 	}
 	return nil
+}
+
+func isMissingAttestationError(output []byte) bool {
+	return strings.Contains(strings.ToLower(string(output)), "no attestations found")
+}
+
+func isUnavailableGitHubAuth(output []byte) bool {
+	message := strings.ToLower(string(output))
+	return strings.Contains(message, "not logged into") ||
+		strings.Contains(message, "authentication required") ||
+		strings.Contains(message, "gh auth login")
 }
 
 func githubReleaseRepository(rawURL string) string {

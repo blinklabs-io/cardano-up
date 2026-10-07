@@ -9,8 +9,10 @@ Place the downloaded binary in `/usr/local/bin`, `~/.local/bin`, or some other c
 that location has been added to your `$PATH`. Our recommendation is to use `~/.local/bin` as that is where this
 tool will install wrapper scripts.
 
-GitHub release assets are checked against their published build attestations
-automatically before installation.
+When the GitHub CLI (`gh`) is installed and authenticated, GitHub release assets
+are checked against their published build attestations before installation.
+Releases without an attestation remain installable; a published attestation
+that fails verification blocks installation.
 
 NOTE: On MacOS, you will need to allow `/` to be used by Docker Desktop
 

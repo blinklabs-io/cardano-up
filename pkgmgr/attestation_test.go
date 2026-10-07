@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -59,7 +60,7 @@ func TestVerifyGitHubReleaseAttestation(t *testing.T) {
 			if string(got) != content {
 				t.Fatalf("unexpected artifact bytes %q", got)
 			}
-			return []byte("Verification succeeded!"), nil
+			return []byte(`[{"verificationResult":{}}]`), nil
 		}
 		if err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte(content)); err != nil {
 			t.Fatalf("unexpected verification error: %s", err)
@@ -77,6 +78,24 @@ func TestVerifyGitHubReleaseAttestation(t *testing.T) {
 		}
 		if err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte(content)); err != nil {
 			t.Fatalf("missing optional attestation should not fail: %s", err)
+		}
+	})
+
+	t.Run("gh unavailable", func(t *testing.T) {
+		runAttestationVerification = func(context.Context, string, string) ([]byte, error) {
+			return nil, &exec.Error{Name: "gh", Err: exec.ErrNotFound}
+		}
+		if err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte(content)); err != nil {
+			t.Fatalf("missing optional gh CLI should not fail: %s", err)
+		}
+	})
+
+	t.Run("gh authentication unavailable", func(t *testing.T) {
+		runAttestationVerification = func(context.Context, string, string) ([]byte, error) {
+			return []byte("You are not logged into any GitHub hosts. Run gh auth login."), errors.New("gh auth failed")
+		}
+		if err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte(content)); err != nil {
+			t.Fatalf("missing optional gh authentication should not fail: %s", err)
 		}
 	})
 
@@ -135,7 +154,7 @@ func TestPackageInstallVerifiesGitHubReleaseBeforeWriting(t *testing.T) {
 			if got, err := os.ReadFile(artifactPath); err != nil || string(got) != "release artifact" {
 				t.Fatalf("attestation checked wrong artifact: %q, %v", got, err)
 			}
-			return []byte("Verification succeeded!"), nil
+			return []byte(`[{"verificationResult":{}}]`), nil
 		}
 		cfg := newArchiveTestConfig(t)
 		step := &PackageInstallStepFile{
