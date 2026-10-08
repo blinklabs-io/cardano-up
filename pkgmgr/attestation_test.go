@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,20 +12,63 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang/snappy"
 	protobundle "github.com/sigstore/protobuf-specs/gen/pb-go/bundle/v1"
 	"github.com/sigstore/sigstore-go/pkg/bundle"
 	"github.com/sigstore/sigstore-go/pkg/fulcio/certificate"
 	"github.com/sigstore/sigstore-go/pkg/root"
+	"github.com/sigstore/sigstore-go/pkg/tuf"
 	"github.com/sigstore/sigstore-go/pkg/verify"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type attestationRoundTripFunc func(*http.Request) (*http.Response, error)
 
+type failingTUFMetadataFetcher struct{}
+
+func (failingTUFMetadataFetcher) DownloadFile(string, int64, time.Duration) ([]byte, error) {
+	return nil, errors.New("test TUF metadata fetch")
+}
+
 func (f attestationRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 	return f(r)
+}
+
+func TestGitHubSigstoreVerifierUsesCacheDirWithReadOnlyHome(t *testing.T) {
+	home := t.TempDir()
+	if err := os.Chmod(home, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(home, 0o755); err != nil {
+			t.Errorf("restore temporary home permissions: %v", err)
+		}
+	})
+	t.Setenv("HOME", home)
+
+	cacheDir := t.TempDir()
+	oldOptions := newSigstoreTUFOptions
+	newSigstoreTUFOptions = func() *tuf.Options {
+		return tuf.DefaultOptions().WithFetcher(failingTUFMetadataFetcher{})
+	}
+	t.Cleanup(func() { newSigstoreTUFOptions = oldOptions })
+
+	oldVerifier := githubVerifier
+	githubVerifier = nil
+	t.Cleanup(func() { githubVerifier = oldVerifier })
+
+	_, err := githubSigstoreVerifier(context.Background(), cacheDir)
+	if err == nil || !strings.Contains(err.Error(), "test TUF metadata fetch") {
+		t.Fatalf("githubSigstoreVerifier() error = %v, want TUF fetch error after cache initialization", err)
+	}
+	if _, err := os.Stat(filepath.Join(cacheDir, "tuf-repo.github.com", "root.json")); err != nil {
+		t.Fatalf("TUF root was not initialized under the configured cache directory: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".sigstore")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("TUF unexpectedly used the home directory for its cache: %v", err)
+	}
 }
 
 func TestGitHubReleaseRepository(t *testing.T) {
@@ -98,7 +142,7 @@ func TestVerifyGitHubReleaseAttestationLookup(t *testing.T) {
 				body := test.body
 				return &http.Response{StatusCode: test.statusCode, Status: http.StatusText(test.statusCode), Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
 			})}
-			err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte("artifact"), slog.New(slog.NewTextHandler(io.Discard, nil)))
+			err := verifyGitHubReleaseAttestation(context.Background(), releaseURL, []byte("artifact"), t.TempDir(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 			if (err != nil) != test.wantErr {
 				t.Fatalf("verifyGitHubReleaseAttestation() error = %v, wantErr %v", err, test.wantErr)
 			}

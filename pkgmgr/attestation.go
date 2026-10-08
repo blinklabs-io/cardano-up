@@ -26,6 +26,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -50,6 +51,8 @@ const (
 )
 
 var attestationHTTPClient = &http.Client{Timeout: 30 * time.Second}
+
+var newSigstoreTUFOptions = tuf.DefaultOptions
 
 // This is the Sigstore TUF bootstrap root used by GitHub's attestation service.
 //
@@ -91,7 +94,7 @@ func githubReleaseRepository(releaseURL string) string {
 
 var githubPathSegment = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]*$`)
 
-func verifyGitHubReleaseAttestation(ctx context.Context, releaseURL string, artifact []byte, logger *slog.Logger) error {
+func verifyGitHubReleaseAttestation(ctx context.Context, releaseURL string, artifact []byte, cacheDir string, logger *slog.Logger) error {
 	repository := githubReleaseRepository(releaseURL)
 	if repository == "" {
 		return nil
@@ -145,7 +148,7 @@ func verifyGitHubReleaseAttestation(ctx context.Context, releaseURL string, arti
 			failures = append(failures, err)
 			continue
 		}
-		if err := verifyAttestationBundle(ctx, bundleBytes, repository, digest); err == nil {
+		if err := verifyAttestationBundle(ctx, bundleBytes, repository, digest, filepath.Join(cacheDir, "sigstore")); err == nil {
 			return nil
 		} else {
 			failures = append(failures, err)
@@ -181,7 +184,7 @@ func downloadAttestationBundle(ctx context.Context, bundleURL string) ([]byte, e
 	return readBounded(response.Body, maxAttestationBundle)
 }
 
-func verifyAttestationBundle(ctx context.Context, data []byte, repository string, digest [sha256.Size]byte) error {
+func verifyAttestationBundle(ctx context.Context, data []byte, repository string, digest [sha256.Size]byte, cacheDir string) error {
 	decodedLen, err := snappy.DecodedLen(data)
 	if err != nil || decodedLen > maxAttestationJSON {
 		return errors.New("invalid or oversized compressed attestation bundle")
@@ -209,9 +212,9 @@ func verifyAttestationBundle(ctx context.Context, data []byte, repository string
 	var verifier *verify.Verifier
 	switch cert.Issuer.Organization[0] {
 	case "GitHub, Inc.":
-		verifier, err = githubSigstoreVerifier(ctx)
+		verifier, err = githubSigstoreVerifier(ctx, cacheDir)
 	case "sigstore.dev":
-		verifier, err = publicSigstoreVerifier(ctx)
+		verifier, err = publicSigstoreVerifier(ctx, cacheDir)
 	default:
 		return fmt.Errorf("untrusted attestation certificate issuer %q", cert.Issuer.Organization[0])
 	}
@@ -271,13 +274,13 @@ func attestationIdentity(repository string) (verify.CertificateIdentity, error) 
 	}, nil
 }
 
-func githubSigstoreVerifier(ctx context.Context) (*verify.Verifier, error) {
+func githubSigstoreVerifier(ctx context.Context, cacheDir string) (*verify.Verifier, error) {
 	githubVerifierMu.Lock()
 	defer githubVerifierMu.Unlock()
 	if githubVerifier != nil {
 		return githubVerifier, nil
 	}
-	opts := tuf.DefaultOptions().WithRoot(githubTUFRoot).WithRepositoryBaseURL("https://tuf-repo.github.com").WithContext(ctx)
+	opts := newSigstoreTUFOptions().WithRoot(githubTUFRoot).WithRepositoryBaseURL("https://tuf-repo.github.com").WithCachePath(cacheDir).WithContext(ctx)
 	client, err := tuf.New(opts)
 	if err != nil {
 		return nil, err
@@ -294,13 +297,13 @@ func githubSigstoreVerifier(ctx context.Context) (*verify.Verifier, error) {
 	return githubVerifier, err
 }
 
-func publicSigstoreVerifier(ctx context.Context) (*verify.Verifier, error) {
+func publicSigstoreVerifier(ctx context.Context, cacheDir string) (*verify.Verifier, error) {
 	publicVerifierMu.Lock()
 	defer publicVerifierMu.Unlock()
 	if publicVerifier != nil {
 		return publicVerifier, nil
 	}
-	opts := tuf.DefaultOptions().WithContext(ctx)
+	opts := newSigstoreTUFOptions().WithCachePath(cacheDir).WithContext(ctx)
 	client, err := tuf.New(opts)
 	if err != nil {
 		return nil, err
