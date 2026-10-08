@@ -124,11 +124,7 @@ func (p *PackageManager) Up() error {
 		if installedPkg.Context != contextName {
 			continue
 		}
-		cfg := installedPkg.Package.withPackageTemplateVars(
-			p.config,
-			installedPkg.Context,
-			installedPkg.Options,
-		)
+		cfg := p.installedPkgConfig(*installedPkg, installedPkg.Context)
 		if err := installedPkg.Package.startService(
 			cfg,
 			installedPkg.Context,
@@ -144,6 +140,10 @@ func (p *PackageManager) Up() error {
 			errs = append(errs, err)
 			continue
 		}
+		ports = mergePackagePortRegistries(
+			p.registeredPorts(installedPkg.Context, installedPkg.Package.Name),
+			ports,
+		)
 		if err := p.refreshInstalledPackageRuntime(
 			installedPkg,
 			cfg,
@@ -189,10 +189,14 @@ func (p *PackageManager) installedPkgConfig(
 	installedPkg InstalledPackage,
 	context string,
 ) Config {
-	return installedPkg.Package.withPackageTemplateVars(
+	cfg := installedPkg.Package.withPackageTemplateVars(
 		p.config,
 		context,
 		installedPkg.Options,
+	)
+	return cfgWithPorts(
+		cfg,
+		p.registeredPorts(context, installedPkg.Package.Name),
 	)
 }
 
@@ -268,12 +272,18 @@ func (p *PackageManager) Install(pkgs ...string) error {
 		maps.Copy(tmpPkgOpts, installPkg.Options)
 		// Install package
 		registeredPorts := p.registeredPorts(contextName, installPkg.Install.Name)
+		reservedNativePorts := reservedNativePorts(
+			p.state.PortRegistry,
+			contextName,
+			installPkg.Install.Name,
+		)
 		notes, outputs, usedPorts, err := installPkg.Install.install(
 			p.config,
 			contextName,
 			tmpPkgOpts,
 			true,
 			registeredPorts,
+			reservedNativePorts,
 		)
 		if err != nil {
 			return err
@@ -304,11 +314,7 @@ func (p *PackageManager) Install(pkgs ...string) error {
 			sb.WriteString("\n")
 		}
 		// Activate package
-		activateCfg := installPkg.Install.withPackageTemplateVars(
-			p.config,
-			contextName,
-			tmpPkgOpts,
-		)
+		activateCfg := p.installedPkgConfig(installedPkg, contextName)
 		if err := installPkg.Install.activate(activateCfg, contextName); err != nil {
 			p.config.Logger.Warn(
 				fmt.Sprintf("failed to activate package: %s", err),
@@ -370,12 +376,18 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 		// Capture options from existing package
 		pkgOpts := upgradePkg.Installed.Options
 		registeredPorts := p.registeredPorts(contextName, upgradePkg.Installed.Package.Name)
+		reservedNativePorts := reservedNativePorts(
+			p.state.PortRegistry,
+			contextName,
+			upgradePkg.Installed.Package.Name,
+		)
 		// Deactivate old package
 		deactivateCfg := upgradePkg.Installed.Package.withPackageTemplateVars(
 			p.config,
 			contextName,
 			pkgOpts,
 		)
+		deactivateCfg = cfgWithPorts(deactivateCfg, registeredPorts)
 		if err := upgradePkg.Installed.Package.deactivate(deactivateCfg, contextName); err != nil {
 			p.config.Logger.Warn(
 				fmt.Sprintf("failed to deactivate package: %s", err),
@@ -392,6 +404,7 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 			pkgOpts,
 			false,
 			registeredPorts,
+			reservedNativePorts,
 		)
 		if err != nil {
 			return err
@@ -425,11 +438,7 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 			return err
 		}
 		// Activate new package
-		activateCfg := upgradePkg.Upgrade.withPackageTemplateVars(
-			p.config,
-			contextName,
-			pkgOpts,
-		)
+		activateCfg := p.installedPkgConfig(installedPkg, contextName)
 		if err := upgradePkg.Upgrade.activate(activateCfg, contextName); err != nil {
 			p.config.Logger.Warn(
 				fmt.Sprintf("failed to activate package: %s", err),
@@ -499,6 +508,7 @@ func (p *PackageManager) Uninstall(
 		if err := p.uninstallPackage(uninstallPkg, keepData, true); err != nil {
 			return err
 		}
+		p.setRegisteredPorts(contextName, uninstallPkg.Package.Name, nil)
 		if err := p.state.Save(); err != nil {
 			return err
 		}
@@ -884,7 +894,7 @@ func (p *PackageManager) registeredPorts(
 	contextName string,
 	pkgName string,
 ) PackagePortRegistry {
-	if len(p.state.PortRegistry) == 0 {
+	if p.state == nil || len(p.state.PortRegistry) == 0 {
 		return nil
 	}
 	contextRegistry, ok := p.state.PortRegistry[contextName]

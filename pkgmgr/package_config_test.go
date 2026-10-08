@@ -264,7 +264,7 @@ func TestPackageUpgradePreservesConfigFileAcrossVersions(t *testing.T) {
 	v1 := newPkg("1.0.0", "version: 1.0.0 default\n")
 	v2 := newPkg("2.0.0", "version: 2.0.0 default\n")
 
-	if _, _, _, err := v1.install(cfg, context, nil, false, nil); err != nil {
+	if _, _, _, err := v1.install(cfg, context, nil, false, nil, nil); err != nil {
 		t.Fatalf("v1 install failed: %s", err)
 	}
 
@@ -279,7 +279,7 @@ func TestPackageUpgradePreservesConfigFileAcrossVersions(t *testing.T) {
 	if err := v1.uninstall(cfg, context, true, false); err != nil {
 		t.Fatalf("v1 uninstall failed: %s", err)
 	}
-	if _, _, _, err := v2.install(cfg, context, nil, false, nil); err != nil {
+	if _, _, _, err := v2.install(cfg, context, nil, false, nil, nil); err != nil {
 		t.Fatalf("v2 install failed: %s", err)
 	}
 
@@ -311,7 +311,7 @@ func TestPackageInstallStepMultipleMethodsRejected(t *testing.T) {
 			},
 		},
 	}
-	if _, _, _, err := pkg.install(cfg, "testctx", nil, false, nil); err == nil {
+	if _, _, _, err := pkg.install(cfg, "testctx", nil, false, nil, nil); err == nil {
 		t.Fatal("expected error for multiple install methods, got nil")
 	}
 }
