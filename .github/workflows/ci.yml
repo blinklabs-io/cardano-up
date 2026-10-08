@@ -20,7 +20,7 @@ jobs:
   publish:
     needs: [go-test]
     if: github.event_name == 'push'
-    uses: blinklabs-io/actions/.github/workflows/reuseable-publish.yml@main
+    uses: blinklabs-io/actions/.github/workflows/reuseable-publish.yml@02b250527c9b7b20d017fe1cf456bc98dfbc3125
     permissions:
       actions: write
       attestations: write
@@ -31,8 +31,11 @@ jobs:
       statuses: write
     secrets:
       docker-password: ${{ secrets.DOCKER_PASSWORD }}
+      homebrew-tap-token: ${{ secrets.ORG_PROJECT_PAT }}
     with:
       binary-name: cardano-up
       binary-target-matrix: '[{"os":"linux","arch":"amd64"},{"os":"linux","arch":"arm64"},{"os":"darwin","arch":"amd64"},{"os":"darwin","arch":"arm64"}]'
       description: Command line utility for managing Cardano services for local development
       docker-image: blinklabs/cardano-up
+      homebrew-formula-path: Formula/cardano-up.rb
+      homebrew-tap-repository: blinklabs-io/homebrew-cardano
