@@ -6,7 +6,7 @@ require (
 	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/blinklabs-io/gouroboros v0.208.5
 	github.com/docker/docker v28.5.2+incompatible
-	github.com/docker/go-connections v0.8.1
+	github.com/docker/go-connections v0.8.2
 	github.com/golang/snappy v1.0.0
 	github.com/hashicorp/go-version v1.9.0
 	github.com/sigstore/protobuf-specs v0.5.2
