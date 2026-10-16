@@ -9,7 +9,7 @@ require (
 	github.com/docker/go-connections v0.8.1
 	github.com/golang/snappy v1.0.0
 	github.com/hashicorp/go-version v1.9.0
-	github.com/sigstore/protobuf-specs v0.5.1
+	github.com/sigstore/protobuf-specs v0.5.2
 	github.com/sigstore/sigstore-go v1.3.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/sys v0.48.0
