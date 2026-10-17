@@ -1,10 +1,10 @@
 module github.com/blinklabs-io/cardano-up
 
-go 1.26.5
+go 1.26.8
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
-	github.com/blinklabs-io/gouroboros v0.208.5
+	github.com/blinklabs-io/gouroboros v0.212.6
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-connections v0.8.2
 	github.com/golang/snappy v1.0.0
@@ -24,16 +24,16 @@ require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
-	github.com/bits-and-blooms/bitset v1.24.6 // indirect
+	github.com/bits-and-blooms/bitset v1.25.0 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
-	github.com/blinklabs-io/plutigo v0.7.2 // indirect
+	github.com/blinklabs-io/plutigo v0.9.1 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.5.0 // indirect
 	github.com/btcsuite/btcd/btcutil v1.2.0 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.2.0 // indirect
 	github.com/btcsuite/btcd/chainhash/v2 v2.0.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/consensys/gnark-crypto v0.21.0 // indirect
+	github.com/consensys/gnark-crypto v0.22.0 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
@@ -45,7 +45,7 @@ require (
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fxamacker/cbor/v2 v2.9.4 // indirect
+	github.com/fxamacker/cbor/v2 v2.9.6 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/analysis v0.25.5 // indirect
