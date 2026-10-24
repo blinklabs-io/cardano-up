@@ -58,7 +58,7 @@ func NewResolver(
 	// Calculate package constraints from installed packages
 	for _, installedPkg := range installedPkgs {
 		for _, dependency := range installedPkg.Package.Dependencies {
-			satisfied, err := r.satisfiedProviders(dependency, "")
+			satisfied, err := r.satisfiedProviders(dependency, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -110,7 +110,7 @@ func (r *Resolver) Install(pkgs ...string) ([]ResolverInstallSet, error) {
 			return nil, NewResolverNoAvailablePackage(pkg)
 		}
 		// Calculate dependencies
-		neededPkgs, err := r.getNeededDeps(latestPkg)
+		neededPkgs, err := r.getNeededDeps(latestPkg, false)
 		if err != nil {
 			return nil, err
 		}
@@ -155,7 +155,7 @@ func (r *Resolver) Upgrade(pkgs ...string) ([]ResolverUpgradeSet, error) {
 			},
 		)
 		// Calculate dependencies
-		neededPkgs, err := r.getNeededDeps(latestPkg)
+		neededPkgs, err := r.getNeededDeps(latestPkg, true)
 		if err != nil {
 			return nil, err
 		}
@@ -178,6 +178,10 @@ func (r *Resolver) Upgrade(pkgs ...string) ([]ResolverUpgradeSet, error) {
 }
 
 func (r *Resolver) Uninstall(pkgs ...InstalledPackage) error {
+	excluded := make(map[string]struct{}, len(pkgs))
+	for _, pkg := range pkgs {
+		excluded[pkg.Package.Name] = struct{}{}
+	}
 	for _, pkg := range pkgs {
 		for _, installedPkg := range r.installedPkgs {
 			for _, dependency := range installedPkg.Package.Dependencies {
@@ -193,7 +197,7 @@ func (r *Resolver) Uninstall(pkgs ...InstalledPackage) error {
 				}
 				satisfied, err := r.satisfiedProviders(
 					dependency,
-					pkg.Package.Name,
+					excluded,
 				)
 				if err != nil {
 					return err
@@ -213,11 +217,14 @@ func (r *Resolver) Uninstall(pkgs ...InstalledPackage) error {
 	return nil
 }
 
-func (r *Resolver) getNeededDeps(pkg Package) ([]ResolverInstallSet, error) {
+func (r *Resolver) getNeededDeps(
+	pkg Package,
+	allowUpgrades bool,
+) ([]ResolverInstallSet, error) {
 	// NOTE: this function is very naive and only works for a single level of dependencies
 	ret := []ResolverInstallSet{}
 	for _, dependency := range pkg.Dependencies {
-		satisfied, err := r.satisfiedProviders(dependency, "")
+		satisfied, err := r.satisfiedProviders(dependency, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -233,7 +240,7 @@ func (r *Resolver) getNeededDeps(pkg Package) ([]ResolverInstallSet, error) {
 			if err != nil {
 				return nil, err
 			}
-			if !installed.IsEmpty() {
+			if !installed.IsEmpty() && !allowUpgrades {
 				continue
 			}
 			availablePkgs, err := r.findAvailable(
@@ -269,12 +276,12 @@ func (r *Resolver) getNeededDeps(pkg Package) ([]ResolverInstallSet, error) {
 
 func (r *Resolver) satisfiedProviders(
 	dependency PackageDependency,
-	exclude string,
+	excluded map[string]struct{},
 ) ([]string, error) {
 	var ret []string
 	for _, provider := range dependency {
 		pkgName, pkgVersionSpec, _ := r.splitPackage(provider)
-		if pkgName == exclude {
+		if _, ok := excluded[pkgName]; ok {
 			continue
 		}
 		installed, err := r.findInstalled(pkgName, pkgVersionSpec)

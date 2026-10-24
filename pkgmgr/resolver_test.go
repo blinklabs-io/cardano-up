@@ -279,6 +279,27 @@ func TestResolverUninstallAlternativeDependencySafety(t *testing.T) {
 	}
 }
 
+func TestResolverUninstallBatchAlternativeDependencySafety(t *testing.T) {
+	dependency := PackageDependency{"node >= 2.0.0", "dolos >= 0.30.0"}
+	app := newTestInstalled(
+		Package{
+			Name:         "app",
+			Version:      "1.0.0",
+			Dependencies: []PackageDependency{dependency},
+		},
+	)
+	node := newTestInstalled(Package{Name: "node", Version: "2.0.0"})
+	dolos := newTestInstalled(Package{Name: "dolos", Version: "0.30.0"})
+	resolver := newTestResolver(
+		t,
+		[]InstalledPackage{app, node, dolos},
+		nil,
+	)
+	if err := resolver.Uninstall(node, dolos); err == nil {
+		t.Fatal("batch uninstall should retain a dependency provider")
+	}
+}
+
 func TestResolverUpgradeAlternativeDependencyConstraints(t *testing.T) {
 	dependency := PackageDependency{"node < 3.0.0", "dolos >= 0.30.0"}
 	app := newTestInstalled(
@@ -316,6 +337,36 @@ func TestResolverUpgradeAlternativeDependencyConstraints(t *testing.T) {
 		)
 	}
 	if len(plan) != 1 || plan[0].Upgrade.Version != "3.0.0" {
+		t.Fatalf("unexpected upgrade plan: %#v", plan)
+	}
+}
+
+func TestResolverUpgradeIncludesOutdatedAlternativeProvider(t *testing.T) {
+	installedApp := newTestInstalled(
+		Package{
+			Name:         "app",
+			Version:      "1.0.0",
+			Dependencies: []PackageDependency{{"node >= 2.0.0", "dolos"}},
+		},
+	)
+	installedNode := newTestInstalled(Package{Name: "node", Version: "2.0.0"})
+	availableApp := Package{
+		Name:         "app",
+		Version:      "2.0.0",
+		Dependencies: []PackageDependency{{"node >= 3.0.0", "dolos"}},
+	}
+	availableNode := Package{Name: "node", Version: "3.0.0"}
+	resolver := newTestResolver(
+		t,
+		[]InstalledPackage{installedApp, installedNode},
+		[]Package{availableApp, availableNode},
+	)
+	plan, err := resolver.Upgrade("app")
+	if err != nil {
+		t.Fatalf("failed to resolve upgrade: %v", err)
+	}
+	if len(plan) != 2 || plan[1].Installed.Package.Version != "2.0.0" ||
+		plan[1].Upgrade.Version != "3.0.0" {
 		t.Fatalf("unexpected upgrade plan: %#v", plan)
 	}
 }
