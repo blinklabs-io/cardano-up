@@ -4,7 +4,7 @@ go 1.26.10
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
-	github.com/blinklabs-io/gouroboros v0.212.6
+	github.com/blinklabs-io/gouroboros v0.213.3
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-connections v0.8.2
 	github.com/golang/snappy v1.0.0
