@@ -137,7 +137,7 @@ func printPackageInfo(pkg pkgmgr.Package) {
 		var sb strings.Builder
 		sb.WriteString("    Requires: ")
 		for idx, dep := range pkg.Dependencies {
-			sb.WriteString(dep)
+			sb.WriteString(dep.String())
 			if idx < len(pkg.Dependencies)-1 {
 				sb.WriteString(` | `)
 			}
