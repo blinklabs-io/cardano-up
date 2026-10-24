@@ -15,7 +15,6 @@ jobs:
     uses: blinklabs-io/actions/.github/workflows/reuseable-go-test.yml@main
     with:
       nilaway-include-pkgs: github.com/blinklabs-io/cardano-up
-      nilaway-go-version: 1.26.x
       run-golangci-lint: true
       run-nilaway: true
   publish:
