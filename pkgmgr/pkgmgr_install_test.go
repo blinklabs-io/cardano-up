@@ -195,7 +195,7 @@ func TestInstallValidatesEntirePlanBeforeInstallingAny(t *testing.T) {
 			// invalid: missing filePath, so Package.validate rejects it
 			Name:         "app",
 			Version:      "1.0.0",
-			Dependencies: []string{"dep"},
+			Dependencies: []PackageDependency{{"dep"}},
 			InstallSteps: []PackageInstallStep{
 				{
 					File: &PackageInstallStepFile{
@@ -263,7 +263,7 @@ func TestUpgradeValidatesEntirePlanBeforeMutatingAny(t *testing.T) {
 			Name:         "app",
 			Version:      "2.0.0",
 			filePath:     filepath.Join("app", "app-2.0.0.yaml"),
-			Dependencies: []string{"newdep"},
+			Dependencies: []PackageDependency{{"newdep"}},
 			InstallSteps: []PackageInstallStep{
 				{
 					File: &PackageInstallStepFile{

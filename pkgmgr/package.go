@@ -45,7 +45,7 @@ type Package struct {
 	Version             string               `yaml:"version,omitempty"`
 	Description         string               `yaml:"description,omitempty"`
 	InstallSteps        []PackageInstallStep `yaml:"installSteps,omitempty"`
-	Dependencies        []string             `yaml:"dependencies,omitempty"`
+	Dependencies        []PackageDependency  `yaml:"dependencies,omitempty"`
 	Tags                []string             `yaml:"tags,omitempty"`
 	PreInstallScript    string               `yaml:"preInstallScript,omitempty"`
 	PostInstallScript   string               `yaml:"postInstallScript,omitempty"`
@@ -60,6 +60,48 @@ type Package struct {
 	Outputs             []PackageOutput      `yaml:"outputs,omitempty"`
 	Ports               []string             `yaml:"ports,omitempty"`
 	filePath            string
+}
+
+// PackageDependency lists interchangeable package specifications in preference order.
+type PackageDependency []string
+
+// UnmarshalYAML decodes a single package specification or an alternative group.
+func (d *PackageDependency) UnmarshalYAML(value *yaml.Node) error {
+	const invalidDependency = "dependency must be a package specification " +
+		"or a list of alternatives"
+	switch value.Kind {
+	case yaml.ScalarNode:
+		var dependency string
+		if err := value.Decode(&dependency); err != nil {
+			return err
+		}
+		*d = PackageDependency{dependency}
+		return nil
+	case yaml.SequenceNode:
+		var dependencies []string
+		if err := value.Decode(&dependencies); err != nil {
+			return err
+		}
+		*d = dependencies
+		return nil
+	case yaml.DocumentNode, yaml.MappingNode, yaml.AliasNode:
+		return errors.New(invalidDependency)
+	default:
+		return errors.New(invalidDependency)
+	}
+}
+
+// MarshalYAML keeps single-provider dependencies in their scalar form.
+func (d PackageDependency) MarshalYAML() (any, error) {
+	if len(d) == 1 {
+		return d[0], nil
+	}
+	return []string(d), nil
+}
+
+// String formats the dependency alternatives for display.
+func (d PackageDependency) String() string {
+	return strings.Join(d, " or ")
 }
 
 type PackageOption struct {
@@ -689,6 +731,34 @@ func (p Package) validate(cfg Config) error {
 			"package did not have expected file path: %s",
 			expectedFilePath,
 		)
+	}
+	for _, dependency := range p.Dependencies {
+		if len(dependency) == 0 {
+			return errors.New("dependency alternatives cannot be empty")
+		}
+		seenProviders := make(map[string]struct{}, len(dependency))
+		for _, provider := range dependency {
+			if strings.TrimSpace(provider) == "" {
+				return errors.New("dependency package specification cannot be empty")
+			}
+			providerName, versionSpec, _ := splitPackage(provider)
+			if !reName.MatchString(providerName) {
+				return fmt.Errorf("invalid dependency package name: %s", providerName)
+			}
+			if _, ok := seenProviders[providerName]; ok {
+				return fmt.Errorf("duplicate dependency provider %q", providerName)
+			}
+			seenProviders[providerName] = struct{}{}
+			if versionSpec != "" {
+				if _, err := version.NewConstraint(versionSpec); err != nil {
+					return fmt.Errorf(
+						"dependency %q has malformed version constraint: %w",
+						provider,
+						err,
+					)
+				}
+			}
+		}
 	}
 	seenPorts := make(map[string]struct{}, len(p.Ports))
 	for _, port := range p.Ports {

@@ -440,6 +440,21 @@ Package `bar` with at least version `3.0.0`, option `optA` turned on, and option
 bar[optA,-optB] >= 3.0.0
 ```
 
+Each entry in `dependencies` may also be a list of interchangeable providers.
+An installed provider that meets its own version constraint satisfies the
+dependency. If none is installed, cardano-up installs the first available
+provider in the order listed.
+
+```yaml
+dependencies:
+  - cardano-config >= 20260430
+  - - cardano-node >= 11.0.0
+    - dolos >= 0.30.0
+```
+
+In this example, either `cardano-node` or `dolos` satisfies the second
+dependency, and `cardano-node` is the default when both are available.
+
 ##### `tags`
 
 The tags for a package should be a list of arbitrary string values corresponding to the supported platforms and architectures. They should be one or more of:
