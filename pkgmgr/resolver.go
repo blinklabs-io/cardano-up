@@ -57,25 +57,37 @@ func NewResolver(
 	}
 	// Calculate package constraints from installed packages
 	for _, installedPkg := range installedPkgs {
-		// Add constraint for each explicit dependency
-		for _, dep := range installedPkg.Package.Dependencies {
-			depPkgName, depPkgVersionSpec, _ := r.splitPackage(dep)
-			tmpConstraints, err := version.NewConstraint(depPkgVersionSpec)
+		for _, dependency := range installedPkg.Package.Dependencies {
+			satisfied, err := r.satisfiedProviders(dependency, nil)
 			if err != nil {
 				return nil, err
 			}
-			r.installedConstraints[depPkgName] = append(
-				r.installedConstraints[depPkgName],
-				tmpConstraints...,
-			)
-			logger.Debug(
-				fmt.Sprintf(
-					"added constraint for installed package %q dependency: %q: %s",
-					installedPkg.Package.Name,
-					depPkgName,
-					tmpConstraints.String(),
-				),
-			)
+			for _, provider := range dependency {
+				depPkgName, depPkgVersionSpec, _ := r.splitPackage(provider)
+				if len(satisfied) > 1 ||
+					(len(satisfied) == 1 && satisfied[0] != depPkgName) {
+					continue
+				}
+				if depPkgVersionSpec == "" {
+					continue
+				}
+				tmpConstraints, err := version.NewConstraint(depPkgVersionSpec)
+				if err != nil {
+					return nil, err
+				}
+				r.installedConstraints[depPkgName] = append(
+					r.installedConstraints[depPkgName],
+					tmpConstraints...,
+				)
+				logger.Debug(
+					fmt.Sprintf(
+						"added constraint for installed package %q dependency: %q: %s",
+						installedPkg.Package.Name,
+						depPkgName,
+						tmpConstraints.String(),
+					),
+				)
+			}
 		}
 	}
 	return r, nil
@@ -98,7 +110,7 @@ func (r *Resolver) Install(pkgs ...string) ([]ResolverInstallSet, error) {
 			return nil, NewResolverNoAvailablePackage(pkg)
 		}
 		// Calculate dependencies
-		neededPkgs, err := r.getNeededDeps(latestPkg)
+		neededPkgs, err := r.getNeededDeps(latestPkg, false)
 		if err != nil {
 			return nil, err
 		}
@@ -143,7 +155,7 @@ func (r *Resolver) Upgrade(pkgs ...string) ([]ResolverUpgradeSet, error) {
 			},
 		)
 		// Calculate dependencies
-		neededPkgs, err := r.getNeededDeps(latestPkg)
+		neededPkgs, err := r.getNeededDeps(latestPkg, true)
 		if err != nil {
 			return nil, err
 		}
@@ -166,27 +178,32 @@ func (r *Resolver) Upgrade(pkgs ...string) ([]ResolverUpgradeSet, error) {
 }
 
 func (r *Resolver) Uninstall(pkgs ...InstalledPackage) error {
+	excluded := make(map[string]struct{}, len(pkgs))
 	for _, pkg := range pkgs {
-		pkgVersion, err := version.NewVersion(pkg.Package.Version)
-		if err != nil {
-			return err
-		}
+		excluded[pkg.Package.Name] = struct{}{}
+	}
+	for _, pkg := range pkgs {
 		for _, installedPkg := range r.installedPkgs {
-			for _, dep := range installedPkg.Package.Dependencies {
-				depPkgName, depPkgVersionSpec, _ := r.splitPackage(dep)
-				// Skip installed package if it doesn't match dep package name
-				if pkg.Package.Name != depPkgName {
+			for _, dependency := range installedPkg.Package.Dependencies {
+				matches, err := r.packageSatisfiesDependency(
+					pkg.Package,
+					dependency,
+				)
+				if err != nil {
+					return err
+				}
+				if !matches {
 					continue
 				}
-				// Skip installed packages that don't match the specified dep version constraint
-				if depPkgVersionSpec != "" {
-					constraints, err := version.NewConstraint(depPkgVersionSpec)
-					if err != nil {
-						return err
-					}
-					if !constraints.Check(pkgVersion) {
-						continue
-					}
+				satisfied, err := r.satisfiedProviders(
+					dependency,
+					excluded,
+				)
+				if err != nil {
+					return err
+				}
+				if len(satisfied) > 0 {
+					continue
 				}
 				return NewPackageUninstallWouldBreakDepsError(
 					pkg.Package.Name,
@@ -200,50 +217,116 @@ func (r *Resolver) Uninstall(pkgs ...InstalledPackage) error {
 	return nil
 }
 
-func (r *Resolver) getNeededDeps(pkg Package) ([]ResolverInstallSet, error) {
+func (r *Resolver) getNeededDeps(
+	pkg Package,
+	allowUpgrades bool,
+) ([]ResolverInstallSet, error) {
 	// NOTE: this function is very naive and only works for a single level of dependencies
 	ret := []ResolverInstallSet{}
-	for _, dep := range pkg.Dependencies {
-		depPkgName, depPkgVersionSpec, depPkgOpts := r.splitPackage(dep)
-		// Check if we already have an installed package that satisfies the dependency
-		if pkg, err := r.findInstalled(depPkgName, depPkgVersionSpec); err != nil {
+	for _, dependency := range pkg.Dependencies {
+		satisfied, err := r.satisfiedProviders(dependency, nil)
+		if err != nil {
 			return nil, err
-		} else if !pkg.IsEmpty() {
+		}
+		if len(satisfied) > 0 {
 			continue
 		}
-		// Check if we already have any installed version of the package
-		if pkg, err := r.findInstalled(depPkgName, depPkgVersionSpec); err != nil {
-			return nil, err
-		} else if !pkg.IsEmpty() {
-			return nil, NewResolverInstalledPackageNoMatchVersionSpecError(pkg.Package.Name, pkg.Package.Version, dep)
-		}
-		availablePkgs, err := r.findAvailable(
-			depPkgName,
-			depPkgVersionSpec,
-			nil,
-		)
-		if err != nil {
-			return nil, err
-		}
-		if len(availablePkgs) == 0 {
-			return nil, NewResolverNoAvailablePackageDependencyError(dep)
-		}
-		latestPkg, err := r.latestPackage(availablePkgs, nil)
-		if err != nil {
-			return nil, err
-		}
-		ret = append(
-			ret,
-			ResolverInstallSet{
+		var selected ResolverInstallSet
+		for _, provider := range dependency {
+			depPkgName, depPkgVersionSpec, depPkgOpts := r.splitPackage(
+				provider,
+			)
+			installed, err := r.findInstalled(depPkgName, "")
+			if err != nil {
+				return nil, err
+			}
+			if !installed.IsEmpty() && !allowUpgrades {
+				continue
+			}
+			availablePkgs, err := r.findAvailable(
+				depPkgName,
+				depPkgVersionSpec,
+				nil,
+			)
+			if err != nil {
+				return nil, err
+			}
+			if len(availablePkgs) == 0 {
+				continue
+			}
+			latestPkg, err := r.latestPackage(availablePkgs, nil)
+			if err != nil {
+				return nil, err
+			}
+			selected = ResolverInstallSet{
 				Install: latestPkg,
 				Options: depPkgOpts,
-			},
-		)
+			}
+			break
+		}
+		if selected.Install.IsEmpty() {
+			return nil, NewResolverNoAvailablePackageDependencyError(
+				dependency.String(),
+			)
+		}
+		ret = append(ret, selected)
 	}
 	return ret, nil
 }
 
+func (r *Resolver) satisfiedProviders(
+	dependency PackageDependency,
+	excluded map[string]struct{},
+) ([]string, error) {
+	var ret []string
+	for _, provider := range dependency {
+		pkgName, pkgVersionSpec, _ := r.splitPackage(provider)
+		if _, ok := excluded[pkgName]; ok {
+			continue
+		}
+		installed, err := r.findInstalled(pkgName, pkgVersionSpec)
+		if err != nil {
+			return nil, err
+		}
+		if !installed.IsEmpty() {
+			ret = append(ret, pkgName)
+		}
+	}
+	return ret, nil
+}
+
+func (r *Resolver) packageSatisfiesDependency(
+	pkg Package,
+	dependency PackageDependency,
+) (bool, error) {
+	pkgVersion, err := version.NewVersion(pkg.Version)
+	if err != nil {
+		return false, err
+	}
+	for _, provider := range dependency {
+		pkgName, pkgVersionSpec, _ := r.splitPackage(provider)
+		if pkg.Name != pkgName {
+			continue
+		}
+		if pkgVersionSpec == "" {
+			return true, nil
+		}
+		constraints, err := version.NewConstraint(pkgVersionSpec)
+		if err != nil {
+			return false, err
+		}
+		if constraints.Check(pkgVersion) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (r *Resolver) splitPackage(pkg string) (string, string, map[string]bool) {
+	return splitPackage(pkg)
+}
+
+func splitPackage(pkg string) (string, string, map[string]bool) {
 	var pkgName, pkgVersionSpec string
 	pkgOpts := make(map[string]bool)
 	// Extract any package option flags
