@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -53,7 +54,7 @@ func registryPackages(cfg Config, validate bool) ([]Package, error) {
 		repoCfg.RegistryUrl = repository.URL
 		// Keep each remote repository's cache separate. Include the URL so a
 		// changed repository at the same priority cannot reuse old metadata.
-		cacheKey := fmt.Sprint(index)
+		cacheKey := strconv.Itoa(index)
 		if repository.URL != "" {
 			cacheKey = fmt.Sprintf(
 				"%d-%x",
@@ -83,12 +84,16 @@ func registryPackages(cfg Config, validate bool) ([]Package, error) {
 		} else if err != nil {
 			return nil, err
 		}
+		repoNames := make(map[string]struct{})
 		for _, pkg := range repoPackages {
 			if _, ok := seenNames[pkg.Name]; ok {
 				continue
 			}
-			seenNames[pkg.Name] = struct{}{}
+			repoNames[pkg.Name] = struct{}{}
 			packages = append(packages, pkg)
+		}
+		for name := range repoNames {
+			seenNames[name] = struct{}{}
 		}
 	}
 	return packages, retErr

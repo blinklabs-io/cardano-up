@@ -93,6 +93,7 @@ func TestRegistryPackagesRepositoryPriority(t *testing.T) {
 		}
 	}
 	writePackage(highPriority, "overlay", "2.0.0")
+	writePackage(highPriority, "overlay", "3.0.0")
 	writePackage(lowPriority, "overlay", "1.0.0")
 	writePackage(lowPriority, "base", "1.0.0")
 
@@ -108,13 +109,13 @@ func TestRegistryPackagesRepositoryPriority(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
-	if len(packages) != 2 {
-		t.Fatalf("got %d packages, expected 2: %#v", len(packages), packages)
+	if len(packages) != 3 {
+		t.Fatalf("got %d packages, expected 3: %#v", len(packages), packages)
 	}
-	if packages[0].Name != "overlay" || packages[0].Version != "2.0.0" {
-		t.Fatalf("higher-priority package did not overlay lower-priority package: %#v", packages[0])
+	if packages[0].Name != "overlay" || packages[1].Name != "overlay" {
+		t.Fatalf("highest-priority repository did not retain all versions: %#v", packages)
 	}
-	if packages[1].Name != "base" {
-		t.Fatalf("lower-priority package was not retained: %#v", packages[1])
+	if packages[2].Name != "base" {
+		t.Fatalf("lower-priority package was not retained: %#v", packages[2])
 	}
 }

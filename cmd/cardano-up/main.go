@@ -164,18 +164,30 @@ func createPackageManager() *pkgmgr.PackageManager {
 	}
 	// Allow setting one or more registries via environment variables.
 	if urls, ok := os.LookupEnv("REGISTRY_URLS"); ok {
+		before := len(cfg.Repositories)
 		for _, url := range strings.Split(urls, ",") {
 			if url = strings.TrimSpace(url); url != "" {
 				cfg.Repositories = append(cfg.Repositories, pkgmgr.Repository{URL: url})
+			}
+		}
+		if len(cfg.Repositories) == before {
+			if url, ok := os.LookupEnv("REGISTRY_URL"); ok {
+				cfg.RegistryUrl = url
 			}
 		}
 	} else if url, ok := os.LookupEnv("REGISTRY_URL"); ok {
 		cfg.RegistryUrl = url
 	}
 	if dirs, ok := os.LookupEnv("REGISTRY_DIRS"); ok {
+		before := len(cfg.Repositories)
 		for _, dir := range strings.Split(dirs, string(os.PathListSeparator)) {
-			if dir = strings.TrimSpace(dir); dir != "" {
+			if strings.TrimSpace(dir) != "" {
 				cfg.Repositories = append(cfg.Repositories, pkgmgr.Repository{Dir: dir})
+			}
+		}
+		if len(cfg.Repositories) == before {
+			if dir, ok := os.LookupEnv("REGISTRY_DIR"); ok {
+				cfg.RegistryDir = dir
 			}
 		}
 	} else if dir, ok := os.LookupEnv("REGISTRY_DIR"); ok {
