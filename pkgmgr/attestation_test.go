@@ -253,5 +253,4 @@ func TestVerifySignedSigstoreAttestation(t *testing.T) {
 	if err := verifyParsedAttestation(sigstoreBundle, "sigstore/sigstore-js", "sha512", make([]byte, 64), verifier); err == nil {
 		t.Fatal("attestation unexpectedly verified for a different artifact digest")
 	}
-
 }
