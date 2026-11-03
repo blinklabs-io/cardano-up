@@ -23,7 +23,6 @@ func TestCompareVersions(t *testing.T) {
 				result,
 				tc.expected,
 			)
-
 		} else {
 			t.Errorf("Test Failed: compareVersions(%s, %s) = %v; Expected %v", tc.v1, tc.v2, result, tc.expected)
 		}

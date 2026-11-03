@@ -233,28 +233,28 @@ func TestServiceHooks_PreStartPostStartAndPreStop(t *testing.T) {
 	// Create preStart script
 	preStartScript := filepath.Join(tmpDir, "prestart.sh")
 	preStartContent := "#!/bin/sh\necho 'prestart executed' >> " + hookLog
-	if err := os.WriteFile(preStartScript, []byte(preStartContent), 0755); err != nil {
+	if err := os.WriteFile(preStartScript, []byte(preStartContent), 0o755); err != nil {
 		t.Fatalf("failed to write preStart script: %v", err)
 	}
 
 	// Create postStart script
 	postStartScript := filepath.Join(tmpDir, "poststart.sh")
 	postStartContent := "#!/bin/sh\necho 'poststart executed' >> " + hookLog
-	if err := os.WriteFile(postStartScript, []byte(postStartContent), 0755); err != nil {
+	if err := os.WriteFile(postStartScript, []byte(postStartContent), 0o755); err != nil {
 		t.Fatalf("failed to write postStart script: %v", err)
 	}
 
 	// Create preStop script
 	preStopScript := filepath.Join(tmpDir, "prestop.sh")
 	preStopContent := "#!/bin/sh\necho 'prestop executed' >> " + hookLog
-	if err := os.WriteFile(preStopScript, []byte(preStopContent), 0755); err != nil {
+	if err := os.WriteFile(preStopScript, []byte(preStopContent), 0o755); err != nil {
 		t.Fatalf("failed to write preStop script: %v", err)
 	}
 
 	// Create postStop script
 	postStopScript := filepath.Join(tmpDir, "poststop.sh")
 	postStopContent := "#!/bin/sh\necho 'poststop executed' >> " + hookLog
-	if err := os.WriteFile(postStopScript, []byte(postStopContent), 0755); err != nil {
+	if err := os.WriteFile(postStopScript, []byte(postStopContent), 0o755); err != nil {
 		t.Fatalf("failed to write postStop script: %v", err)
 	}
 
@@ -344,7 +344,7 @@ func TestStopService_PostStopHookSkippedOnStopFailure(t *testing.T) {
 	hookLog := filepath.Join(tmpDir, "hooks.log")
 	postStopScript := filepath.Join(tmpDir, "poststop.sh")
 	postStopContent := "#!/bin/sh\necho 'poststop executed' >> " + hookLog
-	if err := os.WriteFile(postStopScript, []byte(postStopContent), 0755); err != nil {
+	if err := os.WriteFile(postStopScript, []byte(postStopContent), 0o755); err != nil {
 		t.Fatalf("failed to write postStop script: %v", err)
 	}
 
@@ -461,7 +461,7 @@ func TestStopService_TreatsStillRunningAfterStopAsFailure(t *testing.T) {
 	hookLog := filepath.Join(tmpDir, "hooks.log")
 	postStopScript := filepath.Join(tmpDir, "poststop.sh")
 	postStopContent := "#!/bin/sh\necho 'poststop executed' >> " + hookLog
-	if err := os.WriteFile(postStopScript, []byte(postStopContent), 0755); err != nil {
+	if err := os.WriteFile(postStopScript, []byte(postStopContent), 0o755); err != nil {
 		t.Fatalf("failed to write postStop script: %v", err)
 	}
 
