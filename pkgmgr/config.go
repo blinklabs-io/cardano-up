@@ -35,6 +35,18 @@ type Config struct {
 	RequiredPackageTags []string
 	RegistryUrl         string
 	RegistryDir         string
+	// Repositories are ordered from highest to lowest priority. A package
+	// name found in an earlier repository hides packages with the same name
+	// in later repositories, which allows a repository to overlay the
+	// default package set.
+	Repositories []Repository
+}
+
+// Repository identifies a package repository. Set exactly one of URL or Dir.
+// Repositories are searched in declaration order.
+type Repository struct {
+	URL string
+	Dir string
 }
 
 func NewDefaultConfig() (Config, error) {

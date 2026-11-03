@@ -258,6 +258,13 @@ can run it like:
 REGISTRY_DIR=packages/ cardano-up ...
 ```
 
+Multiple package repositories can be configured with `REGISTRY_URLS` or
+`REGISTRY_DIRS`. Entries are ordered from highest to lowest priority and are
+separated by commas for URLs or the platform path-list separator for local
+directories. A package name in a higher-priority repository overlays the same
+package name in lower-priority repositories. The singular `REGISTRY_URL` and
+`REGISTRY_DIR` variables remain supported.
+
 #### Validating package files
 
 There is a built-in subcommand for validating package files. It will be run automatically for a PR, but you can also run it manually.

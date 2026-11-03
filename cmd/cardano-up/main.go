@@ -162,11 +162,23 @@ func createPackageManager() *pkgmgr.PackageManager {
 		slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
 		os.Exit(1)
 	}
-	// Allow setting registry URL/dir via env var
-	if url, ok := os.LookupEnv("REGISTRY_URL"); ok {
+	// Allow setting one or more registries via environment variables.
+	if urls, ok := os.LookupEnv("REGISTRY_URLS"); ok {
+		for _, url := range strings.Split(urls, ",") {
+			if url = strings.TrimSpace(url); url != "" {
+				cfg.Repositories = append(cfg.Repositories, pkgmgr.Repository{URL: url})
+			}
+		}
+	} else if url, ok := os.LookupEnv("REGISTRY_URL"); ok {
 		cfg.RegistryUrl = url
 	}
-	if dir, ok := os.LookupEnv("REGISTRY_DIR"); ok {
+	if dirs, ok := os.LookupEnv("REGISTRY_DIRS"); ok {
+		for _, dir := range strings.Split(dirs, string(os.PathListSeparator)) {
+			if dir = strings.TrimSpace(dir); dir != "" {
+				cfg.Repositories = append(cfg.Repositories, pkgmgr.Repository{Dir: dir})
+			}
+		}
+	} else if dir, ok := os.LookupEnv("REGISTRY_DIR"); ok {
 		cfg.RegistryDir = dir
 	}
 	pm, err := pkgmgr.NewPackageManager(cfg)
