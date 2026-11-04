@@ -48,7 +48,9 @@ func reservedNativePorts(
 	for contextName, contextRegistry := range registry {
 		for packageName, packageRegistry := range contextRegistry {
 			for serviceName, servicePorts := range packageRegistry {
-				if contextName == currentContext && packageName == currentPackage && serviceName == nativePortService {
+				if contextName == currentContext &&
+					packageName == currentPackage &&
+					serviceName == nativePortService {
 					continue
 				}
 				for _, hostPort := range servicePorts {
@@ -67,7 +69,10 @@ func allocateNativePort(
 ) (string, net.Listener, error) {
 	for range 32 {
 		// Reserve across interfaces because native services may bind beyond loopback.
-		listener, err := net.Listen("tcp", ":0") // #nosec G102 -- reservation prevents port conflicts
+		listener, err := net.Listen(
+			"tcp",
+			":0",
+		) // #nosec G102 -- reservation prevents port conflicts
 		if err != nil {
 			return "", nil, err
 		}

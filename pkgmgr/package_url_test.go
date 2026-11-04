@@ -38,24 +38,36 @@ func TestAllowedDownloadURL(t *testing.T) {
 			t.Fatal(err)
 		}
 		if got := allowedDownloadURL(u); got != testCase.want {
-			t.Errorf("allowedDownloadURL(%q) = %t, want %t", testCase.url, got, testCase.want)
+			t.Errorf(
+				"allowedDownloadURL(%q) = %t, want %t",
+				testCase.url,
+				got,
+				testCase.want,
+			)
 		}
 	}
 }
 
 func TestPackageInstallStepFileInstallHTTPFromLocalhost(t *testing.T) {
 	const expectedContent = "local package artifact"
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte(expectedContent))
-	}))
+	srv := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte(expectedContent))
+		}),
+	)
 	defer srv.Close()
 
 	cfg := newArchiveTestConfig(t)
-	step := &PackageInstallStepFile{Filename: "artifact", Url: srv.URL + "/artifact"}
+	step := &PackageInstallStepFile{
+		Filename: "artifact",
+		Url:      srv.URL + "/artifact",
+	}
 	if err := step.install(cfg, "test-1.0.0-default", ""); err != nil {
 		t.Fatalf("local HTTP download failed: %s", err)
 	}
-	got, err := os.ReadFile(filepath.Join(cfg.DataDir, "test-1.0.0-default", "artifact"))
+	got, err := os.ReadFile(
+		filepath.Join(cfg.DataDir, "test-1.0.0-default", "artifact"),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,25 +77,37 @@ func TestPackageInstallStepFileInstallHTTPFromLocalhost(t *testing.T) {
 }
 
 func TestPackageInstallStepFileInstallHTTPRedirectPolicy(t *testing.T) {
-	privateServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("redirected artifact"))
-	}))
+	privateServer := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("redirected artifact"))
+		}),
+	)
 	defer privateServer.Close()
 
-	localRedirect := newArchiveTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, privateServer.URL, http.StatusFound)
-	}))
+	localRedirect := newArchiveTLSServer(
+		t,
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, privateServer.URL, http.StatusFound)
+		}),
+	)
 	cfg := newArchiveTestConfig(t)
-	step := &PackageInstallStepFile{Filename: "artifact", Url: localRedirect.URL}
+	step := &PackageInstallStepFile{
+		Filename: "artifact",
+		Url:      localRedirect.URL,
+	}
 	if err := step.install(cfg, "test-1.0.0-local", ""); err != nil {
 		t.Fatalf("redirect to private HTTP host failed: %s", err)
 	}
 
-	publicRedirect := newArchiveTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "http://example.com/artifact", http.StatusFound)
-	}))
+	publicRedirect := newArchiveTLSServer(
+		t,
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "http://example.com/artifact", http.StatusFound)
+		}),
+	)
 	step.Url = publicRedirect.URL
-	if err := step.install(cfg, "test-1.0.0-public", ""); err == nil || !strings.Contains(err.Error(), "private HTTP host") {
+	if err := step.install(cfg, "test-1.0.0-public", ""); err == nil ||
+		!strings.Contains(err.Error(), "private HTTP host") {
 		t.Fatalf("expected public HTTP redirect rejection, got %v", err)
 	}
 }

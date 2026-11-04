@@ -86,7 +86,9 @@ func TestPackageAvailableForTagsRequiresDockerTag(t *testing.T) {
 	}
 
 	if pkg.availableForTags(tags) {
-		t.Fatal("expected docker-tagged package to be unavailable without docker tag")
+		t.Fatal(
+			"expected docker-tagged package to be unavailable without docker tag",
+		)
 	}
 }
 
@@ -106,12 +108,16 @@ func TestPackageAvailableForTagsWithDockerTag(t *testing.T) {
 	}
 
 	if !pkg.availableForTags(tags) {
-		t.Fatal("expected docker-tagged package to be available with docker tag")
+		t.Fatal(
+			"expected docker-tagged package to be available with docker tag",
+		)
 	}
 }
 
 // Non-Docker packages should remain available when Docker is detected.
-func TestPackageAvailableForTagsWithDockerTagDoesNotHideNonDockerPackage(t *testing.T) {
+func TestPackageAvailableForTagsWithDockerTagDoesNotHideNonDockerPackage(
+	t *testing.T,
+) {
 	pkg := Package{
 		Tags: []string{
 			"darwin",

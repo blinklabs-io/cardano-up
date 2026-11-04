@@ -307,7 +307,9 @@ func TestServiceHooks_PreStartPostStartAndPreStop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hook log file not found: %v", err)
 	}
-	if string(hookOutput) != "prestart executed\npoststart executed\nprestop executed\npoststop executed\n" {
+	if string(
+		hookOutput,
+	) != "prestart executed\npoststart executed\nprestop executed\npoststop executed\n" {
 		t.Errorf(
 			"unexpected hook output: got %q, want %q",
 			string(hookOutput),
@@ -380,13 +382,19 @@ func TestStopService_PostStopHookSkippedOnStopFailure(t *testing.T) {
 		t.Fatal("expected stopService to fail when a container fails to stop")
 	}
 	if _, statErr := os.Stat(hookLog); !os.IsNotExist(statErr) {
-		t.Fatal("expected postStopScript to be skipped when stopping a service fails")
+		t.Fatal(
+			"expected postStopScript to be skipped when stopping a service fails",
+		)
 	}
 	if !stoppedSvc.started {
-		t.Fatal("expected the earlier successfully-stopped service to be rolled back (restarted)")
+		t.Fatal(
+			"expected the earlier successfully-stopped service to be rolled back (restarted)",
+		)
 	}
 	if brokenSvc.started {
-		t.Fatal("expected the service that failed to stop to not be started during rollback")
+		t.Fatal(
+			"expected the service that failed to stop to not be started during rollback",
+		)
 	}
 }
 
@@ -404,8 +412,10 @@ func TestStopService_DoesNotRollBackOnAmbiguousStopError(t *testing.T) {
 	})
 
 	ambiguousSvc := &fakeServiceLifecycle{
-		running:              true,
-		stopErr:              errors.New("stop reported an error but the container ended up stopped"),
+		running: true,
+		stopErr: errors.New(
+			"stop reported an error but the container ended up stopped",
+		),
 		stopErrLeavesStopped: true,
 	}
 	newServiceFromContainerName = func(containerName string, logger *slog.Logger) (serviceLifecycle, error) {
@@ -437,7 +447,9 @@ func TestStopService_DoesNotRollBackOnAmbiguousStopError(t *testing.T) {
 		t.Fatal("expected stopService to fail")
 	}
 	if ambiguousSvc.started {
-		t.Fatal("expected no rollback for a Stop() call that reported an error, to avoid undoing a possibly-concurrent stop")
+		t.Fatal(
+			"expected no rollback for a Stop() call that reported an error, to avoid undoing a possibly-concurrent stop",
+		)
 	}
 }
 
@@ -488,13 +500,19 @@ func TestStopService_TreatsStillRunningAfterStopAsFailure(t *testing.T) {
 
 	err := pkg.stopService(cfg, "testctx")
 	if err == nil {
-		t.Fatal("expected stopService to fail when the container is still running after Stop()")
+		t.Fatal(
+			"expected stopService to fail when the container is still running after Stop()",
+		)
 	}
 	if _, statErr := os.Stat(hookLog); !os.IsNotExist(statErr) {
-		t.Fatal("expected postStopScript to be skipped when a container is still running")
+		t.Fatal(
+			"expected postStopScript to be skipped when a container is still running",
+		)
 	}
 	if stuckSvc.started {
-		t.Fatal("expected the still-running container not to be rolled back, since it was never actually stopped")
+		t.Fatal(
+			"expected the still-running container not to be rolled back, since it was never actually stopped",
+		)
 	}
 }
 
@@ -541,7 +559,9 @@ func TestStopService_RollsBackOnUnknownStateAfterStopFailure(t *testing.T) {
 		t.Fatal("expected stopService to fail")
 	}
 	if !flakySvc.started {
-		t.Fatal("expected best-effort rollback to restart a container whose final state is unknown")
+		t.Fatal(
+			"expected best-effort rollback to restart a container whose final state is unknown",
+		)
 	}
 }
 
@@ -628,7 +648,9 @@ func TestStopService_RollsBackStoppedServicesOnPostStopFailure(t *testing.T) {
 		t.Fatal("expected running service to be stopped")
 	}
 	if !stoppedSvc.started {
-		t.Fatal("expected newly-stopped service to be restarted during rollback")
+		t.Fatal(
+			"expected newly-stopped service to be restarted during rollback",
+		)
 	}
 	if alreadyStoppedSvc.started {
 		t.Fatal("expected already-stopped service to be left stopped")
@@ -758,7 +780,11 @@ func TestRunHookScriptForwardsStdin(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if got != want {
-		t.Fatalf("stdin was not forwarded to the hook: got %q, want %q", got, want)
+		t.Fatalf(
+			"stdin was not forwarded to the hook: got %q, want %q",
+			got,
+			want,
+		)
 	}
 }
 

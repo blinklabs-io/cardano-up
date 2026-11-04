@@ -28,7 +28,10 @@ func TestPackageInstallStepConfigValidate(t *testing.T) {
 		expectErr bool
 	}{
 		{
-			step:      PackageInstallStepConfig{Filename: "settings.yaml", Content: "foo"},
+			step: PackageInstallStepConfig{
+				Filename: "settings.yaml",
+				Content:  "foo",
+			},
 			expectErr: false,
 		},
 		{
@@ -175,7 +178,9 @@ func TestPackageInstallStepConfigInstallSymlinkedParentRejected(t *testing.T) {
 		t.Fatal("expected error for symlink escape, got nil")
 	}
 	if _, err := os.Stat(filepath.Join(outsideDir, "settings.yaml")); err == nil {
-		t.Fatal("expected no file to be written outside the context directory via the symlink")
+		t.Fatal(
+			"expected no file to be written outside the context directory via the symlink",
+		)
 	}
 }
 

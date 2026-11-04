@@ -63,12 +63,18 @@ func TestAllocateNativePortsAvoidReservedAndUnavailablePorts(t *testing.T) {
 		t.Fatalf("reused unavailable native port %s", port)
 	}
 	if _, err := net.Listen("tcp", net.JoinHostPort("", port)); err == nil {
-		t.Fatalf("allocated native port %s was not held until service startup", port)
+		t.Fatalf(
+			"allocated native port %s was not held until service startup",
+			port,
+		)
 	}
 }
 
 func TestAllocateNativePortsAvoidsOtherContextAssignments(t *testing.T) {
-	first, firstReservations, err := (Package{Ports: []string{"api"}}).allocatePorts(nil, nil)
+	first, firstReservations, err := (Package{Ports: []string{"api"}}).allocatePorts(
+		nil,
+		nil,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +89,10 @@ func TestAllocateNativePortsAvoidsOtherContextAssignments(t *testing.T) {
 		"context-a": {"pkg": first},
 	}
 	reserved := reservedNativePorts(registry, "context-b", "pkg")
-	second, secondReservations, err := (Package{Ports: []string{"api"}}).allocatePorts(nil, reserved)
+	second, secondReservations, err := (Package{Ports: []string{"api"}}).allocatePorts(
+		nil,
+		reserved,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +113,11 @@ func TestValidateRejectsDockerContainerNamedNative(t *testing.T) {
 		filePath: "pkg/pkg-1.0.0.yaml",
 		Ports:    []string{"api"},
 		InstallSteps: []PackageInstallStep{
-			{Docker: &PackageInstallStepDocker{ContainerName: nativePortService}},
+			{
+				Docker: &PackageInstallStepDocker{
+					ContainerName: nativePortService,
+				},
+			},
 		},
 	}
 	if err := pkg.validate(Config{Template: NewTemplate(nil)}); err == nil {

@@ -149,7 +149,11 @@ func TestUpContinuesAfterFailureAndPersistsRefreshes(t *testing.T) {
 		t.Fatalf("unexpected in-memory output: got %q, want %q", got, want)
 	}
 	if got, want := pm.state.InstalledPackages[2].Outputs["DEPENDENT_VALUE"], "refreshed"; got != want {
-		t.Fatalf("unexpected dependent in-memory output: got %q, want %q", got, want)
+		t.Fatalf(
+			"unexpected dependent in-memory output: got %q, want %q",
+			got,
+			want,
+		)
 	}
 
 	reloadedState := NewState(cfg)
@@ -160,6 +164,10 @@ func TestUpContinuesAfterFailureAndPersistsRefreshes(t *testing.T) {
 		t.Fatalf("unexpected persisted output: got %q, want %q", got, want)
 	}
 	if got, want := reloadedState.InstalledPackages[2].Outputs["DEPENDENT_VALUE"], "refreshed"; got != want {
-		t.Fatalf("unexpected dependent persisted output: got %q, want %q", got, want)
+		t.Fatalf(
+			"unexpected dependent persisted output: got %q, want %q",
+			got,
+			want,
+		)
 	}
 }

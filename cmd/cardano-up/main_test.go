@@ -78,7 +78,11 @@ func TestShouldCheckForNewVersion(t *testing.T) {
 				t.Fatalf("failed to resolve command %v: %s", test.args, err)
 			}
 			if got := shouldCheckForNewVersion(cmd.CommandPath()); got != test.want {
-				t.Fatalf("unexpected check decision: got %t, want %t", got, test.want)
+				t.Fatalf(
+					"unexpected check decision: got %t, want %t",
+					got,
+					test.want,
+				)
 			}
 		})
 	}
@@ -149,7 +153,9 @@ func TestCheckForNewVersionRespectsOptOutEnvVar(t *testing.T) {
 	failingClient := &http.Client{
 		Transport: roundTripFunc(
 			func(req *http.Request) (*http.Response, error) {
-				t.Fatal("unexpected network call made while NO_UPDATE_CHECK is set")
+				t.Fatal(
+					"unexpected network call made while NO_UPDATE_CHECK is set",
+				)
 				return nil, nil
 			},
 		),
@@ -167,7 +173,10 @@ func TestCheckForNewVersionRespectsOptOutEnvVar(t *testing.T) {
 	checkForNewVersion(cmd, logger, failingClient)
 
 	if buf.Len() != 0 {
-		t.Fatalf("expected no output when opt-out env var is set, got: %q", buf.String())
+		t.Fatalf(
+			"expected no output when opt-out env var is set, got: %q",
+			buf.String(),
+		)
 	}
 }
 

@@ -71,7 +71,11 @@ func TestSetActiveContextOverrideTargetsOtherContext(t *testing.T) {
 	// EffectiveContext reflects the override
 	name, ctx := pm.EffectiveContext()
 	if name != "other" || ctx.Network != "preview" {
-		t.Fatalf("expected effective context other/preview, got %q/%q", name, ctx.Network)
+		t.Fatalf(
+			"expected effective context other/preview, got %q/%q",
+			name,
+			ctx.Network,
+		)
 	}
 	// ContextEnv reflects the override
 	env := pm.ContextEnv()
@@ -109,6 +113,9 @@ func TestSetActiveContextOverrideUnknownContext(t *testing.T) {
 	}
 	// A failed override must leave targeting on the active context
 	if pm.contextOverride != "" {
-		t.Fatalf("failed override must not set contextOverride, got %q", pm.contextOverride)
+		t.Fatalf(
+			"failed override must not set contextOverride, got %q",
+			pm.contextOverride,
+		)
 	}
 }
