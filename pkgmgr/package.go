@@ -237,7 +237,10 @@ func (p Package) install(
 		}
 		if installStep.Docker != nil {
 			if err := installStep.Docker.preflight(cfg, pkgName); err != nil {
-				return "", nil, nil, fmt.Errorf("pre-flight check failed: %w", err)
+				return "", nil, nil, fmt.Errorf(
+					"pre-flight check failed: %w",
+					err,
+				)
 			}
 		}
 	}
@@ -465,7 +468,11 @@ func (p Package) allocatePorts(
 			for _, reservation := range reservations {
 				_ = reservation.Close()
 			}
-			return nil, nil, fmt.Errorf("failed to allocate native port %q: %w", name, err)
+			return nil, nil, fmt.Errorf(
+				"failed to allocate native port %q: %w",
+				name,
+				err,
+			)
 		}
 		nativePorts[name] = port
 		reservations = append(reservations, listener)
@@ -739,14 +746,22 @@ func (p Package) validate(cfg Config) error {
 		seenProviders := make(map[string]struct{}, len(dependency))
 		for _, provider := range dependency {
 			if strings.TrimSpace(provider) == "" {
-				return errors.New("dependency package specification cannot be empty")
+				return errors.New(
+					"dependency package specification cannot be empty",
+				)
 			}
 			providerName, versionSpec, _ := splitPackage(provider)
 			if !reName.MatchString(providerName) {
-				return fmt.Errorf("invalid dependency package name: %s", providerName)
+				return fmt.Errorf(
+					"invalid dependency package name: %s",
+					providerName,
+				)
 			}
 			if _, ok := seenProviders[providerName]; ok {
-				return fmt.Errorf("duplicate dependency provider %q", providerName)
+				return fmt.Errorf(
+					"duplicate dependency provider %q",
+					providerName,
+				)
 			}
 			seenProviders[providerName] = struct{}{}
 			if versionSpec != "" {
@@ -783,7 +798,8 @@ func (p Package) validate(cfg Config) error {
 			return ErrMultipleInstallMethods
 		}
 		if installStep.Docker != nil {
-			if len(p.Ports) > 0 && installStep.Docker.ContainerName == nativePortService {
+			if len(p.Ports) > 0 &&
+				installStep.Docker.ContainerName == nativePortService {
 				return fmt.Errorf(
 					"docker container name %q is reserved for native ports",
 					nativePortService,
@@ -1307,7 +1323,11 @@ func (p *PackageInstallStepDocker) install(
 		if err != nil {
 			return err
 		}
-		tmpPort, err = ensureHostPortMapping(tmpPort, registeredPorts, portAllocations)
+		tmpPort, err = ensureHostPortMapping(
+			tmpPort,
+			registeredPorts,
+			portAllocations,
+		)
 		if err != nil {
 			return err
 		}
@@ -1426,7 +1446,11 @@ func (p *PackageInstallStepFile) validate(cfg Config) error {
 			return errors.New("sha256 platform keys cannot be empty")
 		}
 		if err := validateSHA256(digest); err != nil {
-			return fmt.Errorf("invalid sha256 digest for platform %q: %w", platform, err)
+			return fmt.Errorf(
+				"invalid sha256 digest for platform %q: %w",
+				platform,
+				err,
+			)
 		}
 	}
 	if p.Archive != "" {
@@ -1482,9 +1506,13 @@ func (p *PackageInstallStepFile) install(
 		tmpFilePath,
 	)
 	filePath = filepath.Clean(filePath)
-	expectedPrefix := filepath.Clean(filepath.Join(cfg.DataDir, pkgName)) + string(os.PathSeparator)
+	expectedPrefix := filepath.Join(cfg.DataDir, pkgName) +
+		string(os.PathSeparator)
 	if !strings.HasPrefix(filePath, expectedPrefix) {
-		return fmt.Errorf("invalid file path %q: path traversal detected", filePath)
+		return fmt.Errorf(
+			"invalid file path %q: path traversal detected",
+			filePath,
+		)
 	}
 	parentDir := filepath.Dir(filePath)
 	if err := os.MkdirAll(parentDir, fs.ModePerm); err != nil {
@@ -1662,7 +1690,8 @@ func allowedDownloadURL(u *url.URL) bool {
 			return true
 		}
 		ip := net.ParseIP(host)
-		return ip != nil && (ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast())
+		return ip != nil &&
+			(ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast())
 	default:
 		return false
 	}
@@ -1898,7 +1927,10 @@ func (p *PackageInstallStepConfig) activate(cfg Config, pkgName string) error {
 	return nil
 }
 
-func (p *PackageInstallStepConfig) deactivate(cfg Config, pkgName string) error {
+func (p *PackageInstallStepConfig) deactivate(
+	cfg Config,
+	pkgName string,
+) error {
 	// Nothing to do
 	return nil
 }
@@ -1913,7 +1945,11 @@ func ensureHostPortMapping(
 		return "", err
 	}
 	if len(portMappings) != 1 {
-		return "", fmt.Errorf("port spec %q expanded to %d mappings; ranges are not supported", rawPort, len(portMappings))
+		return "", fmt.Errorf(
+			"port spec %q expanded to %d mappings; ranges are not supported",
+			rawPort,
+			len(portMappings),
+		)
 	}
 	portMapping := portMappings[0]
 	containerPort := portMapping.Port.Port()
@@ -1923,7 +1959,8 @@ func ensureHostPortMapping(
 	proto := portMapping.Port.Proto()
 	hostPort := portMapping.Binding.HostPort
 	if hostPort == "" && len(registered) > 0 {
-		if registeredPort, ok := registered[containerPort]; ok && registeredPort != "" {
+		if registeredPort, ok := registered[containerPort]; ok &&
+			registeredPort != "" {
 			hostPort = registeredPort
 		}
 	}
@@ -1973,7 +2010,10 @@ func allocateEphemeralPort(proto string) (string, error) {
 		addr := conn.LocalAddr().(*net.UDPAddr) //nolint:forcetypeassert
 		return strconv.Itoa(addr.Port), nil
 	default:
-		return "", fmt.Errorf("unsupported protocol %q for port allocation", proto)
+		return "", fmt.Errorf(
+			"unsupported protocol %q for port allocation",
+			proto,
+		)
 	}
 }
 

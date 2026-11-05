@@ -26,7 +26,10 @@ import (
 // writeHookScript writes a /bin/sh script that appends label to hookLog and
 // returns its path. runHookScript renders the script value and runs it with
 // `/bin/sh -c`, so a path is a valid hook body.
-func writeHookScript(t *testing.T, dir, name, hookLog, label, extra string) string {
+func writeHookScript(
+	t *testing.T,
+	dir, name, hookLog, label, extra string,
+) string {
 	t.Helper()
 	path := filepath.Join(dir, name)
 	body := "#!/bin/sh\n" + extra + "echo '" + label + "' >> " + hookLog + "\n"
@@ -71,8 +74,22 @@ func TestInstall_RunsPreStartHookAfterInstallSteps(t *testing.T) {
 		t, tmpDir, "prestart.sh", hookLog, "prestart",
 		"test -f "+renderedConfig+" || exit 1\n",
 	)
-	preInstall := writeHookScript(t, tmpDir, "preinstall.sh", hookLog, "preinstall", "")
-	postInstall := writeHookScript(t, tmpDir, "postinstall.sh", hookLog, "postinstall", "")
+	preInstall := writeHookScript(
+		t,
+		tmpDir,
+		"preinstall.sh",
+		hookLog,
+		"preinstall",
+		"",
+	)
+	postInstall := writeHookScript(
+		t,
+		tmpDir,
+		"postinstall.sh",
+		hookLog,
+		"postinstall",
+		"",
+	)
 
 	cfg := Config{
 		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -119,7 +136,14 @@ func TestInstall_RunsPreStartHookAfterInstallSteps(t *testing.T) {
 func TestInstall_SkipsPreStartHookWhenHooksDisabled(t *testing.T) {
 	tmpDir := t.TempDir()
 	hookLog := filepath.Join(tmpDir, "hooks.log")
-	preStart := writeHookScript(t, tmpDir, "prestart.sh", hookLog, "prestart", "")
+	preStart := writeHookScript(
+		t,
+		tmpDir,
+		"prestart.sh",
+		hookLog,
+		"prestart",
+		"",
+	)
 
 	cfg := Config{
 		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
@@ -156,7 +180,14 @@ func TestStartService_PreStartHookRunsBeforeContainerStart(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	hookLog := filepath.Join(tmpDir, "hooks.log")
-	preStart := writeHookScript(t, tmpDir, "prestart.sh", hookLog, "prestart", "")
+	preStart := writeHookScript(
+		t,
+		tmpDir,
+		"prestart.sh",
+		hookLog,
+		"prestart",
+		"",
+	)
 
 	svc := &fakeServiceLifecycle{
 		onStart: func() {
@@ -313,7 +344,9 @@ func TestStartServices_RollsBackWhenConditionErrors(t *testing.T) {
 	}
 
 	if err := pkg.startService(cfg, "testctx"); err == nil {
-		t.Fatal("expected startService to fail when a condition cannot be evaluated")
+		t.Fatal(
+			"expected startService to fail when a condition cannot be evaluated",
+		)
 	}
 	if !started.started {
 		t.Fatal("expected the first service to have been started")
@@ -350,7 +383,9 @@ func TestConditionNeedsPackageTemplateVars(t *testing.T) {
 		t.Fatalf("unexpected error with package template vars: %v", err)
 	}
 	if !ok {
-		t.Fatal("expected .Package.Options.extra to be true with package template vars")
+		t.Fatal(
+			"expected .Package.Options.extra to be true with package template vars",
+		)
 	}
 
 	ok, err = base.Template.EvaluateCondition(`.Package.Options.extra`, nil)
@@ -358,7 +393,9 @@ func TestConditionNeedsPackageTemplateVars(t *testing.T) {
 		t.Fatalf("unexpected error without package template vars: %v", err)
 	}
 	if ok {
-		t.Fatal("expected the condition to evaluate false without package template vars")
+		t.Fatal(
+			"expected the condition to evaluate false without package template vars",
+		)
 	}
 }
 
@@ -389,7 +426,10 @@ func TestServices_SkipsStepsWithFalseCondition(t *testing.T) {
 		t.Fatalf("services failed: %v", err)
 	}
 	if len(services) != 0 {
-		t.Fatalf("expected the condition-skipped step to yield no services, got %d", len(services))
+		t.Fatalf(
+			"expected the condition-skipped step to yield no services, got %d",
+			len(services),
+		)
 	}
 }
 
@@ -486,15 +526,22 @@ func TestInstalledPkgConfig_SuppliesConditionVars(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !ok {
-		t.Fatal("expected the installed package's options to be visible to the condition")
+		t.Fatal(
+			"expected the installed package's options to be visible to the condition",
+		)
 	}
 
 	// The bare manager config is what caused the orphaning: silently false.
-	ok, err = pm.config.Template.EvaluateCondition(`.Package.Options.extra`, nil)
+	ok, err = pm.config.Template.EvaluateCondition(
+		`.Package.Options.extra`,
+		nil,
+	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if ok {
-		t.Fatal("expected the bare manager config to evaluate the condition false")
+		t.Fatal(
+			"expected the bare manager config to evaluate the condition false",
+		)
 	}
 }

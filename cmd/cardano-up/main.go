@@ -201,7 +201,11 @@ func createPackageManager() *pkgmgr.PackageManager {
 // version.CheckForUpdate explicitly (production code passes
 // http.DefaultClient) so tests can inject a fake one instead of mutating
 // the shared http.DefaultClient.Transport.
-func checkForNewVersion(cmd *cobra.Command, logger *slog.Logger, httpClient *http.Client) {
+func checkForNewVersion(
+	cmd *cobra.Command,
+	logger *slog.Logger,
+	httpClient *http.Client,
+) {
 	if version.Version == "" || !shouldCheckForNewVersion(cmd.CommandPath()) {
 		return
 	}
@@ -210,7 +214,9 @@ func checkForNewVersion(cmd *cobra.Command, logger *slog.Logger, httpClient *htt
 	}
 	userCacheDir, err := os.UserCacheDir()
 	if err != nil {
-		logger.Debug("failed to determine cache directory for version check: " + err.Error())
+		logger.Debug(
+			"failed to determine cache directory for version check: " + err.Error(),
+		)
 		return
 	}
 	update, err := version.CheckForUpdate(

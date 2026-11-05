@@ -271,7 +271,10 @@ func (p *PackageManager) Install(pkgs ...string) error {
 		tmpPkgOpts := installPkg.Install.defaultOpts()
 		maps.Copy(tmpPkgOpts, installPkg.Options)
 		// Install package
-		registeredPorts := p.registeredPorts(contextName, installPkg.Install.Name)
+		registeredPorts := p.registeredPorts(
+			contextName,
+			installPkg.Install.Name,
+		)
 		reservedNativePorts := reservedNativePorts(
 			p.state.PortRegistry,
 			contextName,
@@ -375,7 +378,10 @@ func (p *PackageManager) Upgrade(pkgs ...string) error {
 		)
 		// Capture options from existing package
 		pkgOpts := upgradePkg.Installed.Options
-		registeredPorts := p.registeredPorts(contextName, upgradePkg.Installed.Package.Name)
+		registeredPorts := p.registeredPorts(
+			contextName,
+			upgradePkg.Installed.Package.Name,
+		)
 		reservedNativePorts := reservedNativePorts(
 			p.state.PortRegistry,
 			contextName,

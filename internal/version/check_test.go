@@ -37,7 +37,11 @@ func TestCheckForUpdateFetchesAndCachesLatestRelease(t *testing.T) {
 				t.Errorf("unexpected Accept header: got %q, want %q", got, want)
 			}
 			if got, want := r.Header.Get("X-GitHub-Api-Version"), "2026-03-10"; got != want {
-				t.Errorf("unexpected API version header: got %q, want %q", got, want)
+				t.Errorf(
+					"unexpected API version header: got %q, want %q",
+					got,
+					want,
+				)
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(
@@ -85,7 +89,10 @@ func TestCheckForUpdateFetchesAndCachesLatestRelease(t *testing.T) {
 		t.Fatalf("unexpected cached update: %#v", update)
 	}
 	if requestCount != 1 {
-		t.Fatalf("fresh cache should avoid another request, got %d requests", requestCount)
+		t.Fatalf(
+			"fresh cache should avoid another request, got %d requests",
+			requestCount,
+		)
 	}
 }
 
@@ -133,7 +140,10 @@ func TestCheckForUpdateRefreshesStaleCache(t *testing.T) {
 		t.Fatalf("unexpected refreshed update: %#v", update)
 	}
 	if requestCount != 1 {
-		t.Fatalf("stale cache should be refreshed, got %d requests", requestCount)
+		t.Fatalf(
+			"stale cache should be refreshed, got %d requests",
+			requestCount,
+		)
 	}
 }
 
@@ -173,7 +183,10 @@ func TestCheckForUpdateReplacesInvalidCache(t *testing.T) {
 		t.Fatalf("unexpected update after invalid cache: %#v", update)
 	}
 	if requestCount != 1 {
-		t.Fatalf("invalid cache should be replaced, got %d requests", requestCount)
+		t.Fatalf(
+			"invalid cache should be replaced, got %d requests",
+			requestCount,
+		)
 	}
 }
 
@@ -218,7 +231,10 @@ func TestCheckForUpdateReplacesMalformedCachedTag(t *testing.T) {
 		t.Fatalf("unexpected update after malformed cached tag: %#v", update)
 	}
 	if requestCount != 1 {
-		t.Fatalf("malformed cached tag should be replaced, got %d requests", requestCount)
+		t.Fatalf(
+			"malformed cached tag should be replaced, got %d requests",
+			requestCount,
+		)
 	}
 }
 
@@ -290,9 +306,11 @@ func TestCheckForUpdateReturnsNilForCurrentVersion(t *testing.T) {
 func TestCheckForUpdateReturnsFetchError(t *testing.T) {
 	expectedErr := errors.New("offline")
 	client := &http.Client{
-		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			return nil, expectedErr
-		}),
+		Transport: roundTripFunc(
+			func(req *http.Request) (*http.Response, error) {
+				return nil, expectedErr
+			},
+		),
 	}
 
 	_, err := checkForUpdate(
