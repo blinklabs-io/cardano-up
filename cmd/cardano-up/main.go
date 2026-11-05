@@ -162,37 +162,7 @@ func createPackageManager() *pkgmgr.PackageManager {
 		slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
 		os.Exit(1)
 	}
-	// Allow setting one or more registries via environment variables.
-	if urls, ok := os.LookupEnv("REGISTRY_URLS"); ok {
-		before := len(cfg.Repositories)
-		for _, url := range strings.Split(urls, ",") {
-			if url = strings.TrimSpace(url); url != "" {
-				cfg.Repositories = append(cfg.Repositories, pkgmgr.Repository{URL: url})
-			}
-		}
-		if len(cfg.Repositories) == before {
-			if url, ok := os.LookupEnv("REGISTRY_URL"); ok {
-				cfg.RegistryUrl = url
-			}
-		}
-	} else if url, ok := os.LookupEnv("REGISTRY_URL"); ok {
-		cfg.RegistryUrl = url
-	}
-	if dirs, ok := os.LookupEnv("REGISTRY_DIRS"); ok {
-		before := len(cfg.Repositories)
-		for _, dir := range strings.Split(dirs, string(os.PathListSeparator)) {
-			if strings.TrimSpace(dir) != "" {
-				cfg.Repositories = append(cfg.Repositories, pkgmgr.Repository{Dir: dir})
-			}
-		}
-		if len(cfg.Repositories) == before {
-			if dir, ok := os.LookupEnv("REGISTRY_DIR"); ok {
-				cfg.RegistryDir = dir
-			}
-		}
-	} else if dir, ok := os.LookupEnv("REGISTRY_DIR"); ok {
-		cfg.RegistryDir = dir
-	}
+	cfg = applyRegistryEnv(cfg)
 	pm, err := pkgmgr.NewPackageManager(cfg)
 	if err != nil {
 		slog.Error(fmt.Sprintf("failed to create package manager: %s", err))
@@ -213,6 +183,44 @@ func createPackageManager() *pkgmgr.PackageManager {
 		}
 	}
 	return pm
+}
+
+func applyRegistryEnv(cfg pkgmgr.Config) pkgmgr.Config {
+	var dirs, urls []pkgmgr.Repository
+	if value, ok := os.LookupEnv("REGISTRY_DIRS"); ok {
+		for _, dir := range strings.Split(value, string(os.PathListSeparator)) {
+			if dir = strings.TrimSpace(dir); dir != "" {
+				dirs = append(dirs, pkgmgr.Repository{Dir: dir})
+			}
+		}
+	}
+	if value, ok := os.LookupEnv("REGISTRY_URLS"); ok {
+		for _, url := range strings.Split(value, ",") {
+			if url = strings.TrimSpace(url); url != "" {
+				urls = append(urls, pkgmgr.Repository{URL: url})
+			}
+		}
+	}
+
+	// Directories must precede URLs so local overlays retain their previous
+	// priority. Singular values are appended when a repository list exists;
+	// otherwise registryPackages uses the legacy fields as its fallback.
+	repositories := append(cfg.Repositories, dirs...)
+	if dir, ok := os.LookupEnv("REGISTRY_DIR"); ok {
+		cfg.RegistryDir = dir
+		if dir != "" && (len(repositories) > 0 || len(urls) > 0) {
+			repositories = append(repositories, pkgmgr.Repository{Dir: dir})
+		}
+	}
+	repositories = append(repositories, urls...)
+	if url, ok := os.LookupEnv("REGISTRY_URL"); ok {
+		cfg.RegistryUrl = url
+		if url != "" && len(repositories) > 0 {
+			repositories = append(repositories, pkgmgr.Repository{URL: url})
+		}
+	}
+	cfg.Repositories = repositories
+	return cfg
 }
 
 // checkForNewVersion looks up whether a newer release is available and, if

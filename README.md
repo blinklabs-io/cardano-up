@@ -264,6 +264,9 @@ separated by commas for URLs or the platform path-list separator for local
 directories. A package name in a higher-priority repository overlays the same
 package name in lower-priority repositories. The singular `REGISTRY_URL` and
 `REGISTRY_DIR` variables remain supported.
+When plural and singular variables are mixed, directories are searched before
+URLs, and the singular value is used as a fallback after the plural entries in
+its family.
 
 #### Validating package files
 
