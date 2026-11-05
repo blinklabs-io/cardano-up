@@ -147,9 +147,8 @@ func registryPackagesUrl(cfg Config, validate bool) ([]Package, error) {
 		if err != nil {
 			return nil, err
 		}
-		resp, err := http.DefaultClient.Do(
-			req,
-		) //nolint:gosec // URL comes from validated configuration
+		//nolint:gosec // URL comes from validated configuration
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return nil, err
 		}
