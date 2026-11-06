@@ -18,6 +18,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -25,18 +26,77 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
 
 func registryPackages(cfg Config, validate bool) ([]Package, error) {
-	if cfg.RegistryDir != "" {
-		return registryPackagesDir(cfg, validate)
-	} else if cfg.RegistryUrl != "" {
-		return registryPackagesUrl(cfg, validate)
-	} else {
+	repositories := cfg.Repositories
+	if len(repositories) == 0 {
+		switch {
+		case cfg.RegistryDir != "":
+			repositories = []Repository{{Dir: cfg.RegistryDir}}
+		case cfg.RegistryUrl != "":
+			repositories = []Repository{{URL: cfg.RegistryUrl}}
+		}
+	}
+	if len(repositories) == 0 {
 		return nil, ErrNoRegistryConfigured
 	}
+
+	var packages []Package
+	seenNames := make(map[string]struct{})
+	var retErr error
+	for index, repository := range repositories {
+		repoCfg := cfg
+		repoCfg.RegistryDir = repository.Dir
+		repoCfg.RegistryUrl = repository.URL
+		// Keep each remote repository's cache separate. Include the URL so a
+		// changed repository at the same priority cannot reuse old metadata.
+		cacheKey := strconv.Itoa(index)
+		if repository.URL != "" {
+			cacheKey = fmt.Sprintf(
+				"%d-%x",
+				index,
+				sha256.Sum256([]byte(repository.URL)),
+			)
+		}
+		repoCfg.CacheDir = filepath.Join(cfg.CacheDir, "registry", cacheKey)
+		if repository.Dir != "" && repository.URL != "" {
+			return nil, fmt.Errorf(
+				"repository %d has both URL and directory",
+				index,
+			)
+		}
+		var repoPackages []Package
+		var err error
+		switch {
+		case repository.Dir != "":
+			repoPackages, err = registryPackagesDir(repoCfg, validate)
+		case repository.URL != "":
+			repoPackages, err = registryPackagesUrl(repoCfg, validate)
+		default:
+			return nil, fmt.Errorf("repository %d has neither URL nor directory", index)
+		}
+		if errors.Is(err, ErrValidationFailed) {
+			retErr = ErrValidationFailed
+		} else if err != nil {
+			return nil, err
+		}
+		repoNames := make(map[string]struct{})
+		for _, pkg := range repoPackages {
+			if _, ok := seenNames[pkg.Name]; ok {
+				continue
+			}
+			repoNames[pkg.Name] = struct{}{}
+			packages = append(packages, pkg)
+		}
+		for name := range repoNames {
+			seenNames[name] = struct{}{}
+		}
+	}
+	return packages, retErr
 }
 
 func registryPackagesDir(cfg Config, validate bool) ([]Package, error) {

@@ -16,6 +16,8 @@ package pkgmgr
 
 import (
 	"log/slog"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"testing/fstest"
@@ -73,5 +75,47 @@ func TestRegistryPackagesFs(t *testing.T) {
 			pkgs,
 			testExpectedPkgs,
 		)
+	}
+}
+
+func TestRegistryPackagesRepositoryPriority(t *testing.T) {
+	highPriority := t.TempDir()
+	lowPriority := t.TempDir()
+	writePackage := func(dir, name, version string) {
+		t.Helper()
+		path := filepath.Join(dir, name, name+"-"+version+".yaml")
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		contents := "name: " + name + "\nversion: " + version + "\n"
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writePackage(highPriority, "overlay", "2.0.0")
+	writePackage(highPriority, "overlay", "3.0.0")
+	writePackage(lowPriority, "overlay", "1.0.0")
+	writePackage(lowPriority, "base", "1.0.0")
+
+	cfg := Config{
+		CacheDir: t.TempDir(),
+		Logger:   slog.Default(),
+		Repositories: []Repository{
+			{Dir: highPriority},
+			{Dir: lowPriority},
+		},
+	}
+	packages, err := registryPackages(cfg, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	if len(packages) != 3 {
+		t.Fatalf("got %d packages, expected 3: %#v", len(packages), packages)
+	}
+	if packages[0].Name != "overlay" || packages[1].Name != "overlay" {
+		t.Fatalf("highest-priority repository did not retain all versions: %#v", packages)
+	}
+	if packages[2].Name != "base" {
+		t.Fatalf("lower-priority package was not retained: %#v", packages[2])
 	}
 }

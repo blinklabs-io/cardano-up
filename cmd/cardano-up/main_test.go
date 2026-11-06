@@ -18,12 +18,69 @@ import (
 	"bytes"
 	"log/slog"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/blinklabs-io/cardano-up/internal/consolelog"
 	"github.com/blinklabs-io/cardano-up/internal/version"
+	"github.com/blinklabs-io/cardano-up/pkgmgr"
 	"github.com/spf13/cobra"
 )
+
+func TestApplyRegistryEnv(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want []pkgmgr.Repository
+	}{
+		{
+			name: "directories precede urls and retain singular fallbacks",
+			env: map[string]string{
+				"REGISTRY_DIRS": "/one" + string(os.PathListSeparator) + "/two",
+				"REGISTRY_DIR":  "/fallback-dir",
+				"REGISTRY_URLS": "https://one, https://two",
+				"REGISTRY_URL":  "https://fallback",
+			},
+			want: []pkgmgr.Repository{
+				{Dir: "/one"}, {Dir: "/two"}, {Dir: "/fallback-dir"},
+				{URL: "https://one"}, {URL: "https://two"}, {URL: "https://fallback"},
+			},
+		},
+		{
+			name: "singular fallback is retained with urls",
+			env: map[string]string{
+				"REGISTRY_URLS": "https://one",
+				"REGISTRY_URL":  "https://fallback",
+			},
+			want: []pkgmgr.Repository{
+				{URL: "https://one"}, {URL: "https://fallback"},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			for _, name := range []string{
+				"REGISTRY_DIRS", "REGISTRY_DIR", "REGISTRY_URLS", "REGISTRY_URL",
+			} {
+				t.Setenv(name, "")
+			}
+			for name, value := range test.env {
+				t.Setenv(name, value)
+			}
+
+			cfg := applyRegistryEnv(pkgmgr.Config{})
+			if len(cfg.Repositories) != len(test.want) {
+				t.Fatalf("got %d repositories, want %d: %#v", len(cfg.Repositories), len(test.want), cfg.Repositories)
+			}
+			for index, want := range test.want {
+				if cfg.Repositories[index] != want {
+					t.Errorf("repository %d: got %#v, want %#v", index, cfg.Repositories[index], want)
+				}
+			}
+		})
+	}
+}
 
 // TestShouldCheckForNewVersion checks that the version check is skipped for
 // "context env", "version", any "completion" subcommand, and cobra's hidden
