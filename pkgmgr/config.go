@@ -83,7 +83,7 @@ func NewDefaultConfig() (Config, error) {
 		runtime.GOOS,
 		runtime.GOARCH,
 	}
-	if _, noDocker := os.LookupEnv(NoDockerEnvVar); !noDocker {
+	if os.Getenv(NoDockerEnvVar) == "" {
 		if checkDockerConnectivity() == nil {
 			requiredPackageTags = append(requiredPackageTags, "docker")
 		}

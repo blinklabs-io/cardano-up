@@ -103,6 +103,10 @@ func setDefaultConfigTestEnv(t *testing.T) {
 	t.Setenv("HOME", "/path/to/user/home")
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("XDG_CACHE_HOME", "")
+	// Clear any NO_DOCKER inherited from the process environment so the
+	// default-path tests exercise the real checkDockerConnectivity stub
+	// regardless of the environment the test suite runs in.
+	t.Setenv(NoDockerEnvVar, "")
 }
 
 // Docker-tagged packages should require Docker even when OS and arch tags match.
