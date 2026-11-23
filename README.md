@@ -72,6 +72,21 @@ Enable for all future sessions:
 cardano-up completion bash > /etc/bash_completion.d/cardano-up
 ```
 
+### Disabling Docker support
+
+By default, `cardano-up` checks whether a Docker daemon is reachable and, if
+so, makes Docker-based packages available for install. To disable Docker
+support entirely, regardless of whether a Docker daemon is actually running,
+set the `NO_DOCKER` environment variable to any non-empty value:
+
+```
+NO_DOCKER=1 cardano-up list-available
+```
+
+With `NO_DOCKER` set, the Docker daemon connectivity check is skipped and
+Docker-based packages are hidden from `list-available` and cannot be
+installed.
+
 ## Contexts
 
 Contexts are used to allow you to install multiple copies of the same package with different network configurations side by side. They allow you to do things
