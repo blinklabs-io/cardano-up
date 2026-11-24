@@ -64,11 +64,49 @@ func TestNewDefaultConfigRequiredPackageTagsWithDocker(t *testing.T) {
 	}
 }
 
+// Docker-tagged packages should be hidden when NO_DOCKER is set, even when
+// the daemon is reachable, and the connectivity check should be skipped
+// entirely.
+func TestNewDefaultConfigRequiredPackageTagsWithNoDockerEnvVar(t *testing.T) {
+	origCheckDockerConnectivity := checkDockerConnectivity
+	checkDockerConnectivity = func() error {
+		t.Fatal(
+			"checkDockerConnectivity should not be called when NO_DOCKER is set",
+		)
+		return nil
+	}
+	defer func() {
+		checkDockerConnectivity = origCheckDockerConnectivity
+	}()
+	setDefaultConfigTestEnv(t)
+	t.Setenv(NoDockerEnvVar, "1")
+
+	cfg, err := NewDefaultConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	expectedTags := []string{
+		runtime.GOOS,
+		runtime.GOARCH,
+	}
+	if !reflect.DeepEqual(cfg.RequiredPackageTags, expectedTags) {
+		t.Fatalf(
+			"did not get expected required package tags, got %#v, expected %#v",
+			cfg.RequiredPackageTags,
+			expectedTags,
+		)
+	}
+}
+
 func setDefaultConfigTestEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("HOME", "/path/to/user/home")
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("XDG_CACHE_HOME", "")
+	// Clear any NO_DOCKER inherited from the process environment so the
+	// default-path tests exercise the real checkDockerConnectivity stub
+	// regardless of the environment the test suite runs in.
+	t.Setenv(NoDockerEnvVar, "")
 }
 
 // Docker-tagged packages should require Docker even when OS and arch tags match.

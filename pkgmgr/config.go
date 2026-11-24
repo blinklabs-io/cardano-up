@@ -24,6 +24,12 @@ import (
 
 var checkDockerConnectivity = CheckDockerConnectivity
 
+// NoDockerEnvVar disables Docker support entirely when set to any
+// non-empty value: the daemon connectivity check is skipped and the
+// "docker" package tag is never added, hiding Docker-tagged packages
+// regardless of whether a Docker daemon is actually reachable.
+const NoDockerEnvVar = "NO_DOCKER"
+
 type Config struct {
 	BinDir              string
 	CacheDir            string
@@ -77,8 +83,10 @@ func NewDefaultConfig() (Config, error) {
 		runtime.GOOS,
 		runtime.GOARCH,
 	}
-	if checkDockerConnectivity() == nil {
-		requiredPackageTags = append(requiredPackageTags, "docker")
+	if os.Getenv(NoDockerEnvVar) == "" {
+		if checkDockerConnectivity() == nil {
+			requiredPackageTags = append(requiredPackageTags, "docker")
+		}
 	}
 	ret := Config{
 		BinDir: userBinDir,
